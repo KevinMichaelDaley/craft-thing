@@ -87,6 +87,80 @@ static uint64_t greek_ball_water(dc_gpu_t *gpu, uint32_t body, uint32_t span,
         }
     return total;
 }
+
+static bool greek_ball_water_contact(dc_gpu_t *gpu, uint32_t body,
+                                    uint32_t *wet_faces, uint32_t *faces,
+                                    char *err, uint32_t cap) {
+    enum {span = 2 * DC_SIEGE_COAL_RADIUS + 1};
+    dc_gpu_world_body_t world;
+    dc_gpu_body_motion_t motion;
+    dc_gpu_body_pixel_t pixels[span * span];
+    uint32_t count;
+    if (!dc_gpu_read_world_body(gpu, body, &world, err, cap) ||
+        !dc_gpu_read_body_motion(gpu, body, &motion, err, cap) ||
+        motion.angle != 0.f || world.chunk.x < 0 || world.chunk.y < 0 ||
+        world.chunk.x >= gpu->page_width || world.chunk.y >= gpu->page_height ||
+        world.body.x_fp % 65536 || world.body.y_fp % 65536 ||
+        !dc_gpu_read_pixel_shape(gpu, body, pixels, span * span, &count, err, cap))
+        return false;
+    int origin_x = world.body.x_fp / 65536;
+    int origin_y = world.body.y_fp / 65536;
+    if (origin_x < 1 || origin_x + span >= (int)DC_CHUNK_SIDE ||
+        origin_y < 1 || origin_y + span >= (int)DC_CHUNK_SIDE)
+        return false;
+    bool solid[span + 2][span + 2] = {{false}};
+    for (uint32_t i = 0; i < count; i++) {
+        if (pixels[i].x >= span || pixels[i].y >= span) return false;
+        solid[pixels[i].y + 1][pixels[i].x + 1] = true;
+    }
+    uint32_t slot = greek_tile_slot(gpu, world.chunk.x * DC_CHUNK_SIDE,
+                                    world.chunk.y * DC_CHUNK_SIDE);
+    dc_chunk_t chunk;
+    if (!slot || !dc_gpu_download_chunk(gpu, slot - 1u, &chunk, err, cap))
+        return false;
+    static const int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+    *wet_faces = 0;
+    *faces = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        for (uint32_t side = 0; side < 4u; side++) {
+            int x = (int)pixels[i].x + directions[side][0];
+            int y = (int)pixels[i].y + directions[side][1];
+            if (solid[y + 1][x + 1]) continue;
+            const dc_cell_t *cell = &chunk.cells[(origin_y + y) * DC_CHUNK_SIDE +
+                                                 origin_x + x];
+            (*faces)++;
+            if (cell->material == DC_MATERIAL_WATER && cell->fluid_mass >= DC_FLUID_FULL)
+                (*wet_faces)++;
+        }
+    }
+    return *faces > 0u;
+}
+
+static void test_pool_soaks_a_stationary_oil_load(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = greek_grid();
+    dc_siege_scene_t scene = {0};
+    const uint32_t span = 2u * DC_SIEGE_COAL_RADIUS + 1u;
+    ASSERT_TRUE(gpu && dc_siege_scene_build_douse_pool(gpu, DC_SIEGE_LOAD_OIL,
+                                                      &scene, err, sizeof(err)));
+    uint64_t admitted_water = greek_ball_water(gpu, scene.coal_body, span, err,
+                                              sizeof(err));
+    ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
+    uint32_t wet_faces, faces;
+    ASSERT_TRUE(greek_ball_water_contact(gpu, scene.coal_body, &wet_faces, &faces,
+                                        err, sizeof(err)));
+    uint64_t soaked_water = greek_ball_water(gpu, scene.coal_body, span, err,
+                                            sizeof(err));
+    printf("Standing pool covered %u/%u exposed faces; bound water %llu -> %llu Q16\n",
+           wet_faces, faces, (unsigned long long)admitted_water,
+           (unsigned long long)soaked_water);
+    ASSERT_EQ(scene.pouch_joint, 0u);
+    ASSERT_EQ(admitted_water, 0u);
+    ASSERT_TRUE(soaked_water > 0u && soaked_water != UINT64_MAX);
+    ASSERT_EQ(wet_faces, faces);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
 static bool greek_land_ball(dc_gpu_t *gpu, dc_siege_scene_t *scene,
                             dc_siege_load_t load, bool ignite, float *rest_x,
                             float *rest_y, char *err, uint32_t cap) {
@@ -704,6 +778,7 @@ int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--douse-preflight") == 0) {
         RUN(test_cold_greek_load_keeps_its_film_while_soaking);
         RUN(test_siege_strike_preserves_the_loads_bound_water);
+        RUN(test_pool_soaks_a_stationary_oil_load);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail ? 1 : 0;
     }
