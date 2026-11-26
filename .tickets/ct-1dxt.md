@@ -31,3 +31,7 @@ Cross-machine WIP handoff: focused reproducer is test_native_trace_buoyancy_pres
 **2026-11-26T19:11:17Z**
 
 The portable trace-buoyancy reproducer passes on both 88965f72 and the new publication repair. It measures center energy 1.3382946371e-24 against 1.3382946612e-24, and external work 6.85935166081e-25 against 6.85935190179e-25. This verifies the small-packet algebra and accounting fixture. The original isolated live 921-second demonstration remains to be replayed.
+
+**2026-11-26T21:18:57Z**
+
+The exact 486563d0 publication run passes the captured trace buoyancy packet with 1.3382946371e-24 center energy and 6.85935166081e-25 external work. Integrated 3c94b591 also passes the native 330-tick fire-ray fixture with real wood ignition and exact gas save/reload. This workspace lacks gas-failure-original, beaver_play_anGXgA, and user-demo-80ms-live.log. The original 921-second session replay remains open because its checkpoint and event history are unavailable here.
