@@ -1,6 +1,6 @@
 ---
 id: ctcri-jd9z
-status: in_progress
+status: closed
 deps: []
 links: [ct-1i55, ctcr-uh5f, ctpao-oywm, ctpao-vwpc]
 created: 2026-11-26T22:48:28Z
@@ -36,3 +36,7 @@ GREEN passed all 14 production session tests, including the individual drive, ra
 **2026-11-26T23:13:08Z**
 
 The first native join fixture completed all three rollback checks before its retry assertion read a cached slot bound as a count of live owners. The exhaustive fixture now counts live owner records directly. The separate Vulkan body suite passed 6/6, ray suite passed 3/3 and visible actions passed 8/8.
+
+**2026-11-26T23:21:03Z**
+
+The corrected native fixture counts live ownership directly. Three failed Start admissions preserved the original seat, input, drive, active ray, geometry cursor and all 1,023 existing parcels. The next Start admitted exactly one player and 1,023 parcels without replaying the original ray. The follow-up covers rigid occupancy in the same tested path. The host player, tool, shader memory and recipe tests passed. Whole-suite verification remains queued.

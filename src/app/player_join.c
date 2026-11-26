@@ -41,7 +41,7 @@ static bool players_prepare_gpu(void *user,const fr_beaver_body_t *body,char *er
     bindings[n]=body->binding;
     return dc_player_session_make_pose(s,&join->player,body,&join->poses[n],err,cap)&&
         fr_player_drive_gpu_create(v->gpu,bindings,n+1u,1.f,3.f,&join->drive,err,cap)&&
-        (!s->ray_enabled||fr_fire_ray_gpu_prepare_emitter(s->ray,&body->binding,err,cap))&&
+        (!s->ray||fr_fire_ray_gpu_prepare_emitter(s->ray,&body->binding,err,cap))&&
         fr_renderer_sprite_prepare_poses(v->gpu,join->poses,n+1u,err,cap);
 }
 
@@ -110,7 +110,7 @@ static bool players_add(dc_level_view_t *v,int64_t device,const fr_input_t *prep
     s->device[n]=device;
     fr_player_drive_gpu_t *previous=s->drive;
     s->drive=join.drive;
-    if(s->ray_enabled) fr_fire_ray_gpu_commit_emitter(s->ray,&body.binding);
+    if(s->ray) fr_fire_ray_gpu_commit_emitter(s->ray,&body.binding);
     fr_renderer_sprite_commit_poses(v->gpu,join.poses,n+1u);
     s->count=n+1u;
     fr_player_drive_gpu_destroy(previous);

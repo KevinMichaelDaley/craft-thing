@@ -1,6 +1,6 @@
 ---
 id: ctpao-oywm
-status: in_progress
+status: closed
 deps: []
 links: [ctcri-jd9z]
 created: 2026-11-26T23:06:20Z
@@ -24,3 +24,7 @@ In the SDL/Vulkan join rollback fixture, verify that the failed candidate occupi
 **2026-11-26T23:13:24Z**
 
 The native RED fixture compiled and reported 1,023 occupied cells belonging to failed candidate 2147483650 immediately after the injected drive failure. Its live body record was already gone. The fixture deliberately checks before any world tick or another join can refresh the grid.
+
+**2026-11-26T23:21:03Z**
+
+Both GREEN and refactor passed on the real SDL/Vulkan path. The drive, ray, and sprite faults each left zero candidate cells before any world tick, and kept the first player raster intact. Repeating Start admitted one body with 1,023 canonical parcels, and the existing ray advanced without a replay.

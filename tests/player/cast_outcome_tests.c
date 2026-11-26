@@ -423,7 +423,6 @@ static void check_join_rolls_back(unsigned failure) {
     view.table = (dc_chunk_table_t){.slots = &slot, .capacity = 1u};
     s.drive = (fr_player_drive_gpu_t *)&existing_drive;
     s.ray = (fr_fire_ray_gpu_t *)&existing_ray;
-    s.ray_enabled = true;
     s.inventory[1].mass_fp[DC_ITEM_WOOD] = 39322u;
     fr_input_t input_before = s.input;
     test_admission = true;

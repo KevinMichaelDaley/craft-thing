@@ -22,8 +22,7 @@ struct dc_player_session {
     int64_t device[FR_INPUT_PLAYERS];
     fr_player_drive_gpu_t *drive;
     fr_fire_ray_gpu_t *ray;
-    fr_fire_ray_config_t ray_config;
-    bool ray_enabled,follow_camera;
+    bool follow_camera;
     uint32_t spawn_x,spawn_y;
     uint32_t count,fire,ice,frame_offsets[FR_PLAYER_ACTION_COUNT][8];
     fr_beaver_frame_layout_t layouts[FR_PLAYER_ACTION_COUNT][8];

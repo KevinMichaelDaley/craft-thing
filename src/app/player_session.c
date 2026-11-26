@@ -69,7 +69,7 @@ bool dc_player_session_make_pose(const struct dc_player_session *s,const fr_play
     uint32_t frame;
     if(!fr_player_frame(player,&frame)) return players_error(err,cap,"Cannot publish invalid player frame");
     fr_player_action_t action=player->action;
-    if(s->ray_enabled&&action==FR_PLAYER_WALK) {action=FR_PLAYER_IDLE;frame=0;}
+    if(s->ray&&action==FR_PLAYER_WALK) {action=FR_PLAYER_IDLE;frame=0;}
     fr_beaver_frame_layout_t layout=s->layouts[action][frame];
     bool flip=player->facing<0;
     uint32_t horizontal_pad=flip?layout.canvas_width-layout.x-layout.width:layout.x;
@@ -150,11 +150,10 @@ bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
 bool dc_players_fire_ray(dc_level_view_t *v,fr_fire_ray_config_t config,char *err,uint32_t cap) {
     if(!v||!v->players) return false;
     struct dc_player_session *s=v->players;
-    if(s->ray_enabled) return true;
+    if(s->ray) return true;
     fr_player_body_binding_t bindings[FR_INPUT_PLAYERS];
     for(uint32_t n=0;n<s->count;n++) bindings[n]=s->bodies[n].binding;
-    if(!fr_fire_ray_gpu_create(v->gpu,bindings,s->count,config,&s->ray,err,cap)) return false;
-    s->ray_config=config;s->ray_enabled=true;return true;
+    return fr_fire_ray_gpu_create(v->gpu,bindings,s->count,config,&s->ray,err,cap);
 }
 bool dc_players_gameplay(const dc_level_view_t *v) {
     return v&&v->players&&!v->players->editor&&v->players->input.players[0].context==FR_INPUT_GAMEPLAY;
