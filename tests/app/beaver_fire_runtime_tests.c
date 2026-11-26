@@ -96,6 +96,8 @@ static void test_actual_demo_starts_unlit_and_button_ray_burns_real_wood(void) {
     pile_state_t pile_before,pile_after;
     ASSERT_TRUE(pile_state(v->gpu,&pile_before,err,sizeof(err)));ASSERT_EQ(pile_before.flaming,0);ASSERT_EQ(pile_before.char_mass,0);
     ASSERT_TRUE(dc_level_view_tick(v,err,sizeof(err)));ASSERT_TRUE(capture(v,"demo-unlit",err,sizeof(err)));
+    dc_level_view_status_t authored_camera;
+    ASSERT_TRUE(dc_level_view_status(v,&authored_camera));
     fr_reactive_record_t before,after;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(v->gpu,target,0,8,&before,&found,err,sizeof(err)));ASSERT_TRUE(found);
     SDL_Event e={.type=SDL_KEYDOWN};
@@ -106,6 +108,12 @@ static void test_actual_demo_starts_unlit_and_button_ray_burns_real_wood(void) {
         if(n==25) {e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));}
         Uint64 start=SDL_GetPerformanceCounter();
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+        dc_level_view_status_t camera;
+        ASSERT_TRUE(dc_level_view_status(v,&camera));
+        ASSERT_EQ(camera.origin.x,authored_camera.origin.x);
+        ASSERT_EQ(camera.origin.y,authored_camera.origin.y);
+        ASSERT_EQ(camera.offset_x,authored_camera.offset_x);
+        ASSERT_EQ(camera.offset_y,authored_camera.offset_y);
         double ms=(SDL_GetPerformanceCounter()-start)*1000./SDL_GetPerformanceFrequency();
         if(n>=8&&n<12) {idle_ms+=ms;idle_n++;}
         if(n>=12&&n<24) {move_ms+=ms;move_n++;}
