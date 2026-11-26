@@ -7,9 +7,10 @@
 #include "ferrum/player/manipulation.h"
 
 static int g_pass, g_fail;
-#define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while (0)
+#define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();close_world();} while (0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while (0)
 #define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
+#define ASSERT_INT_EQ(a,b) ASSERT_EQ((int)(a),(int)(b))
 #define PASS() g_pass++
 
 /* Player anchor on the ground; reticle and carry point derived from it. */
@@ -20,6 +21,11 @@ static int g_pass, g_fail;
 
 static dc_gpu_t *gpu = NULL;
 static char err[256];
+
+static void close_world(void) {
+    dc_gpu_destroy(gpu);
+    gpu = NULL;
+}
 
 static bool setup_world(void) {
     err[0] = 0;
@@ -81,7 +87,7 @@ static void test_grab_selects_body_at_reticle_within_reach(void) {
                                             &reticle, err, sizeof(err)));
     ASSERT_TRUE(fr_player_manipulation_carrying(&carry, id));
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_grab_refuses_overweight_bodies(void) {
@@ -97,7 +103,7 @@ static void test_grab_refuses_overweight_bodies(void) {
                                              &reticle, err, sizeof(err)));
     ASSERT_TRUE(!fr_player_manipulation_carrying(&carry, id));
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_grab_refuses_bodies_beyond_reach(void) {
@@ -111,7 +117,7 @@ static void test_grab_refuses_bodies_beyond_reach(void) {
     ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                              &reticle, err, sizeof(err)));
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_carried_body_tracks_the_carry_point(void) {
@@ -135,7 +141,7 @@ static void test_carried_body_tracks_the_carry_point(void) {
     float by = (float)body.chunk.y * 64.f + body.body.y_fp / 65536.f;
     ASSERT_TRUE(fabsf(bx - PLAYER_X) < 12.f && fabsf(by - (PLAYER_Y - 8.f)) < 12.f);
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_drop_releases_the_carry(void) {
@@ -152,7 +158,7 @@ static void test_drop_releases_the_carry(void) {
     ASSERT_TRUE(fr_player_manipulation_drop(gpu, &carry, err, sizeof(err)));
     ASSERT_TRUE(!fr_player_manipulation_carrying(&carry, id));
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_throw_launches_toward_the_reticle_with_force(void) {
@@ -180,7 +186,7 @@ static void test_throw_launches_toward_the_reticle_with_force(void) {
     ASSERT_TRUE(speed > 2.5f && speed <= 3.01f);
     ASSERT_TRUE(vx > 0.f);
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_throw_force_attribute_scales_the_launch(void) {
@@ -203,7 +209,7 @@ static void test_throw_force_attribute_scales_the_launch(void) {
     float fast = sqrtf(powf((float)world.body.vx_fp / 65536.f, 2.f) +
                        powf((float)world.body.vy_fp / 65536.f, 2.f));
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     ASSERT_TRUE(setup_world());
     ASSERT_TRUE(spawn_and_settle(PLAYER_X + RETICLE_DX, PLAYER_Y + RETICLE_DY,
                                  4u, 4u) != 0u);
@@ -219,7 +225,7 @@ static void test_throw_force_attribute_scales_the_launch(void) {
     printf("throw speeds: strong %.2f weak %.2f\n", fast, slow);
     ASSERT_TRUE(fast > slow);
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
     PASS();
 }
 static void test_grab_refuses_without_a_body_at_the_reticle(void) {
@@ -231,7 +237,114 @@ static void test_grab_refuses_without_a_body_at_the_reticle(void) {
     ASSERT_TRUE(!fr_player_manipulation_grab(gpu, &carry, &m, PLAYER_X, PLAYER_Y,
                                              &reticle, err, sizeof(err)));
     fr_player_manipulation_reset(&carry);
-    dc_gpu_destroy(gpu);
+    close_world();
+    PASS();
+}
+
+static bool spawn_at(uint32_t id, fr_player_point_t point) {
+    dc_gpu_world_body_t body = {.chunk = point.chunk, .body = {
+        .x_fp = (int32_t)lroundf(point.x * DC_FLUID_FULL),
+        .y_fp = (int32_t)lroundf(point.y * DC_FLUID_FULL),
+        .width = 4u, .height = 4u, .id = id, .active = 1u}};
+    return dc_gpu_spawn_world_body(gpu, body, err, sizeof(err)) &&
+           dc_gpu_set_body_origin(gpu, gpu->body_origin, err, sizeof(err));
+}
+
+static bool grab_at(fr_player_carry_t *carry, fr_player_point_t player,
+                     const fr_player_point_t *aim) {
+    fr_player_manipulation_t settings = defaults();
+    return fr_player_manipulation_grab(gpu, carry, &settings,
+        (float)player.chunk.x * DC_CHUNK_SIDE + player.x,
+        (float)player.chunk.y * DC_CHUNK_SIDE + player.y, aim, err, sizeof(err));
+}
+
+static void test_grab_picks_a_live_body_outside_the_legacy_id_range(void) {
+    ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
+    ASSERT_TRUE(spawn_at(17u, reticle_at(212.f, 194.f)));
+    fr_player_point_t solid = reticle_at(215.f, 196.f);
+    ASSERT_TRUE(grab_at(&carry, reticle_at(200.f, 200.f), &solid));
+    ASSERT_TRUE(fr_player_manipulation_carrying(&carry, 17u));
+    PASS();
+}
+
+static void test_grab_rejects_air_just_outside_the_body(void) {
+    ASSERT_TRUE(setup_world());
+    fr_player_carry_t carry = {0};
+    ASSERT_TRUE(spawn_at(0x80000001u, reticle_at(212.f, 194.f)));
+    fr_player_point_t air = reticle_at(211.f, 195.f);
+    ASSERT_TRUE(!grab_at(&carry, reticle_at(200.f, 200.f), &air));
+    PASS();
+}
+
+static void test_a_second_player_cannot_claim_a_held_body(void) {
+    ASSERT_TRUE(setup_world());
+    fr_player_carry_t first = {0}, second = {0};
+    ASSERT_TRUE(spawn_at(0x80000001u, reticle_at(212.f, 194.f)));
+    fr_player_point_t aim = reticle_at(213.f, 195.f);
+    ASSERT_TRUE(grab_at(&first, reticle_at(200.f, 200.f), &aim));
+    ASSERT_TRUE(!grab_at(&second, reticle_at(225.f, 200.f), &aim));
+    ASSERT_TRUE(fr_player_manipulation_drop(gpu, &first, err, sizeof(err)));
+    ASSERT_TRUE(grab_at(&second, reticle_at(225.f, 200.f), &aim));
+    PASS();
+}
+
+static bool map_signed_seam(dc_chunk_coord_t *chunk) {
+    const int64_t far = INT64_C(1) << 36;
+    dc_chunk_coord_t origin = {far, -far};
+    if (!dc_gpu_set_body_origin(gpu, origin, err, sizeof(err))) return false;
+    dc_chunk_t *terrain = calloc(1, sizeof(*terrain));
+    if (!terrain) return false;
+    *chunk = (dc_chunk_coord_t){origin.x + 3, origin.y + 3};
+    terrain->coord = *chunk;
+    bool okay = dc_gpu_upload_chunk(gpu, 11u, terrain, err, sizeof(err));
+    --terrain->coord.y;
+    okay = okay && dc_gpu_upload_chunk(gpu, 10u, terrain, err, sizeof(err)) &&
+           dc_gpu_set_page(gpu, 3u, 2u, 10u, err, sizeof(err));
+    free(terrain);
+    return okay;
+}
+
+static void test_far_carry_normalizes_the_destination_across_a_signed_seam(void) {
+    ASSERT_TRUE(setup_world());
+    dc_chunk_coord_t chunk;
+    ASSERT_TRUE(map_signed_seam(&chunk));
+    fr_player_point_t rock = {chunk, 13.f, 9.f}, player = {chunk, 8.25f, 4.5f};
+    ASSERT_TRUE(spawn_at(0x80000001u, rock));
+    fr_player_carry_t carry = {0};
+    ASSERT_TRUE(grab_at(&carry, player, &rock));
+    ASSERT_TRUE(fr_player_manipulation_tick(gpu, &carry,
+        (float)chunk.x * DC_CHUNK_SIDE + player.x,
+        (float)chunk.y * DC_CHUNK_SIDE + player.y, err, sizeof(err)));
+    dc_gpu_world_body_t held;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, 0x80000001u, &held, err, sizeof(err)));
+    ASSERT_EQ(held.chunk.x, chunk.x);
+    ASSERT_EQ(held.chunk.y, chunk.y - 1);
+    ASSERT_EQ(held.body.x_fp, 33 * DC_FLUID_FULL / 4);
+    ASSERT_EQ(held.body.y_fp, 121 * DC_FLUID_FULL / 2);
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, 0x80000001u, &held, err, sizeof(err)));
+    ASSERT_EQ(held.chunk.y, chunk.y - 1);
+    ASSERT_EQ(held.body.y_fp, 121 * DC_FLUID_FULL / 2);
+    PASS();
+}
+
+static void test_far_throw_keeps_the_local_aim_direction(void) {
+    ASSERT_TRUE(setup_world());
+    dc_chunk_coord_t chunk;
+    ASSERT_TRUE(map_signed_seam(&chunk));
+    fr_player_point_t rock = {chunk, 13.f, 9.f}, player = {chunk, 8.f, 4.f};
+    fr_player_point_t left = {chunk, 7.f, 9.f};
+    ASSERT_TRUE(spawn_at(0x80000001u, rock));
+    fr_player_carry_t carry = {0};
+    ASSERT_TRUE(grab_at(&carry, player, &rock));
+    fr_player_manipulation_t settings = defaults();
+    ASSERT_TRUE(fr_player_manipulation_throw(gpu, &carry, &settings, 0.f, 0.f,
+                                             &left, err, sizeof(err)));
+    dc_gpu_world_body_t launched;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, 0x80000001u, &launched, err, sizeof(err)));
+    ASSERT_EQ(launched.body.vx_fp, -4 * (int32_t)DC_FLUID_FULL);
+    ASSERT_EQ(launched.body.vy_fp, 0);
     PASS();
 }
 
@@ -245,6 +358,11 @@ int main(void) {
     RUN(test_drop_releases_the_carry);
     RUN(test_throw_launches_toward_the_reticle_with_force);
     RUN(test_throw_force_attribute_scales_the_launch);
+    RUN(test_grab_picks_a_live_body_outside_the_legacy_id_range);
+    RUN(test_grab_rejects_air_just_outside_the_body);
+    RUN(test_a_second_player_cannot_claim_a_held_body);
+    RUN(test_far_carry_normalizes_the_destination_across_a_signed_seam);
+    RUN(test_far_throw_keeps_the_local_aim_direction);
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail > 0 ? 1 : 0;
 }

@@ -281,12 +281,49 @@ static void test_paid_placement_is_typed_and_rejects_occupied_cells(void) {
     PASS();
 }
 
+static bool is_held(dc_gpu_t *gpu, uint32_t id, bool expected) {
+    dc_gpu_body_motion_t motion;
+    return dc_gpu_read_body_motion(gpu, id, &motion, err, sizeof(err)) &&
+           ((motion.flags & DC_GPU_BODY_KINEMATIC) != 0u) == expected;
+}
+
+static void test_keyboard_and_controller_manipulate_separate_bodies(void) {
+    ASSERT_TRUE(open_fixture());
+    ASSERT_TRUE(dc_players_join(view,42,err,sizeof(err)));
+    dc_gpu_t *gpu=dc_level_view_gpu(view);
+    const uint32_t first=501u, second=907u;
+    dc_gpu_world_body_t rock = {{1,0}, {
+        .x_fp=18 * DC_FLUID_FULL, .y_fp=26 * DC_FLUID_FULL,
+        .width=4, .height=4, .id=first, .active=1}};
+    ASSERT_TRUE(dc_gpu_spawn_world_body(gpu,rock,err,sizeof(err)));
+    rock.chunk.x=2;
+    rock.body.id=second;
+    ASSERT_TRUE(dc_gpu_spawn_world_body(gpu,rock,err,sizeof(err)));
+    ASSERT_TRUE(aim(0,83,27) && aim(1,147,27));
+    ASSERT_TRUE(tap(SDL_SCANCODE_G) && pad(42,SDL_CONTROLLER_BUTTON_RIGHTSTICK));
+    ASSERT_TRUE(step(1.f/60.f));
+    ASSERT_TRUE(is_held(gpu,first,true) && is_held(gpu,second,true));
+    ASSERT_TRUE(step(1.f/60.f));
+
+    const SDL_Event disconnect = {.cdevice = {.type=SDL_CONTROLLERDEVICEREMOVED,.which=42}};
+    dc_players_event(view,&disconnect);
+    ASSERT_TRUE(step(1.f/60.f));
+    ASSERT_TRUE(is_held(gpu,first,true) && is_held(gpu,second,false));
+    ASSERT_TRUE(aim(0,50,32) && tap(SDL_SCANCODE_F) && step(1.f/60.f));
+    dc_gpu_world_body_t thrown;
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu,first,&thrown,err,sizeof(err)));
+    ASSERT_TRUE(thrown.body.vx_fp < -3 * (int32_t)DC_FLUID_FULL);
+    ASSERT_TRUE(is_held(gpu,first,false));
+    PASS();
+}
+
 int main(void) {
     RUN(test_selected_cast_latches_aim_and_fires_once_at_frame_six);
     RUN(test_keyboard_fire_bolt_leaves_the_live_beaver_as_a_burning_body);
     RUN(test_controller_selection_and_cast_belong_to_its_seat);
     RUN(test_empty_inventory_places_neither_terrain_nor_body);
     RUN(test_paid_placement_is_typed_and_rejects_occupied_cells);
+    RUN(test_keyboard_and_controller_manipulate_separate_bodies);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

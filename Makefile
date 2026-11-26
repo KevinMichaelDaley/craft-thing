@@ -1943,7 +1943,7 @@ build/hotbar_tests: tests/player/hotbar_tests.c src/player/hotbar.c
 test_hotbar: build/hotbar_tests
 	./build/hotbar_tests
 test: test_hotbar
-build/manipulation_tests: tests/player/manipulation_tests.c include/ferrum/player/manipulation.h src/player/manipulation.c include/dungeoncraft/gpu.h
+build/manipulation_tests: tests/player/manipulation_tests.c include/ferrum/player/manipulation.h src/player/manipulation.c include/dungeoncraft/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/manipulation_tests.c src/player/manipulation.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_manipulation
 test_manipulation: build/manipulation_tests

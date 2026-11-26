@@ -103,6 +103,28 @@ static bool rocks(uint32_t ids[3], uint32_t *owned) {
     return true;
 }
 
+static bool aim_at_rock(dc_gpu_t *gpu, const dc_gpu_world_body_t *rock) {
+    const int64_t left = rock->chunk.x * DC_CHUNK_SIDE + rock->body.x_fp / DC_FLUID_FULL;
+    const int64_t top = rock->chunk.y * DC_CHUNK_SIDE + rock->body.y_fp / DC_FLUID_FULL;
+    for (uint32_t y = 0; y < rock->body.height; ++y)
+        for (uint32_t x = 0; x < rock->body.width; ++x) {
+            dc_chunk_coord_t chunk;
+            uint32_t lx, ly;
+            dc_cell_address(left + x, top + y, &chunk, &lx, &ly);
+            uint32_t slot = dc_gpu_find_active_chunk(gpu, chunk);
+            if (slot == UINT32_MAX) continue;
+            uint32_t tile = gpu->slot_page[slot], occupant;
+            if (!dc_gpu_read_occupancy(gpu, tile % gpu->page_width * DC_CHUNK_SIDE + lx,
+                tile / gpu->page_width * DC_CHUNK_SIDE + ly, &occupant, NULL, err, sizeof(err)))
+                return false;
+            if (occupant == rock->body.id) {
+                fr_player_point_t aim = {chunk, (float)lx, (float)ly};
+                return dc_players_aim_override(view, 0, &aim, err, sizeof(err));
+            }
+        }
+    return false;
+}
+
 static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void) {
     char directory[] = "build/play_spawn_XXXXXX";
     ASSERT_TRUE(mkdtemp(directory));
@@ -145,6 +167,25 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     ASSERT_TRUE(read_cell(-12, 74, &cell) && cell.material == DC_MATERIAL_AIR);
     key.type = SDL_KEYUP;
     ASSERT_TRUE(dc_players_event(view, &key));
+    ASSERT_TRUE(fr_gpu_pose_authored_rigid(gpu, beaver.binding.body_id, (dc_chunk_coord_t){0, 1},
+        DC_FLUID_FULL, 6 * (int32_t)DC_FLUID_FULL, 0.f, err, sizeof(err)));
+    ASSERT_TRUE(aim_at_rock(gpu,&west));
+    key.type = SDL_KEYDOWN;
+    key.key.keysym.scancode = SDL_SCANCODE_G;
+    ASSERT_TRUE(dc_players_event(view,&key));
+    ASSERT_TRUE(dc_players_step(view,1.f/60.f,err,sizeof(err)));
+    key.type = SDL_KEYUP;
+    ASSERT_TRUE(dc_players_event(view,&key));
+    ASSERT_TRUE(dc_players_step(view,1.f/60.f,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu,original[0],&west,err,sizeof(err)));
+    ASSERT_EQ(west.chunk.x,0);
+    ASSERT_EQ(west.chunk.y,0);
+    ASSERT_EQ(west.body.x_fp,DC_FLUID_FULL);
+    ASSERT_EQ(west.body.y_fp,62 * DC_FLUID_FULL);
+    key.type = SDL_KEYDOWN;
+    key.key.keysym.scancode = SDL_SCANCODE_E;
+    ASSERT_TRUE(dc_players_event(view,&key));
+    ASSERT_TRUE(dc_players_step(view,1.f/60.f,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_remove_body(gpu, original[1], err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)) && dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_TRUE(close_world());
