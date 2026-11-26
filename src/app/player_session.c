@@ -32,7 +32,7 @@ struct dc_player_session {
     fr_player_drive_gpu_t *drive;
     fr_fire_ray_gpu_t *ray;
     fr_fire_ray_config_t ray_config;
-    bool ray_enabled;
+    bool ray_enabled,follow_camera;
     uint32_t spawn_x,spawn_y;
     uint32_t count,fire,ice,frame_offsets[FR_PLAYER_ACTION_COUNT][8];
     fr_beaver_frame_layout_t layouts[FR_PLAYER_ACTION_COUNT][8];
@@ -172,11 +172,13 @@ void dc_players_destroy(dc_level_view_t *v) {
     for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]) SDL_GameControllerClose(s->controllers[n]);
     SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);free(s);v->players=NULL;
 }
-bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uint32_t cap) {
+bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,
+                          bool follow_camera,char *err,uint32_t cap) {
     if(!v) return false;
     if(v->players) return true;
     struct dc_player_session *s=calloc(1,sizeof(*s));
     if(!s) return players_error(err,cap,"Cannot allocate player session");
+    s->follow_camera=follow_camera;
     v->players=s;s->spawn_x=x;s->spawn_y=y;s->trace=getenv("DC_PLAYER_INPUT_TRACE")!=NULL;fr_input_init(&s->input);
     bool okay=SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER)==0&&
         fr_player_registry_init(&s->registry,s->definitions,2)&&
@@ -191,7 +193,7 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,char *err,uin
     return true;
 }
 bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
-    return dc_players_enable_at(v,64,40,err,cap);
+    return dc_players_enable_at(v,64,40,true,err,cap);
 }
 bool dc_players_fire_ray(dc_level_view_t *v,fr_fire_ray_config_t config,char *err,uint32_t cap) {
     if(!v||!v->players) return false;
@@ -274,7 +276,7 @@ static int32_t player_camera_pan(double position, uint32_t extent) {
 }
 
 static void players_follow_camera(dc_level_view_t *v) {
-    if (!dc_players_gameplay(v)) return;
+    if (!v->players->follow_camera || !dc_players_gameplay(v)) return;
     uint32_t id = v->players->bodies[0].binding.body_id;
     dc_gpu_world_body_t body;
     if (!id || !dc_gpu_read_world_body(v->gpu, id, &body, NULL, 0)) return;

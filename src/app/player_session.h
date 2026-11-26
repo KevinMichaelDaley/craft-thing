@@ -11,8 +11,10 @@
 
 /** Admit keyboard player and immutable animation assets in a fresh play world. */
 bool dc_players_enable(dc_level_view_t *view,char *err,uint32_t cap);
-/** Admit at a chosen world-cell origin relative to the current scene origin. */
-bool dc_players_enable_at(dc_level_view_t *view,uint32_t x,uint32_t y,char *err,uint32_t cap);
+/** Admit at a chosen cell relative to the scene origin and configure automatic
+ * camera follow. Authored fixtures can keep their original framing. */
+bool dc_players_enable_at(dc_level_view_t *view,uint32_t x,uint32_t y,
+                          bool follow_camera,char *err,uint32_t cap);
 /** Configure the demo's explicit Q test ability as a real facing fire ray. */
 bool dc_players_fire_ray(dc_level_view_t *view,fr_fire_ray_config_t config,char *err,uint32_t cap);
 /** Route owned gameplay events, context toggles and controller lifecycle. */

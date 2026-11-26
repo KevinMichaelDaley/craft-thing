@@ -85,7 +85,7 @@ bool dc_beaver_fire_configure(dc_level_view_t *view,char *err,uint32_t cap) {
 bool dc_beaver_fire_setup(dc_level_view_t *view,char *err,uint32_t cap) {
     dc_beaver_fire_plan_t plan;
     if(!view||!dc_beaver_fire_plan(VIEW_WIDTH,VIEW_HEIGHT,&plan)||!dc_smoke_profile_defaults()) return demo_error(err,cap,"Invalid fire demo view or smoke profile");
-    if(!dc_players_enable_at(view,plan.player_x,plan.player_y,err,cap)) return false;
+    if(!dc_players_enable_at(view,plan.player_x,plan.player_y,false,err,cap)) return false;
     if(!view->restored&&!demo_wood(view,&plan,err,cap)) return false;
     if(!configure_gas(view,err,cap)) return false;
     for(uint32_t slot=0;slot<view->table.capacity;slot++) {
