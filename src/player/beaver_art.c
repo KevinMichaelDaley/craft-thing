@@ -27,13 +27,10 @@ bool beaver_art_frame(fr_player_action_t action,uint32_t frame,uint32_t pixel,be
 
 void beaver_art_pose(const beaver_art_pixel_t *pixel,fr_player_action_t action,
     uint32_t frame,int32_t *x,int32_t *y) {
-    if (action==FR_PLAYER_WALK) {
-        static const int32_t stride[6]={-2,0,2,2,0,-2};
-        static const int32_t lift[6]={0,-1,-1,0,1,1};
-        if (pixel->region==FR_BEAVER_FUR && *y>=32) {
-            *x+=*x<25?stride[frame]:-stride[frame];
-        } else if (pixel->region==FR_BEAVER_HAT || *y<24) *y+=lift[frame];
-        else if (pixel->region==FR_BEAVER_TAIL) *y+=stride[frame]/2;
-        else *x+=stride[frame]/2;
-    }
+    if (action!=FR_PLAYER_WALK) return;
+    static const int32_t stride[6]={-2,0,2,2,0,-2};
+    static const int32_t sway[6]={0,-1,-1,0,1,1};
+    if (pixel->region==FR_BEAVER_FUR && *y>=30) {
+        *x+=*x<23?stride[frame]:-stride[frame];
+    } else if (*y<24) *x+=sway[frame];
 }
