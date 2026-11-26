@@ -34,8 +34,9 @@ void dc_players_prepare_view(dc_level_view_t *view);
 bool dc_players_present(dc_level_view_t *view, char *err, uint32_t cap);
 /** Copy action state for diagnostic tests; does not read GPU body state. */
 bool dc_players_status(dc_level_view_t *view,uint32_t index,fr_player_t *player,fr_beaver_body_t *body);
-/** Join a controller-owned seat (the first seat stays keyboard-owned).
- * Device ids beyond SDL controller instance ids are valid input. */
+/** Join or reconnect a controller, reusing the first disconnected seat and
+ * its existing player state. Duplicate joins succeed without a state change.
+ * Device IDs beyond SDL controller instance IDs are valid input. */
 bool dc_players_join(dc_level_view_t *view, int64_t device, char *err,
                      uint32_t cap);
 /** Pin one player's aim at a world point (scripted demos and tests). */

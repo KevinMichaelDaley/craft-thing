@@ -305,7 +305,7 @@ test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
 PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_view.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
-PLAYER_RUNTIME_SRC += src/app/player_inventory_save.c
+PLAYER_RUNTIME_SRC += src/app/player_inventory_save.c src/app/player_join.c
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -1588,7 +1588,7 @@ build/scene_ground_tests: tests/world/scene_ground_tests.c $(GENERATE_OBJ) $(CHU
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GENERATE_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/scene_ground_tests
 build/dungeoncraft: src/app/prop_scene.c src/app/prop_scene.h
-build/dungeoncraft build/controls_tests: $(PLAYER_RUNTIME_SRC) src/app/player_view.h src/player/beaver_imported.h
+build/dungeoncraft build/controls_tests: $(PLAYER_RUNTIME_SRC) src/app/player_session_internal.h src/app/player_view.h src/player/beaver_imported.h
 build/performance/src/player/beaver_art.o: src/player/beaver_imported.h
 
 # Offline authoring and preloaded prop reader checks (no Vulkan device needed).

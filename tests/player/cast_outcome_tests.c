@@ -1,4 +1,13 @@
-#include "../../src/app/player_session.c"
+#include <stdio.h>
+#include <string.h>
+
+#include "ferrum/player/abilities.h"
+#include "ferrum/player/placement.h"
+#include "ferrum/renderer/sprite_gpu.h"
+#include "../../src/app/level_internal.h"
+#include "../../src/app/player_session_internal.h"
+#include "../../src/app/player_view.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 
 static int g_pass, g_fail;
 static char error_buf[256];
