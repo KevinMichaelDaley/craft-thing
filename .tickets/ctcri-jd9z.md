@@ -1,6 +1,6 @@
 ---
 id: ctcri-jd9z
-status: open
+status: in_progress
 deps: []
 links: [ct-1i55, ctcr-uh5f]
 created: 2026-11-26T22:48:28Z
@@ -24,3 +24,7 @@ Inject drive, ray and sprite publication failures independently. The prior seats
 **2026-11-26T22:51:48Z**
 
 The controller router now stages input in src/app/player_join.c. The remaining failure window starts when a new body is admitted and lasts through drive, ray, and pose publication. Resume with native or fault-injection evidence at those boundaries, including ray history and the authored body parcel ledger.
+
+**2026-11-26T22:55:10Z**
+
+RED production session fixture injects failures separately in movement, ray, and sprite setup. All three paths returned failure with two published seats and the newly created body and parcels still live. Eleven existing input and cast checks passed.

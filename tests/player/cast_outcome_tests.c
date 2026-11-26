@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,6 +18,11 @@ static bool backend_failed, backend_applied;
 static unsigned bolt_calls, storm_calls, drive_calls, ray_steps, ray_emits;
 static dc_level_view_t view;
 static dc_body_storage_owner_t saved_owner;
+static enum { JOIN_READY, JOIN_DRIVE_FAILS, JOIN_RAY_FAILS, JOIN_SPRITE_FAILS } join_fault;
+static unsigned candidate_bodies, candidate_parcels, visible_poses, retired_drives, retired_rays;
+static max_align_t existing_drive, next_drive, existing_ray, next_ray;
+static bool test_admission;
+static const char join_error[] = "Injected new-player setup failure";
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); } while (0)
 #define ASSERT_TRUE(expr) do { if (!(expr)) { \
@@ -63,7 +69,12 @@ bool fr_player_drive_gpu_submit(fr_player_drive_gpu_t *drive, const fr_player_dr
 
 bool fr_renderer_sprite_poses(dc_gpu_t *gpu, const fr_renderer_sprite_t *poses,
     uint32_t count, char *err, uint32_t cap) {
-    (void)gpu; (void)poses; (void)count; (void)err; (void)cap;
+    (void)gpu; (void)poses;
+    if (count == 2u && join_fault == JOIN_SPRITE_FAILS) {
+        snprintf(err, cap, "%s", join_error);
+        return false;
+    }
+    visible_poses = count;
     return true;
 }
 
@@ -138,26 +149,43 @@ dc_body_storage_owner_t *dc_gpu_body_owner(const dc_gpu_t *gpu, uint32_t slot) {
 
 bool fr_beaver_body_admit(dc_gpu_t *gpu, uint64_t identity, uint64_t transaction, uint32_t slot,
     dc_chunk_coord_t spawn, int32_t x, int32_t y, fr_beaver_body_t *body, char *err, uint32_t cap) {
-    (void)gpu; (void)identity; (void)transaction; (void)slot; (void)spawn; (void)x; (void)y;
-    (void)body; (void)err; (void)cap;
-    return false;
+    (void)gpu; (void)transaction; (void)slot; (void)spawn; (void)x; (void)y; (void)err; (void)cap;
+    if (!test_admission) return false;
+    *body = (fr_beaver_body_t){.binding = {identity, 72u, 8u}, .width = 40u, .height = 40u};
+    ++candidate_bodies;
+    ++candidate_parcels;
+    return true;
 }
 
 bool fr_player_drive_gpu_create(dc_gpu_t *gpu, const fr_player_body_binding_t *bindings,
     uint32_t count, float speed, float jump, fr_player_drive_gpu_t **drive, char *err, uint32_t cap) {
-    (void)gpu; (void)bindings; (void)count; (void)speed; (void)jump; (void)drive; (void)err; (void)cap;
-    return false;
+    (void)gpu; (void)bindings; (void)count; (void)speed; (void)jump;
+    if (!test_admission || join_fault == JOIN_DRIVE_FAILS) {
+        snprintf(err, cap, "%s", join_error);
+        return false;
+    }
+    *drive = (fr_player_drive_gpu_t *)&next_drive;
+    return true;
 }
 
-void fr_player_drive_gpu_destroy(fr_player_drive_gpu_t *drive) { (void)drive; }
+void fr_player_drive_gpu_destroy(fr_player_drive_gpu_t *drive) {
+    retired_drives += drive == (fr_player_drive_gpu_t *)&existing_drive;
+}
 
 bool fr_fire_ray_gpu_create(dc_gpu_t *gpu, const fr_player_body_binding_t *bindings,
     uint32_t count, fr_fire_ray_config_t config, fr_fire_ray_gpu_t **ray, char *err, uint32_t cap) {
-    (void)gpu; (void)bindings; (void)count; (void)config; (void)ray; (void)err; (void)cap;
-    return false;
+    (void)gpu; (void)bindings; (void)count; (void)config;
+    if (!test_admission || join_fault == JOIN_RAY_FAILS) {
+        snprintf(err, cap, "%s", join_error);
+        return false;
+    }
+    *ray = (fr_fire_ray_gpu_t *)&next_ray;
+    return true;
 }
 
-void fr_fire_ray_gpu_destroy(fr_fire_ray_gpu_t *ray) { (void)ray; }
+void fr_fire_ray_gpu_destroy(fr_fire_ray_gpu_t *ray) {
+    retired_rays += ray == (fr_fire_ray_gpu_t *)&existing_ray;
+}
 
 bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count, const dc_presentation_focus_t *crops) {
     (void)gpu; (void)count; (void)crops;
@@ -356,6 +384,53 @@ static void test_reserved_input_ids_never_admit_or_change_a_player(void) {
     PASS();
 }
 
+static void check_join_rolls_back(unsigned failure) {
+    struct dc_player_session s;
+    ASSERT_TRUE(begin_cast(&s, true));
+    saved_owner = (dc_body_storage_owner_t){0};
+    dc_chunk_slot_t slot = {.coord = {-1, -1}, .state = DC_SLOT_ACTIVE};
+    view.table = (dc_chunk_table_t){.slots = &slot, .capacity = 1u};
+    s.drive = (fr_player_drive_gpu_t *)&existing_drive;
+    s.ray = (fr_fire_ray_gpu_t *)&existing_ray;
+    s.ray_enabled = true;
+    s.inventory[1].mass_fp[DC_ITEM_WOOD] = 39322u;
+    fr_input_t input_before = s.input;
+    test_admission = true;
+    candidate_bodies = candidate_parcels = retired_drives = retired_rays = 0u;
+    join_fault = failure;
+
+    bool joined = dc_players_join(&view, 43, error_buf, sizeof(error_buf));
+    printf("Join fault %u leaves %u seats, %u candidate bodies and %u parcels\n",
+           failure, s.count, candidate_bodies, candidate_parcels);
+    ASSERT_TRUE(!joined);
+    ASSERT_EQ(strcmp(error_buf, join_error), 0);
+    ASSERT_EQ(s.count, 1u);
+    ASSERT_TRUE(!slot.dirty);
+    ASSERT_EQ(s.bodies[1].binding.body_id, 0u);
+    ASSERT_EQ(candidate_bodies, 0u);
+    ASSERT_EQ(candidate_parcels, 0u);
+    ASSERT_EQ(visible_poses, 1u);
+    ASSERT_EQ(memcmp(&s.input, &input_before, sizeof(s.input)), 0);
+    ASSERT_EQ(s.drive, (fr_player_drive_gpu_t *)&existing_drive);
+    ASSERT_EQ(s.ray, (fr_fire_ray_gpu_t *)&existing_ray);
+    ASSERT_EQ(retired_drives + retired_rays, 0u);
+
+    ASSERT_TRUE(dc_players_step(&view, .05f, error_buf, sizeof(error_buf)));
+    join_fault = JOIN_READY;
+    ASSERT_TRUE(dc_players_join(&view, 43, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(s.count, 2u);
+    ASSERT_EQ(candidate_bodies, 1u);
+    ASSERT_EQ(candidate_parcels, 1u);
+    ASSERT_EQ(visible_poses, 2u);
+    ASSERT_EQ(s.ray, (fr_fire_ray_gpu_t *)&existing_ray);
+    ASSERT_EQ(s.inventory[1].mass_fp[DC_ITEM_WOOD], 39322u);
+    PASS();
+}
+
+static void test_failed_drive_preparation_rolls_join_back(void) { check_join_rolls_back(JOIN_DRIVE_FAILS); }
+static void test_failed_ray_preparation_rolls_join_back(void) { check_join_rolls_back(JOIN_RAY_FAILS); }
+static void test_failed_sprite_preparation_rolls_join_back(void) { check_join_rolls_back(JOIN_SPRITE_FAILS); }
+
 int main(void) {
     RUN(test_bolt_backend_failure_stops_the_step);
     RUN(test_storm_backend_failure_stops_the_step);
@@ -368,6 +443,9 @@ int main(void) {
     RUN(test_direct_rejoin_uses_the_vacant_owner_and_keeps_its_ui_context);
     RUN(test_start_binding_failure_leaves_the_seat_vacant_and_retryable);
     RUN(test_reserved_input_ids_never_admit_or_change_a_player);
+    RUN(test_failed_drive_preparation_rolls_join_back);
+    RUN(test_failed_ray_preparation_rolls_join_back);
+    RUN(test_failed_sprite_preparation_rolls_join_back);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
