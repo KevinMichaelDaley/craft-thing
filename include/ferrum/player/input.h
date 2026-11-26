@@ -73,6 +73,9 @@ typedef struct {
     fr_player_point_t target;
 } fr_player_action_event_t;
 typedef struct { fr_player_action_event_t cast; } fr_player_control_t;
+/** Drop an uncommitted cast when its input owner is lost. An emitted cast
+ * continues its normal recovery animation. */
+void fr_player_control_cancel_cast(fr_player_control_t *control, fr_player_t *player);
 /** Arbitrate press actions (fire wins ties), held chew and locomotion. Active
  * casts finish before another action; their ability/target latch at windup.
  * Emit only at frame six, independently of rendering. Caller validates wood

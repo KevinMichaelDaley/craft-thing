@@ -155,6 +155,7 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
        !fr_player_hotbar_put_material(&s->hotbar[n],4u,DC_MATERIAL_WOOD)||
        !fr_input_add_player(&s->input,n+1)||!fr_input_connect(&s->input,device,n+1)||
        !fr_input_sdl_defaults(&s->input,device,device!=FR_INPUT_KEYBOARD_DEVICE)) return players_error(err,cap,"Cannot bind player input owner");
+    fr_input_context(&s->input,n+1,s->input.players[0].context);
     s->manipulation[n] = (fr_player_manipulation_t){.carry_weight=60., .throw_force=4., .reach=24.};
     s->device[n]=device;s->count++;
     fr_player_body_binding_t bindings[FR_INPUT_PLAYERS];
@@ -240,10 +241,19 @@ bool dc_players_fire_ray(dc_level_view_t *v,fr_fire_ray_config_t config,char *er
 bool dc_players_gameplay(const dc_level_view_t *v) {
     return v&&v->players&&!v->players->editor&&v->players->input.players[0].context==FR_INPUT_GAMEPLAY;
 }
+static void players_cancel_cast(struct dc_player_session *s,uint32_t seat) {
+    fr_player_control_cancel_cast(&s->controls[seat],&s->players[seat]);
+    s->cast_pressed_at[seat]=0u;
+}
+
 void dc_players_ui(dc_level_view_t *v,bool active) {
     if(!v||!v->players) return;
     struct dc_player_session *s=v->players;
-    for(uint32_t n=0;n<s->count;n++) fr_input_context(&s->input,n+1,active?FR_INPUT_UI:s->editor?FR_INPUT_EDITOR:FR_INPUT_GAMEPLAY);
+    fr_input_context_t context=active?FR_INPUT_UI:s->editor?FR_INPUT_EDITOR:FR_INPUT_GAMEPLAY;
+    for(uint32_t n=0;n<s->count;n++) {
+        fr_input_context(&s->input,n+1,context);
+        if(context!=FR_INPUT_GAMEPLAY) players_cancel_cast(s,n);
+    }
 }
 void dc_players_frame_time(dc_level_view_t *v,double seconds) {
     if(!v||!v->players||!isfinite(seconds)||seconds<0) return;
@@ -266,14 +276,17 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     if(e->type==SDL_CONTROLLERDEVICEREMOVED) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cdevice.which) {
             players_release_carry(v, n);
+            players_cancel_cast(s,n);
             s->device[n]=INT64_MIN;
         }
         for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]&&SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(s->controllers[n]))==e->cdevice.which) {
             SDL_GameControllerClose(s->controllers[n]);s->controllers[n]=NULL;
         }
     }
-    if (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+    if (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
         players_release_all_carries(v);
+        for(uint32_t n=0;n<s->count;n++) players_cancel_cast(s,n);
+    }
     if(e->type==SDL_CONTROLLERBUTTONDOWN&&e->cbutton.button==SDL_CONTROLLER_BUTTON_START) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cbutton.which) return true;
         for(uint32_t n=1;n<s->count;n++) if(s->device[n]==INT64_MIN) {
@@ -323,11 +336,14 @@ void dc_players_prepare_view(dc_level_view_t *v) {
     dc_player_view_follow(v, ids, s->split_count);
 }
 
+static bool players_input_active(const struct dc_player_session *s,uint32_t seat) {
+    return s->input.focused&&s->input.players[seat].context==FR_INPUT_GAMEPLAY&&s->device[seat]!=INT64_MIN;
+}
+
 static bool players_target(dc_level_view_t *v, uint32_t n, const fr_input_state_t *input,
                            fr_player_point_t *target) {
     struct dc_player_session *s = v->players;
-    if (!s->input.focused || s->input.players[n].context != FR_INPUT_GAMEPLAY ||
-        s->device[n] == INT64_MIN) return false;
+    if (!players_input_active(s,n)) return false;
     if (s->aim_override[n]) {
         *target = s->aim_point[n];
         return true;
@@ -391,13 +407,17 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     fr_player_drive_input_t drive[FR_INPUT_PLAYERS];
     for(uint32_t n=0;n<s->count;n++) {
         fr_input_state_t input;fr_input_sample(&s->input,n+1,&input);
+        bool owns_input=players_input_active(s,n);
+        if(!owns_input) {
+            players_cancel_cast(s,n);
+            input=(fr_input_state_t){0};
+        }
         const uint32_t edges = input.pressed;
         fr_player_hotbar_item_t item = players_select_item(&s->hotbar[n], edges);
         uint32_t selected_spell = s->ray ? s->fire :
             item.kind == FR_SLOT_SPELL ? item.ability_id : 0u;
         bool cast_pressed = (edges & (1u << FR_INPUT_FIRE)) != 0u
             ? selected_spell != 0u : (edges & (1u << FR_INPUT_ICE)) != 0u;
-        bool can_aim=s->input.focused&&s->input.players[n].context==FR_INPUT_GAMEPLAY;
         input.has_target=players_target(v,n,&input,&input.target);
         fr_player_action_t old_action=s->players[n].action;
         uint64_t action_elapsed=elapsed;
@@ -431,7 +451,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         }
         if(has_body) {
             const fr_player_action_event_t *cast=&s->cast_events[n];
-            if(!s->ray&&cast->ability&&cast->has_target&&can_aim) {
+            if(!s->ray&&cast->ability&&cast->has_target&&owns_input) {
                 char detail[sizeof(s->failure)]={0};
                 fr_player_cast_result_t result=FR_PLAYER_CAST_REFUSED;
                 if(cast->ability==s->fire)
@@ -454,7 +474,10 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     players_follow_camera(v);
     if(s->ray) {
         fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];
-        for(uint32_t n=0;n<s->count;n++) rays[n]=(fr_fire_ray_input_t){n+1,s->sequence,s->players[n].facing,s->cast_events[n].ability==s->fire};
+        for(uint32_t n=0;n<s->count;n++) {
+            bool emit=players_input_active(s,n)&&s->cast_events[n].ability==s->fire;
+            rays[n]=(fr_fire_ray_input_t){n+1,s->sequence,s->players[n].facing,emit};
+        }
         if(!fr_fire_ray_gpu_submit(s->ray,rays,s->count,seconds,err,cap)) return false;
     }
     return true;

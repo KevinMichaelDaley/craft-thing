@@ -2,6 +2,12 @@
 
 #include "ferrum/player/input.h"
 
+void fr_player_control_cancel_cast(fr_player_control_t *control, fr_player_t *player) {
+    if (!control || !player || !control->cast.ability) return;
+    control->cast = (fr_player_action_event_t){0};
+    if (player->action == FR_PLAYER_CAST) fr_player_set_action(player, FR_PLAYER_IDLE, false);
+}
+
 bool fr_player_control_tick(fr_player_control_t *c,fr_player_t *p,
     const fr_input_state_t *s,uint32_t fire,uint32_t ice,bool wood,
     uint64_t elapsed,fr_player_action_event_t *event) {
@@ -27,7 +33,10 @@ bool fr_player_control_tick(fr_player_control_t *c,fr_player_t *p,
     }
     if (p->action==FR_PLAYER_CAST) {
         if (!fr_player_advance(p,elapsed)) return false;
-        if (fr_player_take_cast_event(p)) *event=c->cast;
+        if (fr_player_take_cast_event(p)) {
+            *event=c->cast;
+            c->cast=(fr_player_action_event_t){0};
+        }
         if (fr_player_action_complete(p)) fr_player_set_action(p,FR_PLAYER_IDLE,false);
         return true;
     }
