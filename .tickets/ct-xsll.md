@@ -1,7 +1,7 @@
 ---
 id: ct-xsll
 status: in_progress
-deps: [ct-2p38]
+deps: [ct-2p38, ctpa-ptku]
 links: []
 created: 2026-11-01T19:29:54Z
 type: task
@@ -43,3 +43,7 @@ Supervisor round 1: RED dc3d963c compiled and failed state 11/4 and assets 7/2. 
 **2026-11-26T10:21:19Z**
 
 Removed the global idle substitution for walking. The sandbox presents the six-frame derived clip and mirrors it in the actual framebuffer. The dedicated fire-ray mode retains its authored idle-only movement policy from ct-9ieb. Fixed the visible robe seam and animated alternate paws under ct-r84u. The supplied ASE files retain exact hashes. The existing immutable atlas and canonical material parcel IDs are reused. Live wetting/singeing/combustion and pose-dependent exposure verification remain open.
+
+**2026-11-26T11:06:23Z**
+
+The ordinary sandbox has its own streamed atmosphere and real combustion under ctpa-zfxm. A heated canonical fur parcel now consumes oxygen-funded fuel and produces char on normal physical ticks. Its owner, composition and active gas checkpoint persist through reopening. ctpa-ptku tracks the remaining pose-dependent exposure and wet/singe framebuffer acceptance.
