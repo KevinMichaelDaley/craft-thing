@@ -11,9 +11,11 @@
 #include "ferrum/player/abilities.h"
 
 static int g_pass, g_fail;
-#define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while (0)
+static void teardown(void);
+#define RUN(fn) do {printf("RUN %s\n",#fn);fn();teardown();} while (0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while (0)
 #define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
+#define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() g_pass++
 
 /* Wood wall at row 30 and a stone floor at row 40 in chunk (3,3); the
@@ -106,7 +108,6 @@ static void test_fire_bolt_spawns_burning_body_toward_target(void) {
     ASSERT_EQ(record.state.material, DC_MATERIAL_COAL);
     ASSERT_TRUE(record.state.fuel_mass_fp > 0u);
     ASSERT_TRUE((record.state.flags & FR_REACTIVE_FLAMING) != 0u);
-    teardown();
     PASS();
 }
 static void test_fire_bolt_ignites_wood_on_impact(void) {
@@ -184,7 +185,6 @@ static void test_fire_bolt_ignites_wood_on_impact(void) {
     }
     printf("wall hottest %.4g over ambient %.4g\n", hottest, 264.);
     ASSERT_TRUE(hottest > 264. * 1.4);
-    teardown();
     PASS();
 }
 static void test_ice_storm_chills_cells_within_radius(void) {
@@ -224,7 +224,6 @@ static void test_ice_storm_chills_cells_within_radius(void) {
     /* The target pocket lost most of its heat; the far pocket is untouched. */
     ASSERT_TRUE(after < before * 0.4);
     ASSERT_TRUE(fabs(fr_reactive_state_energy(&control.state) - before) < 1.);
-    teardown();
     PASS();
 }
 static void test_ice_storm_bounds_its_area(void) {
@@ -245,16 +244,77 @@ static void test_ice_storm_bounds_its_area(void) {
     ASSERT_TRUE(wet > 20u);
     ASSERT_EQ(probe->cells[40u * 64u + 63u].material, DC_MATERIAL_STONE);
     free(probe);
-    teardown();
     PASS();
 }
 static void test_ice_storm_rejects_zero_radius(void) {
     ASSERT_TRUE(setup_world());
     fr_player_point_t target = point_at(ORIGIN_X, ORIGIN_Y);
     ASSERT_TRUE(!fr_player_cast_ice_storm(gpu, &target, 0u, err, sizeof(err)));
-    teardown();
     PASS();
 }
+
+static void test_ice_storm_keeps_generic_body_inventory_unchanged(void) {
+    ASSERT_TRUE(setup_world());
+    fr_player_point_t target = point_at(224.f, 202.f);
+    uint32_t before = gpu->body_count;
+    ASSERT_TRUE(fr_player_cast_ice_storm(gpu, &target, 6u, err, sizeof(err)));
+    ASSERT_INT_EQ(gpu->body_count, before);
+    PASS();
+}
+
+static void test_ice_storm_tracks_streamed_pages_across_a_seam(void) {
+    ASSERT_TRUE(setup_world());
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    const dc_chunk_coord_t center = {-20, 118};
+    const uint32_t slots[] = {12u, 11u};
+    const uint32_t sand_cells[] = {62u + 12u * 64u, 1u + 12u * 64u};
+    fr_reactive_state_t hot;
+    for (uint32_t i = 0; i < 2u; i++) {
+        chunk->coord = (dc_chunk_coord_t){center.x + i, center.y};
+        chunk->cells[sand_cells[i]].material = DC_MATERIAL_SAND;
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu, slots[i], chunk, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu, 2u + i, 3u, slots[i], err, sizeof(err)));
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_SAND, 3000u, 0u,
+                                             900.f, 0x71000100u + i, &hot,
+                                             err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(gpu, slots[i], sand_cells[i],
+                                              &hot, err, sizeof(err)));
+        chunk->cells[sand_cells[i]].material = DC_MATERIAL_AIR;
+    }
+    const fr_player_point_t target = {center, 63.f, 12.f};
+    ASSERT_TRUE(fr_player_cast_ice_storm(gpu, &target, 4u, err, sizeof(err)));
+    for (uint32_t i = 0; i < 2u; i++) {
+        fr_reactive_record_t chilled;
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, slots[i], sand_cells[i],
+                                              &chilled, &found, err,
+                                              sizeof(err)));
+        ASSERT_TRUE(found);
+        ASSERT_TRUE(fabs(fr_reactive_state_energy(&chilled.state) -
+                         fr_reactive_state_energy(&hot) * 0.3) < 0.001);
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu, slots[i], chunk, err, sizeof(err)));
+        uint32_t wet_x = i == 0u ? 63u : 0u;
+        ASSERT_TRUE(chunk->cells[11u * 64u + wet_x].fluid_mass > 0u);
+        ASSERT_EQ(chunk->cells[7u * 64u + wet_x].fluid_mass, 0u);
+    }
+    free(chunk);
+    PASS();
+}
+
+static void test_ice_storm_rejects_unmapped_or_noncanonical_target(void) {
+    ASSERT_TRUE(setup_world());
+    const fr_player_point_t unmapped = {{4, 3}, 2.f, 12.f};
+    const fr_player_point_t noncanonical = {{4, 3}, -2.f, 12.f};
+    ASSERT_TRUE(!fr_player_cast_ice_storm(gpu, &unmapped, 6u, err, sizeof(err)));
+    ASSERT_TRUE(!fr_player_cast_ice_storm(gpu, &noncanonical, 6u, err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk && dc_gpu_download_chunk(gpu, 11u, chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk->cells[12u * 64u + 62u].fluid_mass, 0u);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     printf("=== Player Ability Cast Tests ===\n\n");
     RUN(test_fire_bolt_spawns_burning_body_toward_target);
@@ -262,6 +322,9 @@ int main(void) {
     RUN(test_ice_storm_chills_cells_within_radius);
     RUN(test_ice_storm_bounds_its_area);
     RUN(test_ice_storm_rejects_zero_radius);
+    RUN(test_ice_storm_keeps_generic_body_inventory_unchanged);
+    RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
+    RUN(test_ice_storm_rejects_unmapped_or_noncanonical_target);
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail > 0 ? 1 : 0;
 }
