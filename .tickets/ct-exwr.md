@@ -42,3 +42,7 @@ User clarification: authoritative 8-frame artwork assets/player/beaver/beaver_ch
 **2026-11-01T23:50:50Z**
 
 Authorized continuation implemented/pushed authoritative eight-frame ASE import with explicit material/canonical maps and phased chew state machine, then actual GPU drive/support-jump backend and extraction-trim reactive binding prerequisites. Combined player tests 28/28, state+asset sanitizers 22/22, dependency tests 9/9. Normal full make attempt still fails ct-lc9o; all 141 commands from ct-il37-hidden runner executed separately: 140 pass, only stale material-15 corruption fixture fails (new ct-n81j), no timeouts. Precise progress/next implementation preserved in build/agents/beaver-player/progress.md and continuation/handoff.md. Epic intentionally remains in_progress: application admission/animated exposure and input integration, conservative gradual tree cutting plus transactional real detached-body release, spells, controller split-screen and actual end-to-end evidence remain unfinished. No inventory/removal or live beaver acceptance falsely claimed.
+
+**2026-11-26T05:47:16Z**
+
+November playtest cleanup: ct-yctv archived generic hail and fixed mapped storm cooling. ct-rrwn removed session startup scene painting and tracks the authored replacement. Remaining playtest shortcuts are tracked by ct-j34i for camera/reticles, ct-9v5t for placement/hotbar, ct-z4da for harvesting, and ct-q3hh for fire bolt ownership.

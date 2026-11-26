@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#include "../../src/app/level_internal.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
 #include "../player/runtime_visual_check.h"
@@ -32,14 +31,18 @@ static void test_enabling_player_admits_only_the_player_body(void) {
     dc_level_view_t *v = dc_level_view_create_ground(directory, 314, &ground,
                                                       err, sizeof(err));
     ASSERT_TRUE(v);
+    dc_gpu_t *gpu = dc_level_view_gpu(v);
     dc_gpu_extraction_stats_t before, after;
     bool admitted = dc_level_view_pan_pixels(v, 0, 128) &&
                     dc_level_view_wait_visible(v, 120000, err, sizeof(err)) &&
-                    dc_gpu_read_extraction_stats(v->gpu, &before) &&
+                    dc_gpu_read_extraction_stats(gpu, &before) &&
                     dc_players_enable(v, err, sizeof(err)) &&
-                    dc_gpu_read_extraction_stats(v->gpu, &after);
-    ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
+                    dc_gpu_read_extraction_stats(gpu, &after);
+    char shutdown_error[256] = {0};
+    bool destroyed = dc_level_view_destroy(v, shutdown_error, sizeof(shutdown_error));
     ASSERT_TRUE(admitted);
+    if (!destroyed) snprintf(err, sizeof(err), "%s", shutdown_error);
+    ASSERT_TRUE(destroyed);
     ASSERT_EQ(after.owned_bodies, before.owned_bodies + 1u);
     PASS();
 }
