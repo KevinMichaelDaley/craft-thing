@@ -129,18 +129,25 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
         memcpy(&data,&root->data,sizeof(data));data+=(VkDeviceAddress)dc_gpu_structural_word_offset(g)*4u;
         memcpy(push+14,&data,sizeof(data));
     }
-    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     bool rigid_coating=mode>=FR_COMBUSTION_RIGID_COATING_LINK&&mode<=FR_COMBUSTION_RIGID_COATING_PUBLISH;
+    VkPipelineStageFlags2 destination=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    VkAccessFlags2 access=VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    if(rigid_coating) {
+        destination|=VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+        access|=VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+    }
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,destination,access);
     bool body_reaction=mode==9u||mode==10u||mode==FR_COMBUSTION_SAMPLE_CONTACT_MODE||rigid_coating;
     fr_renderer_compute_t *pipeline=body_reaction?&t->body_combustion:&t->combustion;
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline_layout,0,1,&pipeline->descriptor,0,NULL);
     vkCmdPushConstants(g->command,pipeline->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     uint32_t x=t->groups_x,y=t->groups_y;
-    if(mode==9u||rigid_coating) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
-    vkCmdDispatch(g->command,x,y,1);
+    if(mode==9u) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
+    if(rigid_coating)
+        vkCmdDispatchIndirect(g->command,t->hud.buffer,FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD*4u);
+    else vkCmdDispatch(g->command,x,y,1);
     if(mode==0u||mode==10u) {
         /* Reactions preserve gas momentum and never decrease local gas mass.
          * Practical transport uses only the advective rate, so its previous

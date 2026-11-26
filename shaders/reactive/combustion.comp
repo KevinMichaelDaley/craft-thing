@@ -756,7 +756,6 @@ void main() {
     if(sample_contact && hud[FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD] == 0u) return;
     bool rigid_coating = params.unused.x >= FR_COMBUSTION_RIGID_COATING_LINK &&
                          params.unused.x <= FR_COMBUSTION_RIGID_COATING_PUBLISH;
-    if(rigid_coating && hud[FR_COMBUSTION_RIGID_COATING_ACTIVE_WORD] == 0u) return;
     if(!rigid_coating) fr_prepare_heat_poses();
     if(params.unused.x==9u || rigid_coating) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
@@ -838,7 +837,9 @@ void main() {
         if(i==0u) {for(uint j=22u;j<32u;j++) hud[j]=0u;
             hud[DC_BODY_ASH_DISPATCH_WORD]=0u;hud[DC_BODY_ASH_DISPATCH_WORD+1u]=1u;hud[DC_BODY_ASH_DISPATCH_WORD+2u]=1u;
             hud[FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD]=0u;
-            hud[FR_COMBUSTION_RIGID_COATING_ACTIVE_WORD]=0u;
+            hud[FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD]=0u;
+            hud[FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD+1u]=1u;
+            hud[FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD+2u]=1u;
             for(uint j=8u;j<12u;j++) hud[j]=0u;for(uint j=14u;j<18u;j++) hud[j]=0u;}
         if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
         uvec2 address;uint chosen=0xffffffffu;

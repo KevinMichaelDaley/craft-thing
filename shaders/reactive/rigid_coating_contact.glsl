@@ -59,7 +59,8 @@ void prepare_rigid_coating(uint index, Words donor, ivec2 p, bool exposed) {
     work.words[base + RIGID_COATING_TARGET] = target;
     for (uint i = 0u; i < 3u; i++) work.words[base + RIGID_COATING_STOCK + i] = share[i];
     work.words[base + RIGID_COATING_HEAT] = floatBitsToUint(heat);
-    atomicOr(hud[FR_COMBUSTION_RIGID_COATING_ACTIVE_WORD], 1u);
+    atomicMax(hud[FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD], gl_NumWorkGroups.x);
+    atomicMax(hud[FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD + 1u], gl_NumWorkGroups.y);
 }
 
 void link_rigid_coating(uint index, Words work) {

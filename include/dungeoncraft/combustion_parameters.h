@@ -26,7 +26,8 @@
 #define FR_COMBUSTION_RIGID_COATING_LINK 17u
 #define FR_COMBUSTION_RIGID_COATING_ADMIT 18u
 #define FR_COMBUSTION_RIGID_COATING_PUBLISH 19u
-#define FR_COMBUSTION_RIGID_COATING_ACTIVE_WORD 188u
+/* Three GPU-owned dispatch dimensions following the sample contact flag. */
+#define FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD 188u
 /* Wood rot: one exposure unit per simulated month of partial immersion;
  * each spent stage converts this much fuel to inert rot residue. */
 #define FR_ROT_EXPOSURE_PER_SECOND (1.0/2628000.0)

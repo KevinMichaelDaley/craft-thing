@@ -509,6 +509,7 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
         ASSERT_TRUE(fr_gpu_reactive_seed_cell(g, 0, first + i, &before[i], err, sizeof(err)));
     }
     ASSERT_TRUE(fr_gpu_admit_rigid_objects(g, 600300u, objects, object_cells, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_reserve_import(g, 70u, err, sizeof(err)));
     for (uint32_t i = 0; i < count; i++) {
         if (destinations[i] < 0) continue;
         uint32_t share[3];
@@ -527,6 +528,7 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
                 fr_gas_gpu_enable(g, &model, .0012f, 293.15f, err, sizeof(err)) &&
                 fr_combustion_gpu_enable(g, err, sizeof(err)) &&
                 fr_combustion_gpu_step(g, 1e-7f, err, sizeof(err)));
+    uint32_t seen = 0u;
     for (uint32_t probe = 0; probe < count; probe++) {
         fr_reactive_record_t result;
         bool found = false;
@@ -534,6 +536,8 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
                                               &found, err, sizeof(err)) && found);
         uint32_t i = result.state.origin_id_low - before[0].origin_id_low;
         ASSERT_TRUE(i < count && fr_reactive_state_valid(&result.state, err, sizeof(err)));
+        ASSERT_EQ(seen & (1u << i), 0u);
+        seen |= 1u << i;
         printf("Rigid contact parcel %u film %u/%u/%u heat %.6f, expected %u/%u/%u %.6f\n",
                i, result.state.coating_oil_fuel_fp, result.state.coating_jelly_fuel_fp,
                result.state.coating_oxidizer_fp, fr_reactive_state_energy(&result.state),
@@ -574,9 +578,13 @@ int main(void) {
     if(getenv("DC_GREEK_BODY_ONLY")) {
         RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
         RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
+        RUN(test_reciprocal_rigid_coating_contact_preserves_film_heat);
+        RUN(test_competing_rigid_coating_contacts_publish_both_offers);
     } else {
         RUN(test_submerged_rigid_coating_burns_from_bound_oxidizer);
         RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
+        RUN(test_reciprocal_rigid_coating_contact_preserves_film_heat);
+        RUN(test_competing_rigid_coating_contacts_publish_both_offers);
         RUN(test_rigid_wood_settles_impact_energy_before_ignition);
         RUN(test_thin_oxygen_is_reserved_without_creating_heat_or_consuming_unfunded_fuel);
         RUN(test_rotated_mixed_temperature_heat_cannot_overdraw_a_cold_parcel);
