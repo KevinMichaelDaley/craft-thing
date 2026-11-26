@@ -2,7 +2,7 @@
 id: ctgc-tteu
 status: in_progress
 deps: []
-links: []
+links: [ctgeo-px2n]
 created: 2026-11-26T16:31:27Z
 type: bug
 priority: 1
