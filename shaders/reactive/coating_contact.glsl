@@ -55,10 +55,7 @@ bool transfer_sample_coating(Words donor, Words receiver) {
     }
     add_energy(donor, -energy);
     add_energy(receiver, energy);
-    float threshold = uintBitsToFloat(receiver.words[s + FR_STATE_COATING_THRESHOLD]);
-    if (threshold == 0.)
-        threshold = ignition_threshold(receiver.words[s + FR_STATE_ORIGIN_LOW] ^ 0x7f4a7c15u,
-                                       receiver.words[s + FR_STATE_ORIGIN_LOW + 1u]);
+    float threshold = coating_ignition_threshold(receiver);
     receiver.words[s + FR_STATE_COATING_THRESHOLD] = floatBitsToUint(threshold);
     receiver.words[s + FR_STATE_COATING_INTEGRAL] = floatBitsToUint(max(threshold,
         uintBitsToFloat(receiver.words[s + FR_STATE_COATING_INTEGRAL])));

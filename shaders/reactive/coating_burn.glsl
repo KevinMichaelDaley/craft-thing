@@ -5,6 +5,13 @@ uint coating_set_credit(uint packed,uint shift,uint value) {
     uint mask=FR_COATING_REACTION_REM_MASK<<shift;
     return (packed&~mask)|((value&FR_COATING_REACTION_REM_MASK)<<shift);
 }
+float coating_ignition_threshold(Words entry) {
+    uint state=FR_ENTRY_STATE;
+    float threshold=uintBitsToFloat(entry.words[state+FR_STATE_COATING_THRESHOLD]);
+    return threshold!=0.?threshold:ignition_threshold(
+        entry.words[state+FR_STATE_ORIGIN_LOW]^0x7f4a7c15u,
+        entry.words[state+FR_STATE_ORIGIN_LOW+1u]);
+}
 void burn_coating(Words entry,inout Gas gas,inout float admitted,
                   inout float source_temperature,inout uint sources) {
     uint s=FR_ENTRY_STATE,oil=entry.words[s+FR_STATE_COATING_OIL];
@@ -19,9 +26,7 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
         min(1.,float(entry.words[s+FR_STATE_BOUND_WATER])/
             float(entry.words[s+FR_STATE_DRY_MASS])):0.;
     float dt=uintBitsToFloat(params.seconds);
-    float threshold=uintBitsToFloat(entry.words[s+FR_STATE_COATING_THRESHOLD]);
-    if(threshold==0.) threshold=ignition_threshold(
-        entry.words[s+4u]^0x7f4a7c15u,entry.words[s+5u]);
+    float threshold=coating_ignition_threshold(entry);
     float integral=uintBitsToFloat(entry.words[s+FR_STATE_COATING_INTEGRAL]);
     if(temperature>=coefficient(profile,FR_PROFILE_IGNITION_WORD))
         integral=min(1e20,integral+coefficient(profile,FR_PROFILE_HAZARD_WORD)*dt);

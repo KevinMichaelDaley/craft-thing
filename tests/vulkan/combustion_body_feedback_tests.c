@@ -2,6 +2,7 @@
 #include "reactive_cell_gpu_tests.c"
 #undef main
 #include <sys/stat.h>
+#include "dungeoncraft/combustion_parameters.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/material_profile.h"
@@ -338,7 +339,8 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
     dc_gpu_t *g = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     fr_gas_state_t *gas = calloc(size, sizeof(*gas));
-    ASSERT_TRUE(chunk && gas && context(&g, err, sizeof(err)));
+    float *water_heat = calloc(size, sizeof(*water_heat));
+    ASSERT_TRUE(chunk && gas && water_heat && context(&g, err, sizeof(err)));
     for (uint32_t row = y - 2u; row <= y + 2u; row++) {
         for (uint32_t column = x - 2u; column <= x + 2u; column++) {
             chunk->cells[row * DC_CHUNK_SIDE + column] = (dc_cell_t){
@@ -381,7 +383,17 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
                 fr_gas_gpu_enable(g, &model, .0012f, 293.15f, err, sizeof(err)) &&
                 fr_combustion_gpu_enable(g, err, sizeof(err)));
     uint64_t admitted = 0u;
-    for (uint32_t i = 0; i < 3u; i++) admitted += fr_reactive_state_mass_fp(&start[i]);
+    double initial_heat = 0.;
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g, 0, gas, size, err, sizeof(err)) &&
+                fr_thermal_gpu_read_water_chunk(g, 0, water_heat, size, err, sizeof(err)));
+    for (uint32_t i = 0; i < size; i++) initial_heat += gas[i].energy + (double)water_heat[i];
+    for (uint32_t i = 0; i < 3u; i++) {
+        admitted += fr_reactive_state_mass_fp(&start[i]);
+        initial_heat += fr_reactive_state_energy(&start[i]);
+    }
+    const double oil_heat = fr_reactive_profile(DC_MATERIAL_OIL)->primary_heat;
+    const double jelly_heat = fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY)->primary_heat;
+    double max_heat_drift = 0.;
     fr_reactive_record_t records[3] = {0};
     for (uint32_t i = 0; i < 2u; i++) {
         bool found = false;
@@ -399,21 +411,36 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
                                                   &found, err, sizeof(err)) && found);
         }
         double remaining = 0.;
+        double heat = 0.;
+        double oil = 0.;
+        double jelly = 0.;
         for (uint32_t i = 0; i < 3u; i++) {
             const fr_reactive_state_t *state = &records[i].state;
             ASSERT_EQ(state->origin_id_low, start[i].origin_id_low);
             ASSERT_TRUE(fr_reactive_state_valid(state, err, sizeof(err)));
             ASSERT_TRUE(state->coating_oxidizer_fp <= start[0].coating_oxidizer_fp);
             remaining += fr_reactive_state_mass_exact_fp(state);
+            heat += fr_reactive_state_energy(state);
+            oil += state->coating_oil_fuel_fp;
+            jelly += state->coating_jelly_fuel_fp;
         }
-        ASSERT_TRUE(fr_gas_gpu_read_chunk(g, 0, gas, size, err, sizeof(err)));
+        ASSERT_TRUE(fr_gas_gpu_read_chunk(g, 0, gas, size, err, sizeof(err)) &&
+                    fr_thermal_gpu_read_water_chunk(g, 0, water_heat, size, err, sizeof(err)));
         double products = 0.;
-        for (uint32_t i = 0; i < size; i++)
+        for (uint32_t i = 0; i < size; i++) {
             products += gas[i].species[FR_GAS_EXHAUST] + gas[i].species[FR_GAS_SOOT];
+            heat += gas[i].energy + (double)water_heat[i] +
+                    gas[i].species[FR_GAS_SOOT] * FR_COMBUSTION_AIRBORNE_ENERGY;
+        }
         ASSERT_TRUE(fabs(remaining + products * DC_FLUID_FULL - (double)admitted) < .01);
+        const double chemical = ((start[0].coating_oil_fuel_fp - oil) * oil_heat +
+                                  (start[0].coating_jelly_fuel_fp - jelly) * jelly_heat) / DC_FLUID_FULL;
+        double drift = fabs(heat - initial_heat - chemical);
+        max_heat_drift = fmax(drift, max_heat_drift);
     }
-    printf("Contact corrosion gold %.6f, ingredient %.6f\n",
-           records[1].state.corroded_fraction, records[2].state.corroded_fraction);
+    printf("Contact corrosion gold %.6f, ingredient %.6f, maximum heat drift %.9f\n",
+           records[1].state.corroded_fraction, records[2].state.corroded_fraction, max_heat_drift);
+    ASSERT_TRUE(max_heat_drift < .01);
     ASSERT_TRUE(records[1].state.corroded_fraction > 0.f);
     ASSERT_TRUE(records[2].state.corroded_fraction > 0.f);
     const char *checkpoint = "build/combustion_contact_reload.bin";
@@ -433,6 +460,7 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
         ASSERT_EQ(memcmp(&restored.state, &records[i + 1u].state, sizeof(restored.state)), 0);
     }
     free(gas);
+    free(water_heat);
     free(chunk);
     dc_gpu_destroy(g);
     PASS();
