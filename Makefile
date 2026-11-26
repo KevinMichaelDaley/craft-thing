@@ -2321,6 +2321,7 @@ build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests 
 .PHONY: test_submerged_coating
 test_submerged_coating: build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests
 	./build/combustion_gpu_display_tests --greek-submerged
+	./build/combustion_gpu_display_tests --corrosion
 	DC_GREEK_BODY_ONLY=1 ./build/combustion_body_feedback_display_tests
 test: test_submerged_coating
 build/revolute_display_tests: tests/vulkan/revolute_tests.c tests/vulkan/rigid_solver_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(SOLVER_SHADER)

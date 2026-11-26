@@ -1,6 +1,6 @@
 ---
 id: ctsc-plvx
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-26T14:26:23Z
@@ -21,3 +21,9 @@ Trace which adjacent cell owns the pre-coated gold reaction in the display fixtu
 ## Acceptance Criteria
 
 The standalone Vulkan case demonstrates partial gold and ingredient conversion, finite oxidizer debit, complete residue, and stable parcel identity through reload. Body-to-terrain contact and chemistry checks stay green.
+
+## Notes
+
+**2026-11-26T14:55:29Z**
+
+The matched unlit RED fixture reaches the same missing partial-gold assertion as d5f030db. The standalone positive samples had finite jelly and oxidizer but no active film flag, which the corrosion shader requires. The fixture now stages active gold and ingredient samples alongside unlit gold with the same inventory and temperature. The Vulkan display test passes partial and complete conversion, exact finite mass, gold residue and ingredient ash, and checkpoint reload with the unlit gold unchanged.
