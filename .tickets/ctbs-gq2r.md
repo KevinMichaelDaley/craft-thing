@@ -36,3 +36,7 @@ Newly admitted beavers bind registered fur, textile and tail profiles directly t
 **2026-11-26T18:50:41Z**
 
 Final focused native run passed all seven player runtime cases and all three authored spawn cases. The cloth calibration retains a larger share of the same finite chemical budget as char. A real pose reversal preserved visible singeing at 7 robe and 11 hat Q16 char, and the control player's parcels were untouched. An isolated Vulkan exposure gave fur 9830 and cloth 29492 Q16 bound water, exactly matching the source debit in both cases. The native fur parcel burned from 33424 to 33290 Q16 fuel and its saved parcel and atmosphere restored byte for byte. The keyboard visual fixture now sets its own clear aim point. Six Vulkan body tests, 256 CPU/GPU rate cases, ordinary wood/tinder/oil/ash controls and fixture contracts passed. Exact full suite is queued, so this ticket stays in progress.
+
+**2026-11-26T21:06:48Z**
+
+Integrated 3c94b591 passed seven live runtime, six Vulkan body, three authored spawn, 256 GPU/CPU profile comparisons and the CPU material, state, and fixture checks. The complete integrated make test is still queued. In the live tests the robe gained seven Q16 char and the hat eleven; fur reaction and the active atmosphere restored exactly.

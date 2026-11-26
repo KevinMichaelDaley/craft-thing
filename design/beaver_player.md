@@ -77,19 +77,20 @@ SDL routing, fixed-step scheduling and cropped animation rendering now use this
 adapter. The live framebuffer test checks all six sandbox walk poses against
 the derived clip and checks horizontal mirroring after reversing direction.
 It also verifies that fire-ray mode displays the supplied idle artwork while moving.
-Liquid water contact uses the current visible pose and transfers water and
-enthalpy to each texel's canonical parcel. Occluded texels retain their stored
-state. Collision, heat transfer and atmospheric combustion use canonical rest
-geometry. Pose-dependent heating and combustion remain open under `ctpa-ptku`.
+Water contact, heat transfer and atmospheric combustion use the current visible
+pose and update each texel's canonical parcel. Occluded texels retain their stored
+state. Collision uses canonical rest geometry. The live framebuffer checks cover
+robe wetting and robe and hat singeing across reversal. The sandbox save test
+checks that fur reaction state and the surrounding gas reload exactly.
 
-Keyboard: A/D movement, Space press jump, Q press fire bolt, E press targeted ice
-storm. C held is the provisional chew input. Keyboard targeting uses the mouse
-world location in that player's viewport. Controller proposal: left stick moves,
-south face button jumps, west fires, north casts ice, east holds chew, right stick
-aims a bounded world target. Join/disconnect/reconnect semantics belong to
-`ct-1i55`; bindings and device ownership are implemented, while split-screen
-cameras and independent viewport targeting remain outstanding. Key repeats
-must not duplicate press actions. Disconnect/focus loss must clear intents.
+Use A/D to move, Space to jump, and hold C to harvest. Select fire with 1 or ice
+with 2, then press Q to cast the selected spell. E drops a carried body. The
+mouse aims into the keyboard player's viewport. On a controller, Start joins,
+the left stick moves, the south button jumps, and the east button holds harvest.
+The right stick aims within that player's viewport. The D-pad selects a hotbar
+slot, the west button casts the selected spell, and the north button casts ice
+directly. The live split-screen checks exercise window focus, per-seat targeting,
+and camera tracking as both players cross chunk boundaries.
 
 ## Existing contracts and concrete gaps
 

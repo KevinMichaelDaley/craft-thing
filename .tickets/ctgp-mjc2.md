@@ -1,6 +1,6 @@
 ---
 id: ctgp-mjc2
-status: in_progress
+status: closed
 deps: []
 links: [ctsg-6060]
 created: 2026-11-26T19:10:19Z
@@ -52,3 +52,7 @@ Instrumented e136d9b3 publication prefix reproduced 16/16 coupled submissions wi
 **2026-11-26T20:48:57Z**
 
 With DC_FRAME_TIMINGS=0 the native test reproduced 16/16 submissions before the change and passed at 8/16 afterward. The untraced paths retain identical gas packets, clocks, and thermal energy in the heated wood. A separate enabled timing test still captured four injected slow logs and excluded them from fence wait time (0.005 ms measured).
+
+**2026-11-26T21:06:48Z**
+
+Exact 486563d0 complete publication suite passed 103 cases with zero failures. It covered one-submission practical publication with rejection, two-submission standalone heat, and the warm combined tick at 8/16 submissions with identical packets and heated wood. The same combined test passes on 3c94b591 with the authored beaver material profiles integrated.

@@ -1,6 +1,6 @@
 ---
 id: ctgvf-retb
-status: in_progress
+status: closed
 deps: []
 links: [ct-8vqy, ctsg-6060]
 created: 2026-11-26T19:28:15Z
@@ -34,3 +34,7 @@ Both native shader boundary regressions pass the production stencil fix. Net imp
 **2026-11-26T20:50:28Z**
 
 The exact full-suite profile reproduced +0.000682947 X and -0.003148760 Y total momentum change in the original one-chunk box. A per-stage Vulkan probe measured +0.000682948 X and -0.003148872 Y of pressure-impulse difference. The largest raw or applied curl imbalance was 5.3e-8 per tick, with zero kinetic-limit hits. The revised plume uses a five-by-five chunk chamber and measures cell-scale lateral detail with a Laplacian. The displayed exact inherited profile passes the unchanged 1e-4 per-axis gate (+8.335e-6, -1.538e-5) and improves detail by 3.95 percent against the retained 2 percent threshold. The default profile passes both gates as well.
+
+**2026-11-26T21:06:48Z**
+
+The exact 486563d0 complete publication suite passed all 103 eligible cases, including both the displayed plume and the empty or skipped destination curl regressions. The integrated 3c94b591 build repeated the displayed plume successfully.

@@ -1,6 +1,6 @@
 ---
 id: ct-xsll
-status: in_progress
+status: closed
 deps: [ct-2p38, ctpa-ptku]
 links: [ctlo-ldb7, ctbs-gq2r]
 created: 2026-11-01T19:29:54Z
@@ -55,3 +55,7 @@ A visible beaver texel now receives water at its current animation coordinates w
 **2026-11-26T12:50:35Z**
 
 Pose exposure acceptance is complete under ctpa-ptku. Live Vulkan tests now verify wet robe darkening, heat transfer, and robe and hat singeing with normal sandbox ambient air across reversal. A second player retains independent material state. The sandbox fixture verifies combustion and exact fur/gas checkpoint reload. Parent-level authored animation and play acceptance should be audited before proceeding to ct-vkik.
+
+**2026-11-26T21:06:48Z**
+
+The integrated 3c94b591 build passed 12 authored asset, 16 player state, six Vulkan body and seven native runtime checks. These cover exact cast and chew pixels, six distinct grounded walk poses, stable canonical owner IDs, pose-dependent heat/wetting/combustion, independent player state, and visible robe/hat singeing. The authored spawn suite passed all three cases, including exact fur parcel and active gas reload. The supplied ASE sources are unchanged.
