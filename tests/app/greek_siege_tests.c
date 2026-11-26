@@ -166,29 +166,32 @@ static void test_pool_soaks_a_stationary_oil_load(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static bool greek_open_pouch_at_launch(dc_gpu_t *gpu, dc_siege_scene_t *scene,
+                                      char *err, uint32_t cap) {
+    dc_gpu_body_motion_t arm = {0};
+    float release_angle = 0.3f;
+    const char *tuned = getenv("DC_SIEGE_RELEASE_ANGLE");
+    if (tuned) release_angle = strtof(tuned, NULL);
+    for (uint32_t tick = 0; tick < 240u && !greek_stopped; tick++) {
+        if (!dc_gpu_tick_step(gpu, err, cap)) return false;
+        if (!dc_gpu_read_body_motion(gpu, scene->arm_body, &arm, err, cap))
+            return false;
+        if (arm.angle >= release_angle)
+            return dc_siege_scene_release_projectile(gpu, scene, err, cap);
+    }
+    if (err && cap) snprintf(err, cap, "Arm did not reach the pouch release angle");
+    return false;
+}
+
 static bool greek_land_ball(dc_gpu_t *gpu, dc_siege_scene_t *scene,
                             dc_siege_load_t load, bool ignite, float *rest_x,
                             float *rest_y, char *err, uint32_t cap) {
     if (!greek_ticks(gpu, 2u, err, cap)) return false;
     if (!dc_siege_scene_release(gpu, scene, err, cap)) return false;
-    /* The launch strike lights the fuse; the swing itself stays cold and
-     * deterministic. */
     if (ignite && !dc_siege_scene_ignite_load(gpu, scene, 0.f, err, cap))
         return false;
-    dc_gpu_body_motion_t arm = {0};
+    if (!greek_open_pouch_at_launch(gpu, scene, err, cap)) return false;
     dc_gpu_world_body_t coal = {0};
-    bool crossing = false;
-    float release_angle = 0.3f;
-    const char *tuned = getenv("DC_SIEGE_RELEASE_ANGLE");
-    if (tuned) release_angle = strtof(tuned, NULL);
-    for (uint32_t tick = 0; tick < 240u && !crossing; tick++) {
-        if (!dc_gpu_tick_step(gpu, err, cap)) return false;
-        if (!dc_gpu_read_body_motion(gpu, scene->arm_body, &arm, err, cap))
-            return false;
-        if (arm.angle >= release_angle) crossing = true;
-    }
-    if (!crossing) return false;
-    if (!dc_siege_scene_release_projectile(gpu, scene, err, cap)) return false;
     for (uint32_t tick = 0; tick < 240u; tick++) {
         if (!dc_gpu_tick_step(gpu, err, cap)) return false;
         if (!dc_gpu_read_world_body(gpu, scene->coal_body, &coal, err, cap))
@@ -502,6 +505,9 @@ static void test_prompt_launch_and_fireproof_carrier_stay_safe(void) {
             if (!fuse) printf("greek fuse ignite: %s\n", err);
             ASSERT_TRUE(fuse);
         }
+        bool released = greek_open_pouch_at_launch(gpu, &scene, err, sizeof(err));
+        if (!released) printf("greek pouch release failed: %s\n", err);
+        ASSERT_TRUE(released);
         ASSERT_TRUE(greek_ticks(gpu, 10u, err, sizeof(err)));
         bool pouch_attached = true;
         ASSERT_TRUE(fr_gpu_revolute_active(gpu, scene.pouch_joint, &pouch_attached,
