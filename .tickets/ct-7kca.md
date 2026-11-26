@@ -1,6 +1,6 @@
 ---
 id: ct-7kca
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-30T10:34:54Z
@@ -23,3 +23,7 @@ Thermal samples and fluxes allocate DEVICE_LOCAL; explicit inspect still returns
 **2026-10-30T10:38:58Z**
 
 Experiment measured on RTX A2000 X11: moving thermal samples and fluxes to DEVICE_LOCAL and staging inspection readback passed thermal 3/3 with validation, but the eight-frame half-native displayed mean was 1122.480ms (baseline 1133.923ms) and MPM/thermal stage remained 650-682ms vs baseline about 655ms. This does not materially fix the bottleneck; implementation and test were reverted. Investigate pass count/algorithm and rigid tick rather than memory placement.
+
+**2026-11-26T21:11:08Z**
+
+On the integrated November baseline, a newly strengthened native thermal inspection test compiles and fails because samples and fluxes still occupy persistently mapped memory. The two existing display and hover checks pass. The current allocator preferred local mapped memory for this quarter-native fixture; the intended change reserves the mapped aperture for explicit bounded inspection instead. Capture paired half-native timing before drawing a performance conclusion.

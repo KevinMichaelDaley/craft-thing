@@ -7,6 +7,7 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "../../src/vulkan/renderer_internal.h"
 #include "../../src/vulkan/thermal_gpu_internal.h"
+#include "../../src/vulkan/thermal_gpu_state.h"
 
 static bool feedback_fixture(dc_gpu_t **g,fr_reactive_state_t *wood,char *err,uint32_t cap) {
     dc_chunk_t *c=calloc(1,sizeof(*c));if(!c) return false;
@@ -21,6 +22,9 @@ static bool feedback_fixture(dc_gpu_t **g,fr_reactive_state_t *wood,char *err,ui
 static void test_single_point_inspection_matches_real_solid_and_liquid_inventories(void) {
     char err[256]={0};dc_gpu_t *g=NULL;fr_reactive_state_t wood;
     ASSERT_TRUE(feedback_fixture(&g,&wood,err,sizeof(err)));
+    const dc_gpu_address_buffer_t *samples=&g->thermal->samples,*fluxes=&g->thermal->fluxes;
+    ASSERT_TRUE(samples->device_local&&fluxes->device_local);
+    ASSERT_TRUE(!samples->host_visible&&!fluxes->host_visible&&!samples->mapped&&!fluxes->mapped);
     fr_thermal_inspection_t info;
     ASSERT_TRUE(fr_thermal_gpu_inspect(g,20,20,&info,err,sizeof(err)));
     ASSERT_EQ(info.occupied,1u);ASSERT_EQ(info.material,DC_MATERIAL_WOOD);
