@@ -36,3 +36,7 @@ Native Vulkan RED isolated the separate grain feedback command. A warm rotating 
 **2026-11-26T20:18:58Z**
 
 Practical direct publication now records grain pressure after the accepted gas commit and guards the dispatch on the GPU rejection word. Refactor checks passed on whole-bank rotation and sparse cell ownership: coupled warm intervals used one submission, standalone conduction used two, accepted horizontal grain force matched RED exactly at +0.199835166, and rejection preserved the sentinel force and gas state. Coupled fused geometry passed the 8/16 submission gate with exact high and low packet words. The sand displacement check passed. Whole physics tick still reports 31/39 submissions and exact packets against its 8/16 gate. The supported coupled full-tick route needs its own ordered input stages.
+
+**2026-11-26T20:22:06Z**
+
+The complete tick fixture now includes coupled thermal/combustion and a real wood parcel with pending shock energy at each terrain edit. Its displayed RED completed all eight intervals in both modes, with exact gas packets, clock, and wood energy at 751.450012, while submitting 16 times in either mode. It retains the 8/16 submission gate.
