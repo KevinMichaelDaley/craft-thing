@@ -361,7 +361,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(s->split&&!split_refresh(v,err,cap)) return false;
     /* The camera follows the keyboard player so walking never leaves the
      * screen; panning shifts the streaming origin so chunks load in. */
-    {
+    if(dc_players_gameplay(v)) {
         dc_gpu_world_body_t self;
         if(s->bodies[0].binding.body_id&&
            dc_gpu_read_world_body(v->gpu,s->bodies[0].binding.body_id,&self,err,cap)) {
