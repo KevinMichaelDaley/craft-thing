@@ -121,12 +121,14 @@ bool fr_beaver_body_admit_prepared(dc_gpu_t *g,uint64_t identity,uint64_t transa
             if(!dc_gpu_remove_body(g,owner->runtime_id,NULL,0)) restored=false;
             else if(tail!=UINT32_MAX) geometry_tail=tail;
         }
-        if(!dc_gpu_upload_chunk(g,slot,chunk,NULL,0)||!restored) {
-            if(world_consistent) *world_consistent=false;
-            beaver_body_error(err,cap,"Cannot restore the world after failed player admission");
-        } else if(geometry_tail!=UINT32_MAX) {
+        if(!dc_gpu_upload_chunk(g,slot,chunk,NULL,0)) restored=false;
+        if(restored&&geometry_tail!=UINT32_MAX) {
             uint32_t *pool=(uint32_t *)g->body_mapped+dc_gpu_pixel_pool_word_offset(g);
             pool[1]=geometry_tail;
+        }
+        if(!restored||!dc_gpu_set_body_origin(g,g->body_origin,NULL,0)) {
+            if(world_consistent) *world_consistent=false;
+            beaver_body_error(err,cap,"Cannot restore the world after failed player admission");
         }
     }
     if(okay) *out=result;
