@@ -21,4 +21,3 @@ Reproduce persistent contact with actual authored sample and donor owners. Follo
 ## Acceptance Criteria
 
 A locked Vulkan persistent-contact replay keeps sample and donor state finite and accounts for all coating and oxidizer. Gold and ingredient corrosion advance through actual film transfer and persist through reload. Existing moving-load corrosion, submerged dousing and conservation checks pass.
-
