@@ -3,5 +3,5 @@
 #include "acoustic.glsl"
 void main() {
     uint tile=gas_index(),count=gas_tile_count();if(tile>=count) return;
-    if((activity[count+tile]&2u)!=0u) {uint slot=atomicAdd(indirect[12],1u);active_tiles[3u*count+slot]=tile;}
+    if(gas_finishes_tile(tile)) {uint slot=atomicAdd(indirect[12],1u);active_tiles[3u*count+slot]=tile;}
 }

@@ -15,6 +15,8 @@ layout(set=0,binding=21,std430) restrict buffer Activity {uint activity[];};
 layout(set=0,binding=22,std430) restrict buffer Matrix {vec4 matrix[];};
 layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
+uint gas_activity_tile(ivec2 p) {return (uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u;}
+bool gas_finishes_tile(uint tile) {return (activity[gas_tile_count()+tile]&2u)!=0u;}
 vec2 gas_large_pressure_state(Gas value,float old_pressure) {
     precise float mass=(((value.species.x+value.species.y)+value.species.z)+value.species.w)+value.dynamics.x;
     if(mass<=0.||value.geometry.x<=0.) return vec2(0);
@@ -34,9 +36,8 @@ float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
 }
 bool gas_pressure_accepted() {return stats[FR_GAS_ERROR_WORD]==0u&&(gas_practical_policy()||uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7);}
 bool gas_advected_point(ivec2 p) {
-    uint tile=(uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u;
     /* Pressure-only tiles can publish momentum while retaining their gas stock. */
-    return (activity[gas_tile_count()+tile]&1u)!=0u;
+    return (activity[gas_tile_count()+gas_activity_tile(p)]&1u)!=0u;
 }
 bool gas_advected(uint index) {
     return gas_advected_point(ivec2(index%params.width,index/params.width));

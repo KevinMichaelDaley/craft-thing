@@ -8,9 +8,8 @@ layout(set=0,binding=24,std430) writeonly buffer Impulses {vec2 impulses[];};
 void main() {
     uint index=gas_index();
     if(index>=params.width*params.height) return;
-    uvec2 p=uvec2(index%params.width,index/params.width);
-    uint tile=(p.y/8u)*((params.width+7u)/8u)+p.x/8u;
+    ivec2 p=ivec2(int(index%params.width),int(index/params.width));
     impulses[index]=vec2(0.);
-    if((activity[gas_tile_count()+tile]&2u)!=0u&&gas_cached(ivec2(p)).metric.z>0.)
-        impulses[index]=gas_subgrid_momentum(ivec2(p),uintBitsToFloat(params.seconds));
+    if(gas_finishes_tile(gas_activity_tile(p))&&gas_cached(p).metric.z>0.)
+        impulses[index]=gas_subgrid_momentum(p,uintBitsToFloat(params.seconds));
 }

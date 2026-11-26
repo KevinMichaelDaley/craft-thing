@@ -31,9 +31,16 @@ vec2 gas_vorticity_velocity(ivec2 p,float dt,vec2 velocity) {
  * momentum sum telescope to zero. Spatial phase is fixed; only transported
  * resolved shear can change the perturbation from one step to the next. */
 float gas_subgrid_potential(ivec2 p,float dt) {
-    uint at=gas_atlas(p);if(at==0xffffffffu) return 0.;
+    uint at=gas_atlas(p);if(at==0xffffffffu||!gas_finishes_tile(gas_activity_tile(p))) return 0.;
     Primitive own=gas_cached(p);if(own.metric.w<=0.||own.metric.z<=0.) return 0.;
-    for(uint d=0u;d<4u;d++) {uint neighbor;if(!gas_neighbor(p,d,neighbor)) return 0.;}
+    for(uint d=0u;d<4u;d++) {
+        uint neighbor;if(!gas_neighbor(p,d,neighbor)) return 0.;
+        /* This potential contributes to p, the cell to its right and the cell below. */
+        if(d==0u||d==2u) {
+            ivec2 q=p+gas_direction(d);
+            if(!gas_finishes_tile(gas_activity_tile(q))||gas_cached(q).metric.z<=0.) return 0.;
+        }
+    }
     float curl=gas_curl(p);if(abs(curl)<.001) return 0.;
     uint phase=uint(p.x)*1664525u+uint(p.y)*1013904223u;
     phase^=phase>>16u;phase*=2246822519u;phase^=phase>>13u;
