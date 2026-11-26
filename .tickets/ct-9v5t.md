@@ -1,6 +1,6 @@
 ---
 id: ct-9v5t
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T05:42:31Z
@@ -24,3 +24,7 @@ Each controller/player owns selection and cast target. Cast once at the authored
 **2026-11-26T06:23:26Z**
 
 RED reproduced ignored controller selection, firing the wrong spell after selecting ice, unpaid rigid admission, and missing terrain placement. The live session now resolves the owned slot before input arbitration and dispatches the spell and target latched at windup on frame six. R places one authored terrain cell and B places a typed 4x4 convex body using a free runtime ID. Validated all four live action cases, including two paid bodies with distinct IDs, a blocked footprint with sufficient stock, a material mismatch, and the solver mass after a real tick. Input, SDL, hotbar, player runtime, split-screen, brush, rigid carve, default recipe, and dependency checks passed. Both pattern shader variants validate.
+
+**2026-11-26T06:24:15Z**
+
+Final follow-up passed all six convex-body cases and the actual fire-ray demo, including 330 live ticks, pile ignition, and exact gas reload. The ongoing broad suite and its queued rerun remain tracked under ct-il37. The fire-bolt admission defect remains tracked under ct-q3hh.
