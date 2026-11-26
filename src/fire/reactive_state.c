@@ -127,6 +127,12 @@ bool fr_reactive_state_valid(const fr_reactive_state_t *s,char *err,uint32_t cap
         return error(err,cap,"Invalid coating mass remainder");
     if(!isfinite(s->reaction_fraction)||s->reaction_fraction<0||s->reaction_fraction>=1)
         return error(err,cap,"Invalid fractional reaction progress");
+    if(!isfinite(s->coating_reaction_progress)||s->coating_reaction_progress<0.f||
+       s->coating_reaction_progress>FR_COATING_PROGRESS_LIMIT||
+       (s->coating_reaction_progress>0.f&&
+        coating_remainder(s->coating_remainders,FR_COATING_REACTION_REM_SHIFT,
+                          FR_COATING_REACTION_REM_MASK)!=0u))
+        return error(err,cap,"Invalid coating reaction progress");
     float step=s->thermal_energy-nextafterf(s->thermal_energy,0.f);
     float next=nextafterf(s->thermal_energy,INFINITY);
     if(isfinite(next)) step=next-s->thermal_energy;
@@ -253,6 +259,11 @@ bool fr_reactive_state_split(const fr_reactive_state_t *s,uint32_t weight,uint64
     double active=(double)first_active+second_active;
     first.reaction_fraction=active>0.?(float)(s->reaction_fraction*first_active/active):0.f;
     second.reaction_fraction=s->reaction_fraction-first.reaction_fraction;
+    double first_coating=(double)first.coating_oil_fuel_fp+first.coating_jelly_fuel_fp;
+    double coating=(double)s->coating_oil_fuel_fp+s->coating_jelly_fuel_fp;
+    first.coating_reaction_progress=coating>0.?
+        (float)(s->coating_reaction_progress*first_coating/coating):0.f;
+    second.coating_reaction_progress=s->coating_reaction_progress-first.coating_reaction_progress;
     first.evaporation_fraction=s->bound_water_fp>0u?
         (float)((double)s->evaporation_fraction*first.bound_water_fp/s->bound_water_fp):0.f;
     second.evaporation_fraction=s->evaporation_fraction-first.evaporation_fraction;

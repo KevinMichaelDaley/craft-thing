@@ -17,6 +17,7 @@ static void test_gpu_body_snapshot_filters_cell_state_and_retains_exact_body_own
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     fr_reactive_state_t body_state,cell_state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,900,700,91,&body_state,err,sizeof(err)));
     body_state.coating_oil_fuel_fp=500;body_state.ignition_threshold=.8f;body_state.ignition_integral=.4f;
+    body_state.coating_reaction_progress=.623589f;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,11*64+11,&body_state,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(g)&&dc_gpu_rigid_step(g,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_paint_material(g,30,30,0,DC_MATERIAL_STONE,err,sizeof(err)));
@@ -24,6 +25,7 @@ static void test_gpu_body_snapshot_filters_cell_state_and_retains_exact_body_own
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,30*64+30,&cell_state,err,sizeof(err)));
     fr_reactive_record_t expected;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(g,0x80000001u,1,1,&expected,&found,err,sizeof(err))&&found);
+    ASSERT_EQ(expected.state.coating_reaction_progress,body_state.coating_reaction_progress);
     fr_reactive_record_t *records=NULL;uint32_t count=0;uint64_t next=0;
     ASSERT_TRUE(fr_gpu_reactive_export_bodies(g,&records,&count,&next,err,sizeof(err)));
     ASSERT_EQ(count,1u);ASSERT_EQ(next,93u);ASSERT_TRUE(memcmp(records,&expected,sizeof(expected))==0);

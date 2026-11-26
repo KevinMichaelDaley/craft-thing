@@ -38,6 +38,7 @@ static void test_gpu_moves_single_owner_preserving_every_state_bit(void) {
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,65536,100,700,73,&state,err,sizeof(err)));
     state.ignition_threshold=.7f;state.ignition_integral=.3f;
     state.coating_oil_fuel_fp=300;state.pending_shock_energy=27;
+    state.coating_reaction_progress=.823412f;
     for(uint32_t i=0;i<16;i++) {
         uint32_t *entry=p.mapped+64+i*FR_ENTRY_WORDS;entry[0]=i+7;entry[1]=FR_REACTIVE_OWNER_CELL;
         memcpy(entry+FR_ENTRY_STATE,&state,sizeof(state));entry[FR_ENTRY_STATE+2]=73+i;
@@ -61,11 +62,15 @@ static void test_stale_or_occupied_handles_never_steal_or_erase_live_state(void)
     probe_t p={0};ASSERT_TRUE(initialize(&p)&&allocate_buffer(&p));
     ASSERT_TRUE(create_pipeline(&p,"build/diagnostics/reactive_state_probe.spv"));
     memset(p.mapped,0,PROBE_WORDS*4u);p.mapped[0]=2;p.mapped[1]=1;
-    p.mapped[64]=8;p.mapped[65]=1;p.mapped[101]=3;p.mapped[102]=1;
+    uint32_t *entries=p.mapped+64u;
+    entries[FR_ENTRY_GENERATION]=8u;
+    entries[FR_ENTRY_OWNER]=1u;
+    entries[FR_ENTRY_WORDS+FR_ENTRY_GENERATION]=3u;
+    entries[FR_ENTRY_WORDS+FR_ENTRY_OWNER]=1u;
     p.mapped[1024]=0;p.mapped[1025]=7; /* retired generation */
     p.mapped[1026]=1;p.mapped[1027]=3;
     uint32_t *c=p.mapped+2048;c[0]=1;c[1]=0;c[2]=1;c[3]=2;c[4]=101;c[5]=1;
-    uint32_t saved[74];memcpy(saved,p.mapped+64,sizeof(saved));
+    uint32_t saved[2u*FR_ENTRY_WORDS];memcpy(saved,entries,sizeof(saved));
     ASSERT_TRUE(dispatch_state(&p));ASSERT_EQ(c[9],0u);
     ASSERT_TRUE(memcmp(saved,p.mapped+64,sizeof(saved))==0);ASSERT_EQ(p.mapped[1027],3u);
     p.mapped[1025]=8; /* valid source, occupied destination must also fail */

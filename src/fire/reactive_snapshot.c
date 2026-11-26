@@ -6,7 +6,11 @@
 
 #include "ferrum/fire/reactive_state.h"
 
-enum { HEADER_WORDS=10, RECORD_WORDS=FR_REACTIVE_STATE_WORDS+FR_REACTIVE_OWNER_WORDS };
+enum {
+    HEADER_WORDS=10,
+    RECORD_WORDS=FR_REACTIVE_STATE_WORDS+FR_REACTIVE_OWNER_WORDS,
+    LEGACY_STATE_WORDS=29
+};
 _Static_assert(sizeof(fr_reactive_record_t)==RECORD_WORDS*4u,"Reactive snapshot record layout changed");
 static bool error(char *err,uint32_t cap,const char *reason) {
     if(err&&cap) snprintf(err,cap,"%s",reason);
@@ -36,6 +40,26 @@ static void encode(uint8_t *target,const uint32_t *words,size_t count) {
 static void decode(uint32_t *target,const uint8_t *bytes,size_t count) {
     for(size_t i=0;i<count;i++) target[i]=(uint32_t)bytes[i*4]|
         ((uint32_t)bytes[i*4+1]<<8)|((uint32_t)bytes[i*4+2]<<16)|((uint32_t)bytes[i*4+3]<<24);
+}
+static size_t disk_record_size(const uint32_t header[HEADER_WORDS]) {
+    if(header[0]!=0x31535246u||header[1]<1u||header[1]>FR_REACTIVE_STATE_ABI||
+       header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0u) return 0u;
+    uint32_t words=header[1]<9u?LEGACY_STATE_WORDS:FR_REACTIVE_STATE_WORDS;
+    return header[2]==words?(words+FR_REACTIVE_OWNER_WORDS)*4u:0u;
+}
+static size_t packet_stride(const uint8_t *bytes,size_t length,uint32_t header[HEADER_WORDS]) {
+    if(!bytes||length<HEADER_WORDS*4u) return 0u;
+    decode(header,bytes,HEADER_WORDS);
+    size_t stride=disk_record_size(header),payload=length-HEADER_WORDS*4u;
+    return stride&&payload%stride==0u&&payload/stride==header[4]?stride:0u;
+}
+static void decode_records(fr_reactive_record_t *records,const uint8_t *payload,
+                           uint32_t count,size_t stride) {
+    for(uint32_t i=0;i<count;i++) {
+        uint32_t words[RECORD_WORDS]={0};
+        decode(words,payload+(size_t)i*stride,stride/4u);
+        memcpy(records+i,words,sizeof(words));
+    }
 }
 static uint64_t hash_bytes(uint64_t hash,const uint8_t *bytes,size_t count) {
     for(size_t i=0;i<count;i++) hash=(hash^bytes[i])*UINT64_C(1099511628211);
@@ -130,11 +154,12 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     uint8_t encoded[HEADER_WORDS*4];uint32_t header[HEADER_WORDS];
     bool okay=fread(encoded,sizeof(encoded),1,file)==1;
     if(okay) decode(header,encoded,HEADER_WORDS);
-    if(!okay||header[0]!=0x31535246u||(header[1]<1u||header[1]>FR_REACTIVE_STATE_ABI)||
-       header[2]!=FR_REACTIVE_STATE_WORDS||header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0) {
+    size_t stride=okay?disk_record_size(header):0u;
+    size_t restored_size=0;
+    if(!stride||!fr_reactive_snapshot_size(header[4],&restored_size)) {
         fclose(file);return error(err,cap,"Unsupported/corrupt reactive snapshot header");
     }
-    uint64_t bytes64=(uint64_t)header[4]*sizeof(fr_reactive_record_t);
+    uint64_t bytes64=(uint64_t)header[4]*stride;
     if(bytes64>SIZE_MAX||bytes64>LONG_MAX-sizeof(encoded)||fseek(file,0,SEEK_END)!=0) {
         fclose(file);return error(err,cap,"Reactive snapshot size is not representable");
     }
@@ -147,7 +172,8 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     }
     size_t bytes=(size_t)bytes64;
     uint8_t *payload=bytes?malloc(bytes):NULL;
-    fr_reactive_record_t *copy=bytes?malloc(bytes):NULL;
+    size_t copy_bytes=restored_size-sizeof(encoded);
+    fr_reactive_record_t *copy=bytes?malloc(copy_bytes):NULL;
     if(bytes&&(!payload||!copy)) {
         free(payload);free(copy);fclose(file);return error(err,cap,"Cannot stage reactive restore");
     }
@@ -158,15 +184,12 @@ bool fr_reactive_snapshot_read(const char *path,fr_reactive_record_t *records,ui
     hash=hash_bytes(hash,payload,bytes);
     uint64_t stored=(uint64_t)header[8]|((uint64_t)header[9]<<32);
     if(hash!=stored) {free(payload);free(copy);return error(err,cap,"Reactive snapshot checksum mismatch");}
-    for(uint32_t i=0;i<header[4];i++) {
-        uint32_t words[RECORD_WORDS];decode(words,payload+(size_t)i*sizeof(*copy),RECORD_WORDS);
-        memcpy(copy+i,words,sizeof(words));
-    }
+    decode_records(copy,payload,header[4],stride);
     free(payload);
     uint64_t restored_next=(uint64_t)header[6]|((uint64_t)header[7]<<32);
     if(!legacy_owners_valid(copy,header[4],header[1],err,cap)||
        !records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
-    if(bytes) memcpy(records,copy,bytes);
+    if(copy_bytes) memcpy(records,copy,copy_bytes);
     free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }
 bool fr_reactive_snapshot_size(uint32_t count,size_t *out) {
@@ -174,6 +197,11 @@ bool fr_reactive_snapshot_size(uint32_t count,size_t *out) {
     size_t bytes=(size_t)count*sizeof(fr_reactive_record_t);
     if((count&&bytes/count!=sizeof(fr_reactive_record_t))||bytes>SIZE_MAX-HEADER_WORDS*4u) return false;
     *out=bytes+HEADER_WORDS*4u;return true;
+}
+bool fr_reactive_snapshot_packet_count(const uint8_t *bytes,size_t length,uint32_t *count) {
+    uint32_t header[HEADER_WORDS];
+    if(!count||!packet_stride(bytes,length,header)) return false;
+    *count=header[4];return true;
 }
 bool fr_reactive_snapshot_encode(const fr_reactive_record_t *records,uint32_t count,uint64_t next,
     uint8_t *bytes,size_t capacity,size_t *written,char *err,uint32_t cap) {
@@ -202,25 +230,22 @@ bool fr_reactive_snapshot_decode(const uint8_t *bytes,size_t length,fr_reactive_
     uint32_t capacity,uint32_t *count,uint64_t *next,uint32_t *required,char *err,uint32_t cap) {
     if(!bytes||length<HEADER_WORDS*4u||!count||!next||!required||(!records&&capacity))
         return error(err,cap,"Invalid reactive packet restore request");
-    uint32_t header[HEADER_WORDS];decode(header,bytes,HEADER_WORDS);size_t total=0;
-    if(header[0]!=0x31535246u||(header[1]<1u||header[1]>FR_REACTIVE_STATE_ABI)||header[2]!=FR_REACTIVE_STATE_WORDS||
-       header[3]!=FR_REACTIVE_OWNER_WORDS||header[5]!=0||!fr_reactive_snapshot_size(header[4],&total))
+    uint32_t header[HEADER_WORDS];
+    size_t stride=packet_stride(bytes,length,header),restored_size=0;
+    if(!stride||!fr_reactive_snapshot_size(header[4],&restored_size))
         return error(err,cap,"Unsupported/corrupt reactive packet header");
-    if(length!=total) return error(err,cap,"Reactive packet length mismatch");
-    size_t payload=total-HEADER_WORDS*4u;
+    size_t payload=length-HEADER_WORDS*4u;
     uint64_t hash=hash_bytes(UINT64_C(14695981039346656037),bytes,8u*4u);
     hash=hash_bytes(hash,bytes+HEADER_WORDS*4u,payload);
     if(hash!=((uint64_t)header[8]|((uint64_t)header[9]<<32))) return error(err,cap,"Reactive packet checksum mismatch");
     if(header[4]>capacity) {*required=header[4];return error(err,cap,"Reactive packet requires more record capacity");}
-    fr_reactive_record_t *copy=payload?malloc(payload):NULL;
-    if(payload&&!copy) return error(err,cap,"Cannot stage reactive packet restore");
-    for(uint32_t i=0;i<header[4];i++) {
-        uint32_t words[RECORD_WORDS];decode(words,bytes+HEADER_WORDS*4u+(size_t)i*sizeof(*copy),RECORD_WORDS);
-        memcpy(copy+i,words,sizeof(words));
-    }
+    size_t copy_bytes=restored_size-HEADER_WORDS*4u;
+    fr_reactive_record_t *copy=copy_bytes?malloc(copy_bytes):NULL;
+    if(copy_bytes&&!copy) return error(err,cap,"Cannot stage reactive packet restore");
+    decode_records(copy,bytes+HEADER_WORDS*4u,header[4],stride);
     uint64_t restored_next=(uint64_t)header[6]|((uint64_t)header[7]<<32);
     if(!legacy_owners_valid(copy,header[4],header[1],err,cap)||
        !records_valid(copy,header[4],restored_next,err,cap)) {free(copy);return false;}
-    if(payload) memcpy(records,copy,payload);
+    if(copy_bytes) memcpy(records,copy,copy_bytes);
     free(copy);*count=header[4];*next=restored_next;*required=header[4];return true;
 }

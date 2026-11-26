@@ -22,7 +22,9 @@ static bool input(fr_reactive_record_t records[2]) {
 }
 #define PACKET_BYTES (2u*sizeof(fr_reactive_record_t)+10u*sizeof(uint32_t))
 static void test_memory_packet_matches_existing_file_codec_and_preserves_input(void) {
-    char err[128];fr_reactive_record_t records[2],saved[2],out[2];ASSERT_TRUE(input(records));memcpy(saved,records,sizeof(saved));
+    char err[128];fr_reactive_record_t records[2],saved[2],out[2];ASSERT_TRUE(input(records));
+    records[1].state.coating_reaction_progress=.491234f;
+    memcpy(saved,records,sizeof(saved));
     uint8_t bytes[PACKET_BYTES],file_bytes[PACKET_BYTES];size_t size=0,written=0;
     ASSERT_TRUE(fr_reactive_snapshot_size(2,&size));ASSERT_EQ(size,sizeof(bytes));
     ASSERT_TRUE(fr_reactive_snapshot_encode(records,2,42,bytes,sizeof(bytes),&written,err,sizeof(err)));

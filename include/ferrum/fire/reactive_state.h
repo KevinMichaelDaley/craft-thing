@@ -8,8 +8,8 @@
 #include "dungeoncraft/chunk.h"
 #include "ferrum/fire/material_profile.h"
 
-#define FR_REACTIVE_STATE_ABI 8u
-#define FR_REACTIVE_STATE_WORDS 29u
+#define FR_REACTIVE_STATE_ABI 9u
+#define FR_REACTIVE_STATE_WORDS 30u
 #define FR_REACTIVE_OWNER_WORDS 6u
 enum {
     FR_REACTIVE_WATER_MIRROR = 1u,
@@ -42,6 +42,8 @@ typedef struct {
     float rot_exposure; /**< Partial-immersion rot progress, ABI 8: each 1.0
      * spends one fuel-to-inert conversion stage. Accumulates only at the
      * air-water interface; dry and fully saturated parcels pause. */
+    float coating_reaction_progress; /**< Unspent reaction progress in Q16 fuel
+     * units, ABI 9. The final mixed oil/jelly pair can accumulate two units. */
 } fr_reactive_state_t;
 
 enum { FR_REACTIVE_OWNER_CELL=1u, FR_REACTIVE_OWNER_BODY=2u,
@@ -136,6 +138,9 @@ bool fr_reactive_snapshot_read(const char *path, fr_reactive_record_t *records,
                                 char *err_buf, uint32_t err_cap);
 /** Size of the canonical FRS1 packet, including its versioned header. */
 bool fr_reactive_snapshot_size(uint32_t count,size_t *out_bytes);
+/** Read the record count after checking the encoded version, stride and length.
+ * Decode validates the checksum and records before publishing restored state. */
+bool fr_reactive_snapshot_packet_count(const uint8_t *bytes,size_t length,uint32_t *count);
 /** Encode an embeddable packet without modifying input records. Invalid data,
  * allocation failure or insufficient capacity leaves bytes/written untouched. */
 bool fr_reactive_snapshot_encode(const fr_reactive_record_t *records,uint32_t count,

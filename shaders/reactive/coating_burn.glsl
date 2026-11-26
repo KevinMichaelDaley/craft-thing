@@ -38,6 +38,8 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     uint s=FR_ENTRY_STATE,oil=entry.words[s+FR_STATE_COATING_OIL];
     if(oil==0u) return;
     uint jelly=entry.words[s+FR_STATE_COATING_JELLY];
+    uint total=oil+jelly;
+    if(total<oil) return;
     bool mixed=jelly>0u;
     uint profile=mixed?FR_COATING_GREEK_MATERIAL:FR_COATING_OIL_MATERIAL;
     float capacity=solid_capacity(entry);
@@ -66,27 +68,36 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     else if(integral>=threshold) flags|=4u;
     entry.words[s+FR_STATE_FLAGS]=flags;
     if(!viable||(flags&4u)==0u) return;
-    uint packed=entry.words[s+FR_STATE_COATING_REMAINDERS],total=oil+jelly;
-    float fuel_credit=float(coating_credit(packed,FR_COATING_REACTION_REM_SHIFT))/1024.;
+    uint packed=entry.words[s+FR_STATE_COATING_REMAINDERS];
+    float fuel_credit=min(float(total),
+        uintBitsToFloat(entry.words[s+FR_STATE_COATING_REACTION_PROGRESS])+
+        float(coating_credit(packed,FR_COATING_REACTION_REM_SHIFT))/1024.);
     float oxygen_credit=float(coating_credit(packed,FR_COATING_OXIDIZER_REM_SHIFT))/1024.;
     float demand=coefficient(profile,FR_PROFILE_OXYGEN_DEMAND_WORD);
     float rate=coefficient(profile,FR_PROFILE_BURN_RATE_WORD)*dt*
         (mixed?1.:(1.-wet)*(1.-wet));
-    float requested=min(float(total)-fuel_credit,float(total)*(1.-exp(-rate)));
+    /* Keep the small interval when subtracting exp(-rate) would lose bits. */
+    float fraction=rate<.01?rate*(1.-rate*(.5-rate/6.)):1.-exp(-rate);
+    float requested=min(float(total)-fuel_credit,float(total)*fraction);
     float funded=min(requested,max(0.,(float(stock)+oxygen_credit)/demand-fuel_credit));
     float progress=max(0.,fuel_credit+funded);
-    uint reacted=min(total,uint(floor(progress)));
-    packed=coating_set_credit(packed,FR_COATING_REACTION_REM_SHIFT,
-        uint(floor(min(1023./1024.,max(0.,progress-float(reacted)))*1024.)));
-    if(reacted==0u) {entry.words[s+FR_STATE_COATING_REMAINDERS]=packed;return;}
+    uint reacted=progress>=float(total)?total:uint(floor(progress));
+    /* Hold the last oil and jelly units until both can be funded together. */
+    if(mixed&&reacted==total-1u) --reacted;
     float needed=float(reacted)*demand;
     uint oxidizer=uint(ceil(max(0.,needed-oxygen_credit)-.00001));
     if(oxidizer>stock) return;
     float remaining_credit=min(1023./1024.,max(0.,oxygen_credit+float(oxidizer)-needed));
+    packed=coating_set_credit(packed,FR_COATING_REACTION_REM_SHIFT,0u);
     packed=coating_set_credit(packed,FR_COATING_OXIDIZER_REM_SHIFT,
         uint(floor(remaining_credit*1024.)));
+    entry.words[s+FR_STATE_COATING_REACTION_PROGRESS]=floatBitsToUint(
+        clamp(progress-float(reacted),0.,FR_COATING_PROGRESS_LIMIT));
     entry.words[s+FR_STATE_COATING_REMAINDERS]=packed;
+    if(reacted==0u) return;
     uint oil_used=mixed?coating_oil_share(reacted,oil,total):reacted;
+    if(mixed&&reacted<total)
+        oil_used=clamp(oil_used,reacted-min(reacted,jelly-1u),oil-1u);
     uint jelly_used=reacted-oil_used;
     uint ash=uint(floor(float(reacted)*coefficient(profile,FR_PROFILE_ASH_YIELD_WORD)));
     uint soot=uint(floor(float(reacted)*coefficient(profile,FR_PROFILE_SOOT_YIELD_WORD)));

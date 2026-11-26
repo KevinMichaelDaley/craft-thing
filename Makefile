@@ -1973,8 +1973,13 @@ build/reactive_state_gpu_tests: tests/vulkan/reactive_state_gpu_tests.c tools/di
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/reactive_state_gpu_tests.c $(REACTIVE_STATE_SRC) -o $@ $(LDLIBS)
 build/reactive_cell_gpu_tests: tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/shaders/runtime/pattern.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
-$(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl include/dungeoncraft/reactive_state_layout.h
+REACTIVE_OWNER_SHADERS = $(RUNTIME_BODY_SHADERS) $(SHADER) $(HALO_SHADER) $(MPM_SHADER) \
+	build/shaders/mpm_stencil.comp.spv build/shaders/component_extract.comp.spv \
+	build/shaders/structural.comp.spv build/shaders/structural_carve.comp.spv \
+	build/shaders/runtime/structural_carve.comp.spv build/shaders/scene.comp.spv
+$(REACTIVE_OWNER_SHADERS): shaders/reactive/gpu_storage.glsl shaders/reactive/state.glsl \
+	shaders/reactive/address.glsl include/dungeoncraft/reactive_state_layout.h \
+	include/dungeoncraft/reactive_arena_layout.h
 test: build/reactive_state_gpu_tests build/reactive_cell_gpu_tests
 build/reactive_cell_display_tests: tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -2004,7 +2009,6 @@ build/reactive_address_gpu_tests: tests/vulkan/reactive_address_gpu_tests.c test
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lvulkan
 $(GPU_OBJ): build/shaders/reactive_arena.comp.spv
 build/reactive_gpu.o: src/vulkan/reactive_arena_gpu.h
-$(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv: include/dungeoncraft/reactive_arena_layout.h shaders/reactive/address.glsl
 build/reactive_packet_tests: tests/fire/reactive_packet_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
@@ -2290,6 +2294,7 @@ build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reac
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl include/dungeoncraft/coating_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_burn.glsl
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv build/shaders/thermal.comp.spv: include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_arena_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_contact.glsl include/dungeoncraft/combustion_parameters.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/rigid_coating_contact.glsl include/dungeoncraft/reactive_arena_layout.h
 build/shaders/body_combustion.comp.spv build/shaders/structural.comp.spv: include/dungeoncraft/corrosion_parameters.h

@@ -78,10 +78,12 @@ bool fr_reactive_archive_decode(const uint8_t *bytes,size_t length,const dc_chun
     if(!bytes||!out||(!chunks&&chunk_count)||length<HEADER_BYTES+40u||get(bytes,4)!=0x31575246u||
        get(bytes+4,4)!=1u||get(bytes+8,4)!=chunk_count||get(bytes+12,4)||get(bytes+24,8)!=length||
        hash(bytes,length)!=get(bytes+32,8)) return error(err,cap,"Unsupported/corrupt reactive archive");
-    uint64_t body_bytes=get(bytes+16,8);size_t expected=0;
+    uint64_t body_bytes=get(bytes+16,8);
     if(body_bytes<40u||body_bytes>length-HEADER_BYTES) return error(err,cap,"Reactive body packet length mismatch");
-    uint32_t body_count=(uint32_t)get(bytes+HEADER_BYTES+16u,4);
-    if(!fr_reactive_snapshot_size(body_count,&expected)||expected!=body_bytes) return error(err,cap,"Reactive body record count mismatch");
+    uint32_t body_count=0;size_t restored_size=0;
+    if(!fr_reactive_snapshot_packet_count(bytes+HEADER_BYTES,(size_t)body_bytes,&body_count)||
+       !fr_reactive_snapshot_size(body_count,&restored_size))
+        return error(err,cap,"Reactive body record count mismatch");
     fr_reactive_archive_t staged={.body_count=body_count,.chunk_count=chunk_count};
     staged.bodies=body_count?malloc((size_t)body_count*sizeof(*staged.bodies)):NULL;
     staged.chunks=chunk_count?calloc(chunk_count,sizeof(*staged.chunks)):NULL;

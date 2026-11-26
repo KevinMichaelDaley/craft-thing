@@ -98,12 +98,14 @@ bool fr_reactive_chunk_encode(const fr_reactive_chunk_t *channel,const dc_chunk_
 }
 bool fr_reactive_chunk_decode(const uint8_t *bytes,size_t length,const dc_chunk_t *chunk,
     fr_reactive_chunk_t *out,char *err,uint32_t cap) {
-    size_t size=0;
     if(!bytes||!out||length<HEADER_BYTES||get(bytes)!=0x31435246u||get(bytes+4)!=1u||
-       get(bytes+24)||get(bytes+28)||!fr_reactive_chunk_size(get(bytes+8),&size)||length!=size)
+       get(bytes+24)||get(bytes+28)||get(bytes+8)>PHYSICAL_ROWS)
         return error(err,cap,"Unsupported/corrupt reactive chunk header");
     uint32_t count=get(bytes+8);size_t start=HEADER_BYTES+(size_t)count*4u;
-    if(get(bytes+12)!=length-start||hash(bytes,length)!=((uint64_t)get(bytes+16)|((uint64_t)get(bytes+20)<<32)))
+    uint32_t packet_count=0;
+    if(start>length||get(bytes+12)!=length-start||
+       !fr_reactive_snapshot_packet_count(bytes+start,length-start,&packet_count)||packet_count!=count||
+       hash(bytes,length)!=((uint64_t)get(bytes+16)|((uint64_t)get(bytes+20)<<32)))
         return error(err,cap,"Reactive chunk length/checksum mismatch");
     fr_reactive_chunk_t staged={.count=count};uint32_t decoded=0,required=0;
     fr_reactive_record_t *records=count?malloc((size_t)count*sizeof(*records)):NULL;

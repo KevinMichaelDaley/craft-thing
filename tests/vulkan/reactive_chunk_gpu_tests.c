@@ -22,6 +22,9 @@ static void test_gpu_compaction_exports_negative_chunk_cells_and_particle_rows(v
     fr_reactive_state_t a,b;
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,0,800,51,&a,err,sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_from_particle(c->particles+11,600,52,&b,err,sizeof(err)));
+    a.coating_oil_fuel_fp=2u;
+    a.coating_jelly_fuel_fp=2u;
+    a.coating_reaction_progress=.718234f;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,0,&a,err,sizeof(err))&&fr_gpu_reactive_seed_particle(g,11,&b,err,sizeof(err)));
     fr_reactive_chunk_t channel={0};ASSERT_TRUE(fr_gpu_reactive_export_chunk(g,0,c,&channel,err,sizeof(err)));
     ASSERT_EQ(channel.count,2u);ASSERT_EQ(channel.next_id,53u);
@@ -42,6 +45,9 @@ static void test_import_replaces_old_slot_state_and_retains_high_water_without_r
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(g,0,0,&old,err,sizeof(err)));
     fr_reactive_attachment_t a={.local_index=1,.record={.owner=fr_reactive_cell_owner(c->coord,1)}};
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE,176947,0,600,40,&a.record.state,err,sizeof(err)));
+    a.record.state.coating_oil_fuel_fp=1u;
+    a.record.state.coating_jelly_fuel_fp=1u;
+    a.record.state.coating_reaction_progress=1.724634f;
     fr_reactive_chunk_t channel={.count=1,.next_id=90,.attachments=&a};
     ASSERT_TRUE(fr_gpu_reactive_import_chunk(g,0,c,&channel,err,sizeof(err)));
     fr_reactive_record_t record;bool found=true;

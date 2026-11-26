@@ -29,6 +29,9 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
         return error(err_buf,err_cap,"Invalid coating reaction input");
     fr_reactive_state_t next=*source;
     fr_coating_combustion_products_t result={0};
+    if(seconds==0.f) {
+        *out=next;*products=result;return true;
+    }
     uint64_t total=(uint64_t)source->coating_oil_fuel_fp+source->coating_jelly_fuel_fp;
     bool mixed=source->coating_oil_fuel_fp>0u&&source->coating_jelly_fuel_fp>0u;
     const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
@@ -39,6 +42,9 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
         return error(err_buf,err_cap,"Coating inventory exceeds finite storage");
     if(source->coating_oil_fuel_fp==0u) {
         next.flags&=~FR_REACTIVE_COATING_FLAMING;
+        next.coating_reaction_progress=0.f;
+        next.coating_remainders=replace_credit(next.coating_remainders,
+            FR_COATING_REACTION_REM_SHIFT,0u);
         *out=next;*products=result;return true;
     }
     float temperature;
@@ -46,7 +52,7 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
     float wet=source->dry_mass_fp?
         fminf(1.f,(float)source->bound_water_fp/source->dry_mass_fp):0.f;
     bool viable=total>0u&&exposed_fraction>0.f&&
-        temperature>=profile->ignition_K&&
+        (mixed||temperature>=profile->ignition_K)&&
         (mixed||wet<.8f)&&(!mixed||source->coating_oxidizer_fp>0u);
     if(!viable) next.flags&=~FR_REACTIVE_COATING_FLAMING;
     if(!viable||(next.flags&FR_REACTIVE_COATING_FLAMING)==0u) {
@@ -54,8 +60,8 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
     }
     double available=mixed?source->coating_oxidizer_fp:ambient_oxygen_fp;
     double oxygen_per_fuel=profile->oxygen_per_fuel;
-    double fuel_credit=(double)credit(source->coating_remainders,
-        FR_COATING_REACTION_REM_SHIFT)/1024.;
+    double fuel_credit=fmin((double)total,source->coating_reaction_progress+
+        (double)credit(source->coating_remainders,FR_COATING_REACTION_REM_SHIFT)/1024.);
     double oxygen_credit=(double)credit(source->coating_remainders,
         FR_COATING_OXIDIZER_REM_SHIFT)/1024.;
     double rate=profile->surface_burn_per_second*seconds*exposed_fraction*
@@ -66,9 +72,11 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
     if(!isfinite(funded)||funded<0.) return error(err_buf,err_cap,"Coating reaction rate overflow");
     double progressed=fuel_credit+funded;
     uint32_t reacted=(uint32_t)fmin((double)total,floor(progressed));
-    double fractional=fmin(1023./1024.,fmax(0.,progressed-reacted));
+    /* Hold the last oil and jelly units until both can be funded together. */
+    if(mixed&&reacted==total-1u) --reacted;
+    next.coating_reaction_progress=(float)fmin(FR_COATING_PROGRESS_LIMIT,progressed-reacted);
     next.coating_remainders=replace_credit(next.coating_remainders,
-        FR_COATING_REACTION_REM_SHIFT,(uint32_t)floor(fractional*1024.));
+        FR_COATING_REACTION_REM_SHIFT,0u);
     if(reacted==0u) {
         *out=next;*products=result;return true;
     }
@@ -79,8 +87,17 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
         fmax(0.,oxygen_credit+oxygen-oxygen_needed));
     next.coating_remainders=replace_credit(next.coating_remainders,
         FR_COATING_OXIDIZER_REM_SHIFT,(uint32_t)floor(remaining_credit*1024.));
-    uint32_t oil_used=mixed?(uint32_t)(((uint64_t)reacted*source->coating_oil_fuel_fp+
-        total/2u)/total):reacted;
+    uint32_t oil_used=reacted;
+    if(mixed) {
+        uint32_t oil_stock=source->coating_oil_fuel_fp;
+        uint32_t jelly_stock=source->coating_jelly_fuel_fp;
+        oil_used=(uint32_t)(((uint64_t)reacted*oil_stock+total/2u)/total);
+        if(reacted<total) {
+            uint32_t minimum=reacted<jelly_stock?0u:reacted-jelly_stock+1u;
+            if(oil_used<minimum) oil_used=minimum;
+            if(oil_used>=oil_stock) oil_used=oil_stock-1u;
+        }
+    }
     uint32_t jelly_used=reacted-oil_used;
     const fr_reactive_profile_t *host=fr_reactive_profile(source->material);
     uint32_t ash=(uint32_t)floor(reacted*(double)profile->fuel_yields[1]);
