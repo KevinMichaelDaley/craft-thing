@@ -77,8 +77,10 @@ SDL routing, fixed-step scheduling and cropped animation rendering now use this
 adapter. The live framebuffer test checks all six sandbox walk poses against
 the derived clip and checks horizontal mirroring after reversing direction.
 It also verifies that fire-ray mode displays the supplied idle artwork while moving.
-Collision and thermal exposure still use canonical rest geometry;
-pose-dependent deformation remains required for full material acceptance.
+Liquid water contact uses the current visible pose and transfers water and
+enthalpy to each texel's canonical parcel. Occluded texels retain their stored
+state. Collision, heat transfer and atmospheric combustion use canonical rest
+geometry. Pose-dependent heating and combustion remain open under `ctpa-ptku`.
 
 Keyboard: A/D movement, Space press jump, Q press fire bolt, E press targeted ice
 storm. C held is the provisional chew input. Keyboard targeting uses the mouse

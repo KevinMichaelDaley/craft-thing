@@ -24,6 +24,15 @@ VkDeviceAddress fr_renderer_sprites_address(const dc_gpu_t *g) {
     return g->sprites ? g->sprites->channel.address : 0;
 }
 
+static void sprite_build_contact_map(uint32_t *map, const uint32_t *frame, uint32_t texels) {
+    memset(map, 0, DC_SPRITE_SOURCE_COUNT * sizeof(*map));
+    for (uint32_t i = 0; i < texels; ++i) {
+        uint32_t source = frame[2u * i + 1u];
+        if (source && source <= DC_SPRITE_SOURCE_COUNT && (frame[2u * i] >> 24u) && !map[source - 1u])
+            map[source - 1u] = i + 1u;
+    }
+}
+
 bool fr_renderer_sprite_atlas(dc_gpu_t *g,const fr_renderer_sprite_pixel_t *p,
     uint32_t n,char *err,uint32_t cap) {
     if(!g||!p||!n||n>(UINT32_MAX-DC_SPRITE_ATLAS_WORD-DC_SPRITE_CONTACT_WORDS)/2u)
@@ -63,15 +72,10 @@ bool fr_renderer_sprite_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
     for(uint32_t i=0;i<n;i++) {
         uint32_t *pose=w+DC_SPRITE_HEADER_WORDS+i*DC_SPRITE_POSE_WORDS;
         uint32_t reverse_at=contact+i*DC_SPRITE_SOURCE_COUNT;
+        /* Mirroring and origin offsets are applied in the shader. */
         if(pose[2]!=p[i].offset||pose[3]!=p[i].width||pose[4]!=p[i].height) {
-            uint32_t *reverse=w+reverse_at;
-            memset(reverse,0,DC_SPRITE_SOURCE_COUNT*sizeof(*reverse));
             const uint32_t *frame=w+DC_SPRITE_ATLAS_WORD+2u*p[i].offset;
-            for(uint32_t texel=0;texel<p[i].width*p[i].height;texel++) {
-                uint32_t source=frame[2u*texel+1u];
-                if(source&&source<=DC_SPRITE_SOURCE_COUNT&&(frame[2u*texel]>>24u)&&!reverse[source-1u])
-                    reverse[source-1u]=texel+1u;
-            }
+            sprite_build_contact_map(w+reverse_at,frame,p[i].width*p[i].height);
         }
         memcpy(pose,&p[i],sizeof(*p));
         pose[DC_SPRITE_CONTACT_WORD]=reverse_at;

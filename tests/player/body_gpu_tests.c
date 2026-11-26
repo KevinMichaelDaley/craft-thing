@@ -46,7 +46,8 @@ static bool read_parcel(dc_gpu_t *g, const fr_beaver_body_t *body, uint32_t sour
 }
 
 static void test_wetting_follows_visible_owner_when_a_sprite_is_mirrored(void) {
-    enum { FUR = 30u * FR_BEAVER_WIDTH + 27u, HAT = 2u * FR_BEAVER_WIDTH + 32u,
+    enum { FUR_X = 26, FUR_Y = 30, FUR = FUR_Y * FR_BEAVER_WIDTH + FUR_X + 1u,
+           HAT = 2u * FR_BEAVER_WIDTH + 32u,
            HIDDEN = 20u * FR_BEAVER_WIDTH + 21u, WATER_X = 52, WATER_Y = 6,
            POSE_WIDTH = 9 };
     char err[256] = {0};
@@ -59,8 +60,9 @@ static void test_wetting_follows_visible_owner_when_a_sprite_is_mirrored(void) {
     fr_beaver_body_t body;
     ASSERT_TRUE(fr_beaver_body_admit(g, 41, 71, 0, (dc_chunk_coord_t){0, 0},
                                     8 * DC_FLUID_FULL, 8 * DC_FLUID_FULL, &body, err, sizeof(err)));
-    const fr_renderer_sprite_pixel_t atlas[POSE_WIDTH] = {
-        [0] = {0xffc08040u, FUR}, [POSE_WIDTH - 1] = {0xff8040c0u, HAT}
+    const fr_renderer_sprite_pixel_t atlas[2u * POSE_WIDTH] = {
+        [0] = {0xffc08040u, FUR}, [POSE_WIDTH - 1] = {0xff8040c0u, HAT},
+        [2u * POSE_WIDTH - 1u] = {0xff8040c0u, HAT}
     };
     fr_renderer_sprite_t pose = {
         .body_id = body.binding.body_id, .generation = body.binding.generation,
@@ -68,7 +70,7 @@ static void test_wetting_follows_visible_owner_when_a_sprite_is_mirrored(void) {
         .rest_origin_x = body.rest_origin_x, .rest_origin_y = body.rest_origin_y,
         .origin_x = 8 - WATER_X, .origin_y = 8 - WATER_Y
     };
-    ASSERT_TRUE(fr_renderer_sprite_atlas(g, atlas, POSE_WIDTH, err, sizeof(err)));
+    ASSERT_TRUE(fr_renderer_sprite_atlas(g, atlas, 2u * POSE_WIDTH, err, sizeof(err)));
     ASSERT_TRUE(fr_thermal_gpu_enable(g, err, sizeof(err)));
     const uint32_t water_cell = WATER_Y * DC_CHUNK_SIDE + WATER_X;
     uint32_t wet_fur = 0;
@@ -98,6 +100,21 @@ static void test_wetting_follows_visible_owner_when_a_sprite_is_mirrored(void) {
         }
         ASSERT_TRUE(dc_gpu_paint_material(g, WATER_X, WATER_Y, 0, DC_MATERIAL_AIR, err, sizeof(err)));
     }
+    pose.offset = POSE_WIDTH;
+    pose.flip = 0u;
+    ASSERT_TRUE(fr_renderer_sprite_poses(g, &pose, 1, err, sizeof(err)));
+    const uint32_t rest_x = 8u + FUR_X - body.rest_origin_x;
+    const uint32_t rest_y = 8u + FUR_Y - body.rest_origin_y;
+    ASSERT_TRUE(dc_gpu_paint_material(g, WATER_X, WATER_Y, 0, DC_MATERIAL_WATER, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, rest_x, rest_y, 0, DC_MATERIAL_WATER, err, sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_step(g, .25f, err, sizeof(err)));
+    fr_reactive_record_t fur;
+    ASSERT_TRUE(read_parcel(g, &body, FUR, &fur, err, sizeof(err)));
+    ASSERT_EQ(fur.state.bound_water_fp, wet_fur);
+    ASSERT_TRUE(fr_renderer_sprite_poses(g, NULL, 0, err, sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_step(g, .25f, err, sizeof(err)));
+    ASSERT_TRUE(read_parcel(g, &body, FUR, &fur, err, sizeof(err)));
+    ASSERT_TRUE(fur.state.bound_water_fp > wet_fur);
     free(chunk);
     dc_gpu_destroy(g);
     PASS();

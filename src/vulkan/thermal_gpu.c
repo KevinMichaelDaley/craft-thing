@@ -15,7 +15,7 @@
 #include "runtime_body_internal.h"
 
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds);
-enum { THERMAL_PUSH_WORDS = 12 };
+enum { THERMAL_SPRITE_ADDRESS_WORD = 10, THERMAL_PUSH_WORDS = 12 };
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->gas) {
         if(err&&cap) snprintf(err,cap,"Combustion requires existing thermal and gas owners");
@@ -275,7 +275,7 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
         (t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u)|(g->bulk_phase_work_possible?2u:0u),t->profile_count,g->page_width};
     if(mode==20u) {
         VkDeviceAddress sprites=fr_renderer_sprites_address(g);
-        memcpy(push+10,&sprites,sizeof(sprites));
+        memcpy(push+THERMAL_SPRITE_ADDRESS_WORD,&sprites,sizeof(sprites));
     }
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

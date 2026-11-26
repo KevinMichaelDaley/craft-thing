@@ -47,3 +47,7 @@ Removed the global idle substitution for walking. The sandbox presents the six-f
 **2026-11-26T11:06:23Z**
 
 The ordinary sandbox has its own streamed atmosphere and real combustion under ctpa-zfxm. A heated canonical fur parcel now consumes oxygen-funded fuel and produces char on normal physical ticks. Its owner, composition and active gas checkpoint persist through reopening. ctpa-ptku tracks the remaining pose-dependent exposure and wet/singe framebuffer acceptance.
+
+**2026-11-26T11:48:43Z**
+
+A visible beaver texel now receives water at its current animation coordinates while keeping its canonical parcel ID. Live Vulkan framebuffer checks show the wet robe darken after reversal. The owning parcel retains moisture while hidden. The heating and combustion subtasks remain under ctpa-ptku.

@@ -19,7 +19,9 @@ bool fr_body_project_contact(uvec2 address,uint pose,uint piece,inout Body body)
     if(pose==0u) return true;
     ContactSprites sprites=ContactSprites(address);
     ivec2 rest=pixel_piece_cell(body,piece);
-    ivec2 source=rest+ivec2(sprites.words[pose+6u],sprites.words[pose+7u]);
+    uvec2 rest_origin=uvec2(sprites.words[pose+6u],sprites.words[pose+7u]);
+    if(any(greaterThanEqual(rest_origin,uvec2(DC_SPRITE_SOURCE_SIDE)))) return false;
+    ivec2 source=rest+ivec2(rest_origin);
     if(any(lessThan(source,ivec2(0)))||
        any(greaterThanEqual(source,ivec2(DC_SPRITE_SOURCE_SIDE)))) return false;
     uint map_at=sprites.words[pose+DC_SPRITE_CONTACT_WORD];
@@ -30,7 +32,9 @@ bool fr_body_project_contact(uvec2 address,uint pose,uint piece,inout Body body)
     if(sprites.words[pose+5u]!=0u) cell.x=width-1u-cell.x;
     vec2 local=vec2(cell)-vec2(ivec2(sprites.words[pose+8u],sprites.words[pose+9u]));
     vec2 origin=vec2(body.x_fp,body.y_fp)+round(body_rotate(local-vec2(rest),body.angle)*65536.);
-    if(any(greaterThanEqual(abs(origin),vec2(2147483520.)))) return false;
+    const float signed_limit=2147483648.;
+    if(any(lessThan(origin,vec2(-signed_limit)))||
+       any(greaterThanEqual(origin,vec2(signed_limit)))) return false;
     body.x_fp=int(origin.x);
     body.y_fp=int(origin.y);
     return true;

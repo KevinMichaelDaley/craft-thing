@@ -148,7 +148,8 @@ void sprite_surface(uvec2 cell,inout Surface surface,inout float coverage,inout 
         uint source=sprite_words[texel+1u];vec4 color=unpackUnorm4x8(sprite_words[texel]);
         if(source==0u||color.a==0.) continue;
         if(pixel_body(body)) {
-            ivec2 rest=ivec2((source-1u)%40u,(source-1u)/40u)-ivec2(sprite_words[at+6u],sprite_words[at+7u]);
+            ivec2 rest=ivec2((source-1u)%DC_SPRITE_SOURCE_SIDE,(source-1u)/DC_SPRITE_SOURCE_SIDE)-
+                ivec2(sprite_words[at+6u],sprite_words[at+7u]);
             uint piece=pixel_piece_at(body,rest);
             if(pixel_piece_material(body,piece)==0u) continue;
 #ifdef DC_RUNTIME_BODY_STORAGE
