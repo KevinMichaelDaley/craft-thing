@@ -733,6 +733,10 @@ bool dc_level_view_set_title(dc_level_view_t *view, const char *title) {
     return view && dc_gpu_set_window_title(view->gpu, title);
 }
 
+static SDL_Window *level_window(const dc_level_view_t *view) {
+    return view && view->gpu ? view->gpu->window : NULL;
+}
+
 bool dc_level_view_accepts_event(const dc_level_view_t *view, const SDL_Event *event) {
     if (!view || !event) return false;
     uint32_t window_id;
@@ -747,19 +751,19 @@ bool dc_level_view_accepts_event(const dc_level_view_t *view, const SDL_Event *e
     case SDL_MOUSEWHEEL: window_id = event->wheel.windowID; break;
     default: return true;
     }
-    return window_id == 0u || (view->gpu && view->gpu->window &&
-        window_id == SDL_GetWindowID(view->gpu->window));
+    SDL_Window *window = level_window(view);
+    return window_id == 0u || (window && window_id == SDL_GetWindowID(window));
 }
 
 bool dc_level_view_has_keyboard(const dc_level_view_t *view) {
-    return view && view->gpu && view->gpu->window &&
-        SDL_GetKeyboardFocus() == view->gpu->window;
+    SDL_Window *window = level_window(view);
+    return window && SDL_GetKeyboardFocus() == window;
 }
 
 bool dc_level_view_pointer(const dc_level_view_t *view, uint32_t *x, uint32_t *y,
                            uint32_t *buttons) {
-    if (!view || !view->gpu || !view->gpu->window || !x || !y ||
-        SDL_GetMouseFocus() != view->gpu->window) return false;
+    SDL_Window *window = level_window(view);
+    if (!window || !x || !y || SDL_GetMouseFocus() != window) return false;
     int mx, my;
     uint32_t held = SDL_GetMouseState(&mx, &my);
     if (mx < 0 || my < 0) return false;

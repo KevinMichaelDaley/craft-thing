@@ -339,6 +339,13 @@ static void test_gameplay_ignores_other_window_focus_and_keys(void) {
     ASSERT_TRUE(dc_players_gameplay(v));
     key.key.windowID = owned;
     ASSERT_TRUE(dc_players_event(v,&key) && !dc_players_gameplay(v));
+
+    SDL_Event text = {.text = {.type = SDL_TEXTINPUT, .windowID = other, .text = "2718"}};
+    ASSERT_TRUE(!dc_level_view_accepts_event(v,&text));
+    text.text.windowID = owned;
+    ASSERT_TRUE(dc_level_view_accepts_event(v,&text));
+    text.text.windowID = 0u;
+    ASSERT_TRUE(dc_level_view_accepts_event(v,&text));
     PASS();
 }
 

@@ -48,3 +48,7 @@ The completed geometry-boundary replay measured 900 normal ticks at seconds 131â
 **2026-11-26T17:43:29Z**
 
 The production transport update separately reproduced one float bit of stock creation on a balanced exchange and lost a 2^-30 incoming trace when old carry was fully sent. Compensating both face additions preserves exact exhaust, soot and pigment in the Vulkan regression. Eight focused transport and display checks and 26 gas numerics and fixture checks passed. The authored full locked depletion replay is required to verify the actual standing-pool ledger through depletion.
+
+**2026-11-26T17:57:18Z**
+
+The exact integrated c4324106 run of make test_greek_siege_locked_depletion exited 2 at Greek second 143. Inventory was +4.030869484 Q16 with all 36 faces still wet, no transferred or mobile film, and 8580 accepted steps. The preceding second was +3.937343597 Q16. The four-unit gate remains in place. A temporary native probe sampling provisional inventory after advection, after pressure finishing, and after publication passed its aligned 60-tick preflight, matching the official first-second total +0.000814356. Its 130-second warm-up and 15-second phase capture are running on the integrated revision.
