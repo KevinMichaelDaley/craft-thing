@@ -53,6 +53,7 @@ vec2 transport_rates(ivec2 p,int direction) {
     ivec2 step=transport_axis()==0u?ivec2(direction,0):ivec2(0,direction);
     ivec2 q=p+step;Primitive own=gas_cached(p),other=gas_cached(q);
     if(own.metric.w<=0.||other.metric.w<=0.||!gas_gate_open(direction>0?p:q,transport_axis())) return vec2(0);
+    /* Both sides must publish the same face exchange. */
     if(!gas_advected_point(p)||!gas_advected_point(q)) return vec2(0);
     float u=own.hydro[transport_axis()+1u],v=other.hydro[transport_axis()+1u],speed=max(abs(u),abs(v));
     if(gas_practical_policy()) speed=max(speed,FR_GAS_PRACTICAL_MIXING_RATE);

@@ -33,12 +33,13 @@ float gas_pressure_relaxation(vec4 coefficients,float diagonal) {
     return 2./denominator;
 }
 bool gas_pressure_accepted() {return stats[FR_GAS_ERROR_WORD]==0u&&(gas_practical_policy()||uintBitsToFloat(stats[FR_GAS_RESIDUAL_WORD])<=1e-7);}
-bool gas_advected(uint index) {
-    uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
+bool gas_advected_point(ivec2 p) {
+    uint tile=(uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u;
+    /* Pressure-only tiles can publish momentum while retaining their gas stock. */
     return (activity[gas_tile_count()+tile]&1u)!=0u;
 }
-bool gas_advected_point(ivec2 p) {
-    return gas_advected(uint(p.y)*params.width+uint(p.x));
+bool gas_advected(uint index) {
+    return gas_advected_point(ivec2(index%params.width,index/params.width));
 }
 Primitive gas_pressure_stage(ivec2 p,uint index) {
     if(gas_advected(index)) return gas_cache_candidate(index);
