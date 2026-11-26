@@ -691,8 +691,30 @@ static void forest_probe_diagnostic(void) {
 #endif /* DC_FOREST_DISPLAY_INCLUDE */
 
 #ifndef DC_FOREST_DISPLAY_INCLUDE
+static void test_warmth_window_includes_its_scheduled_endpoint(void) {
+    const uint32_t endpoint = DC_FOREST_WARMTH_END_S / 10u;
+    forest_run_t run = {.sample_count = endpoint + 2u};
+    const double accepted_step = (double)(1.f / 60.f);
+    for (uint32_t i = 0; i < run.sample_count; ++i) {
+        run.samples[i].sim_seconds = i * 10u * 60u * accepted_step;
+        run.samples[i].probe_K = 310.f;
+    }
+    ASSERT_TRUE(run.samples[endpoint].sim_seconds > DC_FOREST_WARMTH_END_S);
+    run.samples[endpoint + 1u].probe_K = 400.f;
+    ASSERT_TRUE(forest_warmth_held(&run));
+    run.samples[endpoint].probe_K = 361.f;
+    ASSERT_TRUE(!forest_warmth_held(&run));
+    PASS();
+}
+
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
+    if (argc == 2 && strcmp(argv[1], "--warmth-clock") == 0) {
+        printf("RUN  test_warmth_window_includes_its_scheduled_endpoint\n");
+        test_warmth_window_includes_its_scheduled_endpoint();
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--build-only") == 0) {
         RUN(test_locked_forest_scene_matches_the_manifest_fixture);
         printf("%d passed, %d failed\n", g_pass, g_fail);

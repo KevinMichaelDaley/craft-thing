@@ -998,6 +998,7 @@ build/forest_bonfire_display_tests: tests/app/forest_bonfire_display_tests.c tes
 .PHONY: test_forest_bonfire
 test: test_forest_bonfire
 test_forest_bonfire: build/forest_bonfire_tests
+	./build/forest_bonfire_tests --warmth-clock
 	./build/forest_bonfire_tests
 .PHONY: forest-bonfire-display
 forest-bonfire-display: build/forest_bonfire_display_tests
