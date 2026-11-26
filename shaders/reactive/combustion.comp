@@ -610,6 +610,7 @@ void burn(ivec2 position,uint gas_at,inout Gas gas,inout float admitted,inout fl
 }
 #ifdef FR_BODY_REACTIONS
 #include "coating_contact.glsl"
+#include "rigid_coating_contact.glsl"
 void choose_body_target(uint index,Body body,ivec2 p,bool exposed) {
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));
     Words scratch=Words(uvec2(root[FR_ARENA_THERMAL_SCRATCH],root[FR_ARENA_THERMAL_SCRATCH+1u]));
@@ -664,46 +665,6 @@ void choose_body_target(uint index,Body body,ivec2 p,bool exposed) {
         if(in_body_reaction_grid(p)&&fr_body_heat_owner(body_reaction_index(p))==body.id) atomicAdd(hud[24],1u);
     }
     if(chosen==0xffffffffu) scratch.words[index*12u+6u]=0u;
-    /* Contact adhesion smear: hot greek film sticks to whatever body it
-     * touches. A burning coated parcel deposits a share of its film, with
-     * the burning flag, onto directly adjacent parcels of other bodies;
-     * the smeared film then heats that substrate through the ordinary
-     * coating burn, which is the delayed-launch launcher risk. */
-    if((e.words[s+1u]&2u)!=0u&&(e.words[s+13u]>0u||e.words[s+14u]>0u)) {
-        float smear_dt=uintBitsToFloat(params.seconds);
-        uint share_oil=e.words[s+13u]/4u,share_jelly=e.words[s+14u]/4u,
-             share_oxidizer=e.words[s+FR_STATE_COATING_OXIDIZER]/4u;
-        if(share_oil+share_jelly>0u) {
-            uint donor_body=e.words[FR_ENTRY_OWNER+1u];
-            for(uint d=0u;d<4u;d++) {
-                ivec2 q=p+body_directions[d];
-                uint slot=runtime_body_find(thermal_occupancy[uint(max(q.y,0))*params.width+min(uint(max(q.x,0)),params.width-1u)]);
-                if(slot>=BODY_CAPACITY) continue;
-                Body nb=body_thermal_grid(DC_BODY(slot));
-                if(!pixel_body(nb)||nb.id==donor_body) continue;
-                ivec2 nq=q;
-                uint piece=pixel_piece_at(nb,nq);
-                uvec2 nh=fr_body_reactive_handle(nb,slot,piece);
-                if(nh.y==0u||nh.x>=root[2]) continue;
-                Words ne=Words(reactive_entry_address(uvec2(root[4],root[5]),nh.x));
-                if(ne.words[FR_ENTRY_GENERATION]!=nh.y||ne.words[FR_ENTRY_OWNER]!=2u) continue;
-                uint ns=FR_ENTRY_STATE,nm=ne.words[ns];
-                if(nm!=7u&&nm!=8u&&nm!=9u&&nm!=12u) continue;
-                uint take_oil=min(share_oil,e.words[s+13u]);
-                uint take_jelly=min(share_jelly,e.words[s+14u]);
-                uint take_ox=min(share_oxidizer,e.words[s+FR_STATE_COATING_OXIDIZER]);
-                if(take_oil+take_jelly==0u) break;
-                atomicAdd(ne.words[ns+FR_STATE_COATING_OIL],take_oil);
-                atomicAdd(ne.words[ns+FR_STATE_COATING_JELLY],take_jelly);
-                atomicAdd(ne.words[ns+FR_STATE_COATING_OXIDIZER],take_ox);
-                e.words[s+13u]-=take_oil;
-                e.words[s+14u]-=take_jelly;
-                e.words[s+FR_STATE_COATING_OXIDIZER]-=take_ox;
-                atomicOr(ne.words[ns+1u],4u);
-                break;
-            }
-        }
-    }
     /* Contact brand offer: a burning parcel with fuel offers one adjacent
      * cell share per tick. The receiving cell-owned fuel record claims the
      * offer single-writer in the reaction cell pass, so no two writers race
@@ -793,8 +754,11 @@ void main() {
 #ifdef FR_BODY_REACTIONS
     bool sample_contact = params.unused.x == FR_COMBUSTION_SAMPLE_CONTACT_MODE;
     if(sample_contact && hud[FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD] == 0u) return;
-    fr_prepare_heat_poses();
-    if(params.unused.x==9u) {
+    bool rigid_coating = params.unused.x >= FR_COMBUSTION_RIGID_COATING_LINK &&
+                         params.unused.x <= FR_COMBUSTION_RIGID_COATING_PUBLISH;
+    if(rigid_coating && hud[FR_COMBUSTION_RIGID_COATING_ACTIVE_WORD] == 0u) return;
+    if(!rigid_coating) fr_prepare_heat_poses();
+    if(params.unused.x==9u || rigid_coating) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
         Body body=body_thermal_grid(DC_BODY(slot));if((body.enabled|body.reserved0)==0u||!pixel_body(body)) return;
         uint pose=body.enabled!=0u?fr_body_contact_pose(params.sprite_address,slot,body):0u;
@@ -803,9 +767,14 @@ void main() {
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y==0u||h.x>=root[2]) continue;
             Words entry=Words(reactive_entry_address(uvec2(root[4],root[5]),h.x));
             if(entry.words[FR_ENTRY_GENERATION]!=h.y||entry.words[FR_ENTRY_OWNER]!=2u) continue;
+            if(rigid_coating) {
+                rigid_coating_phase(params.unused.x,h.x,entry);
+                continue;
+            }
             Body contact=body;
             bool exposed=fr_body_project_contact(params.sprite_address,pose,piece,contact);
             ivec2 projected=exposed?fr_body_parcel_cell(contact,piece):ivec2(-1);
+            prepare_rigid_coating(h.x,entry,projected,exposed&&in_body_reaction_grid(projected));
             choose_body_target(h.x,body,projected,exposed&&in_body_reaction_grid(projected));
             if(!exposed) continue;
             uint s=FR_ENTRY_STATE,material=entry.words[s];
@@ -869,6 +838,7 @@ void main() {
         if(i==0u) {for(uint j=22u;j<32u;j++) hud[j]=0u;
             hud[DC_BODY_ASH_DISPATCH_WORD]=0u;hud[DC_BODY_ASH_DISPATCH_WORD+1u]=1u;hud[DC_BODY_ASH_DISPATCH_WORD+2u]=1u;
             hud[FR_COMBUSTION_SAMPLE_CONTACT_ACTIVE_WORD]=0u;
+            hud[FR_COMBUSTION_RIGID_COATING_ACTIVE_WORD]=0u;
             for(uint j=8u;j<12u;j++) hud[j]=0u;for(uint j=14u;j<18u;j++) hud[j]=0u;}
         if(at!=0xffffffffu) emission[at]=vec4(0.,0.,uintBitsToFloat(slot_generation(at)),0.);
         uvec2 address;uint chosen=0xffffffffu;

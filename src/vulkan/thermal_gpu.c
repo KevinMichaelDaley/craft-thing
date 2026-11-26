@@ -132,13 +132,14 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    bool body_reaction=mode==9u||mode==10u||mode==FR_COMBUSTION_SAMPLE_CONTACT_MODE;
+    bool rigid_coating=mode>=FR_COMBUSTION_RIGID_COATING_LINK&&mode<=FR_COMBUSTION_RIGID_COATING_PUBLISH;
+    bool body_reaction=mode==9u||mode==10u||mode==FR_COMBUSTION_SAMPLE_CONTACT_MODE||rigid_coating;
     fr_renderer_compute_t *pipeline=body_reaction?&t->body_combustion:&t->combustion;
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline->pipeline_layout,0,1,&pipeline->descriptor,0,NULL);
     vkCmdPushConstants(g->command,pipeline->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     uint32_t x=t->groups_x,y=t->groups_y;
-    if(mode==9u) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
+    if(mode==9u||rigid_coating) {uint32_t groups=g->runtime_bodies->store.slab_count*DC_BODY_SLAB_RECORDS;x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
     vkCmdDispatch(g->command,x,y,1);
     if(mode==0u||mode==10u) {
         /* Reactions preserve gas momentum and never decrease local gas mass.
@@ -158,6 +159,9 @@ static void record_flame_radiation(dc_gpu_t *g,float seconds) {
 static void record_reactions(dc_gpu_t *g,float seconds) {
     record_combustion(g,seconds,3);
     record_combustion(g,seconds,9);
+    record_combustion(g,seconds,FR_COMBUSTION_RIGID_COATING_LINK);
+    record_combustion(g,seconds,FR_COMBUSTION_RIGID_COATING_ADMIT);
+    record_combustion(g,seconds,FR_COMBUSTION_RIGID_COATING_PUBLISH);
     record_combustion(g,seconds,0);
     record_combustion(g,seconds,10);
     record_combustion(g,seconds,FR_COMBUSTION_SAMPLE_CONTACT_MODE);

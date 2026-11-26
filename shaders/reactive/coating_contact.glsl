@@ -2,6 +2,33 @@ const uint COATING_CONTACT_NONE = 0xffffffffu;
 /* Word two holds conductivity during body conduction. Target selection
  * reuses it only after conduction and until the next thermal snapshot. */
 const uint COATING_CONTACT_TARGET = 2u;
+const uvec3 COATING_FIELDS = uvec3(FR_STATE_COATING_OIL, FR_STATE_COATING_JELLY,
+                                  FR_STATE_COATING_OXIDIZER);
+
+uvec3 coating_inventory(Words entry) {
+    return uvec3(entry.words[FR_ENTRY_STATE + COATING_FIELDS.x],
+                 entry.words[FR_ENTRY_STATE + COATING_FIELDS.y],
+                 entry.words[FR_ENTRY_STATE + COATING_FIELDS.z]);
+}
+
+float coating_contact_heat(Words donor, uvec3 share) {
+    float capacity = solid_capacity(donor);
+    if (capacity <= 0.) return 0.;
+    float temperature = reactive_parcel_energy(donor, FR_ENTRY_STATE) / capacity;
+    float film_capacity = (float(share.x) * coefficient(FR_COATING_OIL_MATERIAL,
+        FR_PROFILE_HEAT_CAPACITY_WORD) + (float(share.y) + float(share.z)) *
+        coefficient(FR_COATING_JELLY_MATERIAL, FR_PROFILE_HEAT_CAPACITY_WORD)) / 65536.;
+    return film_capacity * temperature;
+}
+
+void kindle_contact_film(Words receiver) {
+    uint s = FR_ENTRY_STATE;
+    float threshold = coating_ignition_threshold(receiver);
+    receiver.words[s + FR_STATE_COATING_THRESHOLD] = floatBitsToUint(threshold);
+    receiver.words[s + FR_STATE_COATING_INTEGRAL] = floatBitsToUint(max(threshold,
+        uintBitsToFloat(receiver.words[s + FR_STATE_COATING_INTEGRAL])));
+    receiver.words[s + FR_STATE_FLAGS] |= 4u;
+}
 
 bool is_corrosion_sample(uint material) {
     return material == 18u || material == 19u;
@@ -15,9 +42,7 @@ bool accepts_coating_contact(Words sample_entry) {
 uvec3 coating_contact_share(Words donor) {
     uint state = FR_ENTRY_STATE;
     if ((donor.words[state + FR_STATE_FLAGS] & (2u | 4u)) == 0u) return uvec3(0u);
-    return min(uvec3(donor.words[state + FR_STATE_COATING_OIL],
-        donor.words[state + FR_STATE_COATING_JELLY],
-        donor.words[state + FR_STATE_COATING_OXIDIZER]) / 8u, uvec3(4096u));
+    return min(coating_inventory(donor) / 8u, uvec3(4096u));
 }
 
 uint choose_coating_contact(ivec2 p, Words donor) {
@@ -35,31 +60,19 @@ uint choose_coating_contact(ivec2 p, Words donor) {
 
 bool transfer_sample_coating(Words donor, Words receiver) {
     uint s = FR_ENTRY_STATE;
-    const uvec3 fields = uvec3(FR_STATE_COATING_OIL, FR_STATE_COATING_JELLY,
-                              FR_STATE_COATING_OXIDIZER);
     uvec3 share = coating_contact_share(donor);
-    for (uint i = 0u; i < 3u; i++)
-        share[i] = min(share[i], 0xffffffffu - receiver.words[s + fields[i]]);
+    share = min(share, uvec3(0xffffffffu) - coating_inventory(receiver));
     if (any(equal(share, uvec3(0u)))) return false;
 
-    float capacity = solid_capacity(donor);
-    if (capacity <= 0.) return false;
-    float temperature = reactive_parcel_energy(donor, s) / capacity;
-    float film_capacity = (float(share.x) * coefficient(FR_COATING_OIL_MATERIAL,
-        FR_PROFILE_HEAT_CAPACITY_WORD) + float(share.y + share.z) *
-        coefficient(FR_COATING_JELLY_MATERIAL, FR_PROFILE_HEAT_CAPACITY_WORD)) / 65536.;
-    float energy = film_capacity * temperature;
+    float energy = coating_contact_heat(donor, share);
+    if (energy <= 0.) return false;
     for (uint i = 0u; i < 3u; i++) {
-        donor.words[s + fields[i]] -= share[i];
-        receiver.words[s + fields[i]] += share[i];
+        donor.words[s + COATING_FIELDS[i]] -= share[i];
+        receiver.words[s + COATING_FIELDS[i]] += share[i];
     }
     add_energy(donor, -energy);
     add_energy(receiver, energy);
-    float threshold = coating_ignition_threshold(receiver);
-    receiver.words[s + FR_STATE_COATING_THRESHOLD] = floatBitsToUint(threshold);
-    receiver.words[s + FR_STATE_COATING_INTEGRAL] = floatBitsToUint(max(threshold,
-        uintBitsToFloat(receiver.words[s + FR_STATE_COATING_INTEGRAL])));
-    receiver.words[s + FR_STATE_FLAGS] |= 4u;
+    kindle_contact_film(receiver);
     return true;
 }
 
