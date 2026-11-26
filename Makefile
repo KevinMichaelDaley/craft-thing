@@ -100,7 +100,7 @@ GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/b
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
-GPU_OBJ += build/gas_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
+GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
 GPU_OBJ += build/bulk_phase_gpu.o
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
@@ -2122,6 +2122,8 @@ build/diagnostics/gas_frame: tools/diagnostics/gas_frame.c $(PERFORMANCE_OBJ) $(
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/gas_gpu.o: src/vulkan/gas_gpu.c src/vulkan/gas_gpu_internal.h src/vulkan/gas_gpu_state.h include/ferrum/fire/gas_gpu.h include/dungeoncraft/gas_layout.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/gas_audit_gpu.o: src/vulkan/gas_audit_gpu.c src/vulkan/gas_gpu_state.h src/vulkan/gas_gpu_internal.h include/ferrum/fire/gas_gpu.h include/dungeoncraft/gas_audit_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gas_checkpoint_gpu.o: src/vulkan/gas_checkpoint_gpu.c src/vulkan/gas_gpu_state.h include/ferrum/fire/gas_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

@@ -17,6 +17,8 @@ void fr_gas_gpu_record_pending_tick(dc_gpu_t *gpu);
 void fr_gas_gpu_record_pending_geometry(dc_gpu_t *gpu);
 /** Submit one gas command buffer and wait for its completion fence only. */
 bool fr_gas_submit(dc_gpu_t *gpu);
+/** Dispatch and wait for the gas audit after its summary buffer has been bound. */
+bool fr_gas_run_audit(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
 /** Read completed scalar pressure dispatch size; diagnostic only, no field scan. */
 bool fr_gas_gpu_pressure_tiles(const dc_gpu_t *gpu,uint32_t *tiles);
 /** Read completed CFL scalars and reduction width; cold diagnostics only. */
