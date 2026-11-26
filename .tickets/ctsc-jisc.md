@@ -1,6 +1,6 @@
 ---
 id: ctsc-jisc
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-26T14:19:25Z
@@ -21,3 +21,9 @@ Build a locked authored multi-body contact replay. Stage transferable oil, jelly
 ## Acceptance Criteria
 
 Reciprocal and competing contacts preserve exact coating inventory, finite bound oxidizer and total heat. Delayed, prompt and fireproof launcher controls retain their intended outcomes on the actual GPU fixture.
+
+## Notes
+
+**2026-11-26T14:46:13Z**
+
+The prior shader fails both locked reciprocal and competing contacts because it gives world coordinates to the local receiver lookup. The GPU now resolves contact geometry, snapshots each donor once, admits each combined inbox before any debit, and writes each parcel once. Independent bodies transferred exact Q16 oil, jelly and oxidizer. Maximum parcel heat error was about 1.6e-5 kJ. Identical replays pass after growing the live arena, and arena rollback plus address diagnostics pass. Transfer phases dispatch indirectly with zero work groups when no offer exists. The actual prompt replay opens the pouch at the flight-test angle and preserves all 943728 Q16 arm fuel. The stone carrier survives. The parent 16-seed delayed control passed 16/16 and the updated run is in flight.
