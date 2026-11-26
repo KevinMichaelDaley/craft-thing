@@ -55,3 +55,7 @@ RED on native Vulkan: two 16x16 solid tiles with a single diagonal seam remain o
 **2026-11-26T22:05:44Z**
 
 GREEN on native Vulkan: a full tile uses its lowest packed pixel, so the 512-pixel diagonal case performs one union edge instead of 1,861. The cut still yields 255 and 256 pixels in the original order. A separate GPU diagnostic matched the CPU 8-neighbor flood fill for all labels and counts across 18 mixed fixtures, 18,432 input pixels and 213 fragments, including empty and leaf-reserved cells. End-to-end colored workload and isolated latency are still queued; both existing time limits are unchanged.
+
+**2026-11-26T22:24:20Z**
+
+On native Vulkan, the identical colored geometry regression failed the pre-optimization edge bound at 143,026 merges and passed on 8daff75e at 34,216, retaining 36,051 pixels, exact mass/color, and the rotated/repeated miss results, 2/2. The native diagonal seam control passed before the optimization. The optimized body timings and isolated comparison remain queued.

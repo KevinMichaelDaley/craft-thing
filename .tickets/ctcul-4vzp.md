@@ -1,6 +1,6 @@
 ---
 id: ctcul-4vzp
-status: in_progress
+status: closed
 deps: []
 links: [ctlo-jnt7]
 created: 2026-11-26T21:53:29Z
@@ -27,3 +27,7 @@ The compiled native Vulkan probe returns observed parent 2 and retains parent 1 
 **2026-11-26T22:05:44Z**
 
 The compare-and-swap change on 9d712cd0 preserves parent 2 and returns roots 0/0/0 on the native probe. The exact focused colored workload passed both cases with 36,051 pixels and matching mass and color. The body-carve and full suites remain queued at this exact revision.
+
+**2026-11-26T22:24:20Z**
+
+Exact 9d712cd0 passed 12/12 native body-carve tests, 2/2 colored work fixtures, 2/2 body-color tests, and 17/17 component-admission cases. The body-carve run retained 36,051 pixels at the exact expected mass, measured 9.784 ms for the large brush and 1.782 ms for a one-submission warm miss. The checker targeted the race and nearby behavior. The whole test and isolated comparative latency remain queued under ctlo-jnt7.
