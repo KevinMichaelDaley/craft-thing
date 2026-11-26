@@ -36,7 +36,7 @@ layout(push_constant) uniform Params {
     uint width,height,seconds,sparse;
     uvec2 world_address,alternate_address,gates_address,model_address;
     uvec4 unused;
-    uvec4 body_params;
+    uvec2 body_params,sprite_address;
 } params;
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) buffer Handles {uvec2 values[];};
@@ -47,6 +47,8 @@ float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[mat
 #define FR_THERMAL_OCCUPANCY_BINDING 12
 #define FR_BODY_POOL_WORD params.body_params.x
 #include "world_body.glsl"
+#include "pose_contact.glsl"
+#include "heat_contacts.glsl"
 uint atlas(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0xffffffffu;
     /* The pages array strides the world tile width; the sim grid may be
@@ -864,6 +866,7 @@ void main() {
         uintBitsToFloat(slot_generation(at)),uintBitsToFloat(floatBitsToUint(previous.w)|sources));
     field.values[at]=gas;
 #else
+    if(params.unused.x==14u||params.unused.x==15u) fr_prepare_heat_poses();
     if(i>=params.width*params.height) return;
     ivec2 p=ivec2(i%params.width,i/params.width);uint at=atlas(p);
     if(params.unused.x==13u) {

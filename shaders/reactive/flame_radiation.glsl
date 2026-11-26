@@ -8,7 +8,7 @@ bool flame_visible(ivec2 source,ivec2 target) {
         ivec2 cell=ivec2(floor(vec2(source)+vec2(.5)+vec2(displacement)*float(step)/float(steps)));
         if(all(equal(cell,source))||all(equal(cell,target))) continue;
         uint index=uint(cell.y)*params.width+uint(cell.x);
-        if(samples[index].y>0.||thermal_occupancy[index]!=0u) return false;
+        if(samples[index].y>0.||fr_body_heat_occluder(index)) return false;
     }
     return true;
 }

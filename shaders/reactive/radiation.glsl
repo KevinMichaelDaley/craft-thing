@@ -28,11 +28,11 @@ vec2 radiant_ray(uint index,ivec2 direction) {
         if(direction.x!=0&&direction.y!=0) {
             ivec2 previous=q-direction,a=previous+ivec2(direction.x,0),b=previous+ivec2(0,direction.y);
             uint ai=uint(a.y)*params.width+uint(a.x),bi=uint(b.y)*params.width+uint(b.x);
-            if((samples[ai].y>0.||thermal_occupancy[ai]!=0u)&&(samples[bi].y>0.||thermal_occupancy[bi]!=0u)) break;
+            if((samples[ai].y>0.||fr_body_heat_occluder(ai))&&(samples[bi].y>0.||fr_body_heat_occluder(bi))) break;
         }
         uint other=uint(q.y)*params.width+uint(q.x);
-        if(samples[other].y<=0.) {if(thermal_occupancy[other]!=0u) break;continue;}
-        if(distance==1u&&thermal_occupancy[index]==thermal_occupancy[other]) break;
+        if(samples[other].y<=0.) {if(fr_body_heat_occluder(other)) break;continue;}
+        if(distance==1u&&fr_body_heat_owner(index)==fr_body_heat_owner(other)) break;
         float a=radiant_temperature(index),b=radiant_temperature(other);
         float requested=radiant_coefficient(index,other)*(radiant_fourth(a)-radiant_fourth(b))*uintBitsToFloat(params.seconds);
         float budget=min(samples[index].y,samples[other].y)*abs(a-b)/16.;
@@ -57,7 +57,7 @@ float radiant_open_sky_angle(uint index,vec2 direction) {
         if(all(equal(q,previous))) continue;
         previous=q;
         uint other=uint(q.y)*params.width+uint(q.x);
-        if(samples[other].y>0.||thermal_occupancy[other]!=0u) return 0.;
+        if(samples[other].y>0.||fr_body_heat_occluder(other)) return 0.;
     }
     return 1.;
 }

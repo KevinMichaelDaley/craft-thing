@@ -35,6 +35,7 @@ float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[mat
 #include "coating_mass.glsl"
 #include "world_body.glsl"
 #include "pose_contact.glsl"
+#include "heat_contacts.glsl"
 uint atlas_at(uint index) {
     uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.page_width+x/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+(y%64u)*64u+x%64u;
@@ -166,6 +167,8 @@ void body_conduction(uint index) {
 #include "radiation.glsl"
 void main() {
     uint index=gl_GlobalInvocationID.x+gl_GlobalInvocationID.y*gl_NumWorkGroups.x*64u;
+    if(active_phase()==4u||active_phase()==7u||active_phase()==10u||active_phase()==13u||
+       active_phase()==16u||active_phase()==17u||active_phase()==19u) fr_prepare_heat_poses();
     if(active_phase()==8u||active_phase()==9u||active_phase()==11u||active_phase()==14u||
        active_phase()==20u||active_phase()==24u||active_phase()==25u) {
         uint slot=gl_WorkGroupID.x+gl_WorkGroupID.y*gl_NumWorkGroups.x;if(slot>=BODY_CAPACITY) return;
@@ -259,9 +262,9 @@ void main() {
             horizontal=sign(horizontal)*min(abs(horizontal),min(a.y,b.y)*abs(a.x/a.y-b.x/b.y)/(rigid&&right_body?4.:16.));
         if(c.y>0.&&(rigid||below_body))
             vertical=sign(vertical)*min(abs(vertical),min(a.y,c.y)*abs(a.x/a.y-c.x/c.y)/(rigid&&below_body?4.:16.));
-        uint id=thermal_occupancy[index];
-        if(id!=0u&&x+1u<params.width&&thermal_occupancy[index+1u]==id) horizontal=0.;
-        if(id!=0u&&y+1u<params.height&&thermal_occupancy[index+params.width]==id) vertical=0.;
+        uint id=fr_body_heat_owner(index);
+        if(id!=0u&&x+1u<params.width&&fr_body_heat_owner(index+1u)==id) horizontal=0.;
+        if(id!=0u&&y+1u<params.height&&fr_body_heat_owner(index+params.width)==id) vertical=0.;
         fluxes[index]=vec4(horizontal,vertical,0.,0.);
     }
     if(active_phase()==10u||active_phase()==13u) {

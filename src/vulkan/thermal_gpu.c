@@ -113,6 +113,8 @@ static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     uint32_t push[20]={g->width,g->height,0,gas->sparse_owners?1u:0u};memcpy(push+2,&seconds,4);
     push[16]=dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS;
     push[17]=g->page_width;
+    VkDeviceAddress sprites=fr_renderer_sprites_address(g);
+    memcpy(push+18,&sprites,sizeof(sprites));
     VkDeviceAddress addresses[4]={gas->state[gas->direct_publish?1u:0u].address,
         gas->state[2].address,gas->gates.address,gas->parameters.address};
     memcpy(push+4,addresses,sizeof(addresses));
@@ -273,10 +275,8 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
     uint32_t push[THERMAL_PUSH_WORDS]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,t->combustion.pipeline?1u:0u,
         (t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u)|(g->bulk_phase_work_possible?2u:0u),t->profile_count,g->page_width};
-    if(mode==20u) {
-        VkDeviceAddress sprites=fr_renderer_sprites_address(g);
-        memcpy(push+THERMAL_SPRITE_ADDRESS_WORD,&sprites,sizeof(sprites));
-    }
+    VkDeviceAddress sprites=fr_renderer_sprites_address(g);
+    memcpy(push+THERMAL_SPRITE_ADDRESS_WORD,&sprites,sizeof(sprites));
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
