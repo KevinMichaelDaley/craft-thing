@@ -79,7 +79,8 @@ bool fr_coating_combustion_reference(const fr_reactive_state_t *source,
         fmax(0.,oxygen_credit+oxygen-oxygen_needed));
     next.coating_remainders=replace_credit(next.coating_remainders,
         FR_COATING_OXIDIZER_REM_SHIFT,(uint32_t)floor(remaining_credit*1024.));
-    uint32_t oil_used=mixed?(uint32_t)((uint64_t)reacted*source->coating_oil_fuel_fp/total):reacted;
+    uint32_t oil_used=mixed?(uint32_t)(((uint64_t)reacted*source->coating_oil_fuel_fp+
+        total/2u)/total):reacted;
     uint32_t jelly_used=reacted-oil_used;
     const fr_reactive_profile_t *host=fr_reactive_profile(source->material);
     uint32_t ash=(uint32_t)floor(reacted*(double)profile->fuel_yields[1]);

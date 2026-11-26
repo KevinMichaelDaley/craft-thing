@@ -12,6 +12,26 @@ float coating_ignition_threshold(Words entry) {
         entry.words[state+FR_STATE_ORIGIN_LOW]^0x7f4a7c15u,
         entry.words[state+FR_STATE_ORIGIN_LOW+1u]);
 }
+uint coating_oil_share(uint reacted,uint oil,uint total) {
+    uint high,low;
+    umulExtended(reacted,oil,high,low);
+    uint quotient=0u;
+    if(high==0u) {
+        quotient=low/total;
+        high=low%total;
+    } else {
+        /* Divide the extended product on devices with 32-bit shader integers. */
+        for(uint bit=0u;bit<32u;bit++) {
+            bool overflow=(high>>31u)!=0u;
+            high=(high<<1u)|(low>>31u);
+            low<<=1u;
+            bool subtract=overflow||high>=total;
+            if(subtract) high-=total;
+            quotient=(quotient<<1u)|uint(subtract);
+        }
+    }
+    return quotient+uint(high>=total-total/2u);
+}
 void burn_coating(Words entry,inout Gas gas,inout float admitted,
                   inout float source_temperature,inout uint sources) {
     uint s=FR_ENTRY_STATE,oil=entry.words[s+FR_STATE_COATING_OIL];
@@ -65,7 +85,7 @@ void burn_coating(Words entry,inout Gas gas,inout float admitted,
     packed=coating_set_credit(packed,FR_COATING_OXIDIZER_REM_SHIFT,
         uint(floor(remaining_credit*1024.)));
     entry.words[s+FR_STATE_COATING_REMAINDERS]=packed;
-    uint oil_used=mixed?min(oil,uint(floor(float(reacted)*float(oil)/float(total)))):reacted;
+    uint oil_used=mixed?coating_oil_share(reacted,oil,total):reacted;
     uint jelly_used=reacted-oil_used;
     uint ash=uint(floor(float(reacted)*coefficient(profile,FR_PROFILE_ASH_YIELD_WORD)));
     uint soot=uint(floor(float(reacted)*coefficient(profile,FR_PROFILE_SOOT_YIELD_WORD)));
