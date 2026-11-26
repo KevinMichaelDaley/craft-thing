@@ -750,6 +750,17 @@ static void forest_probe_diagnostic(void) {
 #endif /* DC_FOREST_DISPLAY_INCLUDE */
 
 #ifndef DC_FOREST_DISPLAY_INCLUDE
+static void test_unresident_warmth_probe_reports_its_failure(void) {
+    uint32_t page = 0;
+    dc_gpu_t gpu = {.width = DC_CHUNK_SIDE, .height = DC_CHUNK_SIDE,
+        .page_width = 1u, .page_height = 1u, .page_mapped = &page};
+    char err[128] = {0};
+    float temperature = forest_gas_temperature_K(&gpu, 0u, 0u, err, sizeof(err));
+    printf("Unavailable forest probe returned %.2f K with '%s'\n", temperature, err);
+    ASSERT_TRUE(strstr(err, "resident") != NULL);
+    PASS();
+}
+
 static void test_forest_manifest_starter_location(void) {
     printf("Forest starter (%u,%u), radius %u\n", DC_FOREST_IGNITION_X,
            DC_FOREST_IGNITION_Y, DC_FOREST_IGNITION_RADIUS);
@@ -782,6 +793,11 @@ static void test_warmth_window_includes_its_scheduled_endpoint(void) {
 
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
+    if (argc == 2 && strcmp(argv[1], "--probe-contract") == 0) {
+        RUN(test_unresident_warmth_probe_reports_its_failure);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--manifest-starter") == 0) {
         printf("RUN  test_forest_manifest_starter_location\n");
         test_forest_manifest_starter_location();

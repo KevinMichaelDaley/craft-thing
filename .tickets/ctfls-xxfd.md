@@ -2,7 +2,7 @@
 id: ctfls-xxfd
 status: in_progress
 deps: []
-links: [ctlo-ehqj, ct-e6fr]
+links: [ctlo-ehqj, ct-e6fr, ctgwpe-1n73]
 created: 2026-11-26T23:46:13Z
 type: bug
 priority: 1
