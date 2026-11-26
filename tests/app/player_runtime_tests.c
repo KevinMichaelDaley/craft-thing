@@ -3,10 +3,14 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
+#include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include "../../src/app/level_internal.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 #include "../player/runtime_visual_check.h"
 
 static int g_pass,g_fail;
@@ -344,6 +348,113 @@ static void test_heat_probe_targets_the_visible_robe_in_a_two_player_scene(void)
     PASS();
 }
 
+static void test_visible_robe_and_hat_singe_and_stay_dark_after_reversal(void) {
+    enum { PARTS = 2 };
+    const uint32_t rest_canvas[PARTS][2] = {{16u, 20u}, {26u, 9u}};
+    const fr_beaver_region_t regions[PARTS] = {FR_BEAVER_ROBE, FR_BEAVER_HAT};
+    char directory[] = "build/player_runtime_singe_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    dc_level_view_t *v = dc_level_view_create_ground(directory, 314, &ground, err, sizeof(err));
+    ASSERT_TRUE(v && dc_level_view_pan_pixels(v, 0, -INITIAL_CHUNK_Y * DC_CHUNK_SIDE) &&
+                dc_level_view_wait_visible(v, 120000, err, sizeof(err)) &&
+                dc_players_enable_at(v, 80, 24, false, err, sizeof(err)) &&
+                dc_players_join(v, 42, err, sizeof(err)));
+    dc_gpu_t *gpu = dc_level_view_gpu(v);
+    ASSERT_TRUE(dc_level_view_configure_atmosphere(v, err, sizeof(err)) &&
+                fr_combustion_gpu_enable(gpu, err, sizeof(err)) &&
+                dc_level_view_heat_overlay(v, 0));
+    SDL_Event move = {.key = {.type = SDL_KEYDOWN, .keysym.scancode = SDL_SCANCODE_D}};
+    ASSERT_TRUE(dc_players_event(v, &move));
+    dc_players_frame_time(v, .12);
+    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+
+    dc_level_view_status_t status;
+    fr_player_t player;
+    fr_beaver_body_t bodies[2];
+    ASSERT_TRUE(dc_level_view_status(v, &status) &&
+                dc_players_status(v, 0, &player, &bodies[0]) &&
+                dc_players_status(v, 1, &player, &bodies[1]));
+    fr_gas_state_t *gas = calloc(DC_CHUNK_CELLS, sizeof(*gas));
+    double *volume = calloc(DC_CHUNK_CELLS, sizeof(*volume));
+    ASSERT_TRUE(gas && volume);
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) volume[i] = 1.;
+    uint32_t slots[PARTS], sources[PARTS], original_x[PARTS], original_rgb[PARTS];
+    fr_reactive_record_t before[PARTS], control[PARTS], burned[PARTS];
+    for (uint32_t part = 0; part < PARTS; ++part) {
+        uint32_t sx = rest_canvas[part][0], sy = rest_canvas[part][1];
+        sources[part] = sy * FR_BEAVER_WIDTH + sx + 1u;
+        fr_beaver_source_t source;
+        ASSERT_TRUE(fr_beaver_source(sources[part], &source) && source.region == regions[part]);
+        uint32_t y;
+        ASSERT_TRUE(walk_source_pixel(v, sources[part], &original_x[part], &y, err, sizeof(err)) &&
+                    original_x[part] > 0u &&
+                    dc_level_view_pixel(v, original_x[part], y, &original_rgb[part], err, sizeof(err)));
+        const uint32_t air_x = original_x[part] + status.offset_x - 1u;
+        const uint32_t air_y = y + status.offset_y;
+        dc_chunk_coord_t coord = {status.origin.x + air_x / DC_CHUNK_SIDE,
+                                  status.origin.y + air_y / DC_CHUNK_SIDE};
+        slots[part] = dc_gpu_find_active_chunk(gpu, coord);
+        ASSERT_TRUE(slots[part] != UINT32_MAX);
+        const uint32_t cell = air_y % DC_CHUNK_SIDE * DC_CHUNK_SIDE + air_x % DC_CHUNK_SIDE;
+        gas[cell] = (fr_gas_state_t){.species = {[FR_GAS_OXYGEN] = .02, [FR_GAS_NITROGEN] = .07},
+                                    .energy = 293.15 * (.02 * .65816 + .07 * .74320)};
+        bool found = false;
+        const uint32_t x = sx - bodies[0].rest_origin_x, py = sy - bodies[0].rest_origin_y;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[0].binding.body_id, x, py,
+                                              &before[part], &found, err, sizeof(err)) && found);
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[1].binding.body_id,
+                                              sx - bodies[1].rest_origin_x, sy - bodies[1].rest_origin_y,
+                                              &control[part], &found, err, sizeof(err)) && found);
+        fr_reactive_state_t hot = before[part].state;
+        hot.ignition_threshold = .001f;
+        const double heat = fr_reactive_state_energy_at_temperature(&hot, 1150.f) - fr_reactive_state_energy(&hot);
+        ASSERT_TRUE(fr_reactive_state_add_heat(&hot, heat, err, sizeof(err)) &&
+                    fr_gpu_reactive_seed_body(gpu, bodies[0].binding.body_id, x, py, &hot, err, sizeof(err)));
+    }
+    ASSERT_EQ(slots[0], slots[1]);
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(gpu, slots[0], gas, volume, DC_CHUNK_CELLS, err, sizeof(err)));
+    free(volume);
+    free(gas);
+    ASSERT_TRUE(fr_combustion_gpu_step(gpu, .75f, err, sizeof(err)));
+    for (uint32_t part = 0; part < PARTS; ++part) {
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[0].binding.body_id,
+            before[part].owner.key[2], before[part].owner.key[3], &burned[part], &found, err, sizeof(err)) && found);
+        printf("Walking %s gained %u char\n", part == 0u ? "robe" : "hat", burned[part].state.char_mass_fp);
+        ASSERT_TRUE(burned[part].state.fuel_mass_fp < before[part].state.fuel_mass_fp &&
+                    burned[part].state.char_mass_fp > before[part].state.char_mass_fp);
+    }
+    move.type = SDL_KEYUP;
+    ASSERT_TRUE(dc_players_event(v, &move));
+    move.key.type = SDL_KEYDOWN;
+    move.key.keysym.scancode = SDL_SCANCODE_A;
+    ASSERT_TRUE(dc_players_event(v, &move));
+    dc_players_frame_time(v, .12);
+    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)) && dc_level_view_tick(v, err, sizeof(err)));
+    for (uint32_t part = 0; part < PARTS; ++part) {
+        uint32_t x, y, rgb;
+        ASSERT_TRUE(walk_source_pixel(v, sources[part], &x, &y, err, sizeof(err)) && x != original_x[part] &&
+                    dc_level_view_pixel(v, x, y, &rgb, err, sizeof(err)));
+        ASSERT_TRUE(((rgb >> 8u) & 255u) < ((original_rgb[part] >> 8u) & 255u));
+        bool found = false;
+        fr_reactive_record_t turned, other;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[0].binding.body_id,
+            burned[part].owner.key[2], burned[part].owner.key[3], &turned, &found, err, sizeof(err)) && found);
+        ASSERT_EQ(turned.state.parcel_id_low, before[part].state.parcel_id_low);
+        ASSERT_EQ(turned.state.parcel_id_high, before[part].state.parcel_id_high);
+        ASSERT_EQ(turned.state.char_mass_fp, burned[part].state.char_mass_fp);
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[1].binding.body_id,
+            control[part].owner.key[2], control[part].owner.key[3], &other, &found, err, sizeof(err)) && found);
+        ASSERT_EQ(other.state.parcel_id_low, control[part].state.parcel_id_low);
+        ASSERT_EQ(other.state.fuel_mass_fp, control[part].state.fuel_mass_fp);
+        ASSERT_EQ(other.state.char_mass_fp, control[part].state.char_mass_fp);
+    }
+    ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_enabling_player_admits_only_the_player_body);
     RUN(test_editor_camera_holds_its_manual_position);
@@ -351,6 +462,7 @@ int main(void) {
     RUN(test_fire_ray_mode_uses_supplied_artwork_while_moving);
     RUN(test_wet_robe_darkening_follows_the_owner_across_walk_poses);
     RUN(test_heat_probe_targets_the_visible_robe_in_a_two_player_scene);
+    RUN(test_visible_robe_and_hat_singe_and_stay_dark_after_reversal);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
