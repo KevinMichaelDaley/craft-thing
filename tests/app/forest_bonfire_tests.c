@@ -20,7 +20,7 @@ static const fr_gas_model_t forest_gas_model = {
     .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
     .kinetic_scale = 1. / 512.};
 
-enum {DC_FOREST_MAX_SAMPLES = 40};
+enum {DC_FOREST_MAX_SAMPLES = 40, DC_FOREST_SAMPLE_INTERVAL_S = 10};
 
 #ifdef DC_FOREST_PRESENTATION
 #define FOREST_STEP(gpu, err, cap) dc_gpu_present_chunks_steps(gpu, 1, err, cap)
@@ -312,7 +312,7 @@ static bool forest_run(dc_gpu_t *gpu, forest_run_t *run, char *err, uint32_t cap
             fflush(stdout);
         }
         while (next_sample < DC_FOREST_MAX_SAMPLES &&
-               clock.advanced_seconds >= (double)next_sample * 10.) {
+               clock.advanced_seconds >= next_sample * DC_FOREST_SAMPLE_INTERVAL_S) {
             if (!forest_collect_sample(gpu, clock.advanced_seconds,
                                        &run->samples[next_sample], err, cap))
                 return false;
@@ -419,19 +419,20 @@ static bool forest_warmth_held(const forest_run_t *run) {
     float hottest = 0.f;
     for (uint32_t i = 0; i < run->sample_count; i++) {
         const forest_sample_t *s = &run->samples[i];
-        if (s->sim_seconds < DC_FOREST_WARMTH_BEGIN_S ||
-            s->sim_seconds > DC_FOREST_WARMTH_END_S)
+        uint32_t scheduled_seconds = i * DC_FOREST_SAMPLE_INTERVAL_S;
+        if (scheduled_seconds < DC_FOREST_WARMTH_BEGIN_S ||
+            scheduled_seconds > DC_FOREST_WARMTH_END_S)
             continue;
         /* The realistic kindling bootstrap warms the probe past ~60 s versus
          * the old pre-armed body parcels; the cold draft dips the probe just
          * before the plume arrives (measured 295.97 K at 50 s), so
          * enforcement starts at 60 s and the ramp is recorded as a fixture
          * deviation on the ticket. */
-        if (s->sim_seconds >= 60. && s->probe_K * 100.f < DC_FOREST_WARMTH_LOW_KX100)
+        if (scheduled_seconds >= 60u && s->probe_K * 100.f < DC_FOREST_WARMTH_LOW_KX100)
             return false;
-        if (s->sim_seconds >= 60. && s->probe_K * 100.f > 36000)
+        if (scheduled_seconds >= 60u && s->probe_K * 100.f > 36000)
             return false;
-        if (s->sim_seconds >= 60.) held = true;
+        if (scheduled_seconds >= 60u) held = true;
         if (s->probe_K > hottest) hottest = s->probe_K;
     }
     printf("FOREST warmth hottest probe %.2f K over the locked %.2f-%.2f K band\n",
@@ -692,11 +693,11 @@ static void forest_probe_diagnostic(void) {
 
 #ifndef DC_FOREST_DISPLAY_INCLUDE
 static void test_warmth_window_includes_its_scheduled_endpoint(void) {
-    const uint32_t endpoint = DC_FOREST_WARMTH_END_S / 10u;
+    const uint32_t endpoint = DC_FOREST_WARMTH_END_S / DC_FOREST_SAMPLE_INTERVAL_S;
     forest_run_t run = {.sample_count = endpoint + 2u};
     const double accepted_step = (double)(1.f / 60.f);
     for (uint32_t i = 0; i < run.sample_count; ++i) {
-        run.samples[i].sim_seconds = i * 10u * 60u * accepted_step;
+        run.samples[i].sim_seconds = i * DC_FOREST_SAMPLE_INTERVAL_S * 60u * accepted_step;
         run.samples[i].probe_K = 310.f;
     }
     ASSERT_TRUE(run.samples[endpoint].sim_seconds > DC_FOREST_WARMTH_END_S);
