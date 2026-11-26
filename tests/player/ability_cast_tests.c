@@ -424,8 +424,50 @@ static void test_ice_storm_rejects_unmapped_or_noncanonical_target(void) {
     PASS();
 }
 
-int main(void) {
+static void test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint(void) {
+    ASSERT_TRUE(dc_gpu_create(&gpu, 192u, 192u, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    enum { TARGET_SLOT = 0, DECOY_SLOT = 1, ROW = 12, DECOY_SAND = ROW * DC_CHUNK_SIDE + 1 };
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    const fr_player_point_t target = {{-20, 118}, 63.f, ROW};
+    chunk->coord = target.chunk;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, TARGET_SLOT, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 1u, 1u, TARGET_SLOT, err, sizeof(err)));
+    chunk->coord = (dc_chunk_coord_t){100, -100};
+    chunk->cells[DECOY_SAND].material = DC_MATERIAL_SAND;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, DECOY_SLOT, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 2u, 1u, DECOY_SLOT, err, sizeof(err)));
+    fr_reactive_state_t hot;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_SAND, 3000u, 0u, 900.f,
+                                         0x71000200u, &hot, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(gpu, DECOY_SLOT, DECOY_SAND, &hot, err, sizeof(err)));
+
+    bool applied = fr_player_cast_ice_storm(gpu, &target, 4u, err, sizeof(err));
+    fr_reactive_record_t decoy;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, DECOY_SLOT, DECOY_SAND, &decoy, &found, err, sizeof(err)) && found);
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, DECOY_SLOT, chunk, err, sizeof(err)));
+    uint32_t decoy_water = chunk->cells[ROW * DC_CHUNK_SIDE].fluid_mass;
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, TARGET_SLOT, chunk, err, sizeof(err)));
+    uint32_t center_water = chunk->cells[ROW * DC_CHUNK_SIDE + 63u].fluid_mass;
+    free(chunk);
+    printf("Unrelated page water %u, center water %u, decoy energy %.3f -> %.3f\n",
+           decoy_water, center_water, fr_reactive_state_energy(&hot), fr_reactive_state_energy(&decoy.state));
+    ASSERT_EQ(decoy_water, 0u);
+    ASSERT_EQ(center_water, 0u);
+    ASSERT_EQ(memcmp(&hot, &decoy.state, sizeof(hot)), 0);
+    ASSERT_TRUE(!applied);
+    PASS();
+}
+
+int main(int argc, char **argv) {
     printf("=== Player Ability Cast Tests ===\n\n");
+    if (argc == 2 && strcmp(argv[1], "--storm-mapping") == 0) {
+        RUN(test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint);
+        RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
+        printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
+        return g_fail > 0 ? 1 : 0;
+    }
     RUN(test_fire_bolt_spawns_burning_body_toward_target);
     RUN(test_fire_bolt_heats_wood_on_impact);
     RUN(test_fire_bolt_owns_every_burning_texel_across_a_streamed_seam);
@@ -437,6 +479,7 @@ int main(void) {
     RUN(test_ice_storm_keeps_generic_body_inventory_unchanged);
     RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
     RUN(test_ice_storm_rejects_unmapped_or_noncanonical_target);
+    RUN(test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint);
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail > 0 ? 1 : 0;
 }

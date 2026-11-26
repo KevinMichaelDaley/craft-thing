@@ -1,4 +1,11 @@
 BEAVER_SRC = src/player/beaver_art.c src/player/beaver_asset.c
+build/player_storm_footprint_tests: tests/player/storm_footprint_tests.c src/player/abilities.c src/vulkan/chunk_gpu.c src/fire/reactive_state.c include/ferrum/player/abilities.h src/vulkan/gpu_internal.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $(filter %.c,$^) -Wl,--gc-sections -o $@ -lm
+.PHONY: test_player_storm_footprint
+test_player_storm_footprint: build/player_storm_footprint_tests
+	./build/player_storm_footprint_tests
+test_player: test_player_storm_footprint
 build/player_chew_tests: tests/player/chew_tests.c src/player/chew.c src/fire/material_profile.c include/ferrum/player/chew.h
 build/player_chew_tests: src/fire/material_profile_data.inc
 	mkdir -p build

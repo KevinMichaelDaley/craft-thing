@@ -2,7 +2,7 @@
 id: ct-vkik
 status: in_progress
 deps: [ct-xsll, ct-ortp, ct-hk3v, ct-unkh, ct-1i55]
-links: [ctbpa-ccma]
+links: [ctbpa-ccma, ct-yctv, ctisf-f0wy]
 created: 2026-11-01T19:29:54Z
 type: task
 priority: 1
