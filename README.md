@@ -27,7 +27,8 @@ and gas simulation supply ignition, burning wood, heat and smoke. Air and
 combustible substrates pass the ray; noncombustible solids, water and unloaded
 cells block it. The eight casting frames use 80 ms per frame: emission at
 400 ms, recovery complete at 640 ms. A new button press is required for each cast.
-Movement currently displays the supplied idle artwork pending a walk asset.
+Movement cycles through six walk poses at 100 ms per frame, mirrored to face
+the direction of travel.
 
 A fresh sandbox (`./build/dungeoncraft --play`) starts in an
 [authored clearing](assets/props/spawn_tree.md). Pass the same `--world-dir` to

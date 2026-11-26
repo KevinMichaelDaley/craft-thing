@@ -74,7 +74,9 @@ GPU no-ops. The adapter never reads body state to CPU or edits transforms.
 Its five Vulkan tests exercise real support/movement, independent players,
 sequence retries, invalid batches and stale generations. Application spawning,
 SDL routing, fixed-step scheduling and cropped animation rendering now use this
-adapter. Collision and thermal exposure still use canonical rest geometry;
+adapter. The live framebuffer test checks all six walk poses against the
+authored clip and checks horizontal mirroring after reversing direction.
+Collision and thermal exposure still use canonical rest geometry;
 pose-dependent deformation remains required for full material acceptance.
 
 Keyboard: A/D movement, Space press jump, Q press fire bolt, E press targeted ice

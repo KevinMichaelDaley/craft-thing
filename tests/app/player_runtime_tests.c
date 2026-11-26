@@ -84,6 +84,7 @@ static void test_editor_camera_holds_its_manual_position(void) {
 }
 
 static void test_real_app_keyboard_drives_body_and_animation(void) {
+    enum { WALK_FRAMES = 6, WALK_LOOP_TICKS = 36 };
     char directory[]="build/player_runtime_XXXXXX",err[256]={0};ASSERT_TRUE(mkdtemp(directory));
     uint32_t surface=96;dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
     dc_level_view_t *v=dc_level_view_create_ground(directory,314,&ground,err,sizeof(err));ASSERT_TRUE(v);
@@ -111,19 +112,22 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(runtime_visual_check(v,0u,err,sizeof(err)));
     uint32_t frame;
     ASSERT_TRUE(fr_player_frame(&p, &frame));
+    ASSERT_TRUE(frame < WALK_FRAMES);
     uint32_t displayed_walk_frames = 1u << frame;
-    for (unsigned n = 0; n < 36 && displayed_walk_frames != 0x3fu; n++) {
+    const uint32_t all_walk_frames = (1u << WALK_FRAMES) - 1u;
+    for (unsigned n = 0; n < WALK_LOOP_TICKS && displayed_walk_frames != all_walk_frames; n++) {
         ASSERT_TRUE(dc_level_view_step(v, err, sizeof(err)) &&
                     dc_level_view_tick(v, err, sizeof(err)));
         ASSERT_TRUE(dc_players_status(v, 0, &p, &binding));
         ASSERT_EQ(p.action, FR_PLAYER_WALK);
         ASSERT_TRUE(fr_player_frame(&p, &frame));
+        ASSERT_TRUE(frame < WALK_FRAMES);
         if (!(displayed_walk_frames & (1u << frame))) {
             ASSERT_TRUE(runtime_visual_check(v, 0u, err, sizeof(err)));
             displayed_walk_frames |= 1u << frame;
         }
     }
-    ASSERT_EQ(displayed_walk_frames, 0x3fu);
+    ASSERT_EQ(displayed_walk_frames, all_walk_frames);
     e.type=SDL_KEYUP;e.key.keysym.scancode=SDL_SCANCODE_D;ASSERT_TRUE(dc_players_event(v,&e));
     e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_A;ASSERT_TRUE(dc_players_event(v,&e));
     for(unsigned n=0;n<7;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
