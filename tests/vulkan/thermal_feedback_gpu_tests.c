@@ -25,8 +25,12 @@ static void test_single_point_inspection_matches_real_solid_and_liquid_inventori
     const dc_gpu_address_buffer_t *samples=&g->thermal->samples,*fluxes=&g->thermal->fluxes;
     ASSERT_TRUE(samples->device_local&&fluxes->device_local);
     ASSERT_TRUE(!samples->host_visible&&!fluxes->host_visible&&!samples->mapped&&!fluxes->mapped);
+    ASSERT_EQ(g->thermal->inspection.buffer,VK_NULL_HANDLE);
     fr_thermal_inspection_t info;
     ASSERT_TRUE(fr_thermal_gpu_inspect(g,20,20,&info,err,sizeof(err)));
+    const dc_gpu_address_buffer_t *inspection=&g->thermal->inspection;
+    ASSERT_TRUE(inspection->mapped&&inspection->bytes==32u);
+    VkBuffer staging=inspection->buffer;
     ASSERT_EQ(info.occupied,1u);ASSERT_EQ(info.material,DC_MATERIAL_WOOD);
     printf("Wood hover: %.6fK wetness%.6f energy%.6f capacity%.6f\n",info.temperature_K,info.wetness,info.thermal_energy,info.heat_capacity);
     ASSERT_TRUE(fabsf(info.temperature_K-350.f)<1e-3f&&fabsf(info.wetness-1.f)<1e-4f);
@@ -36,6 +40,7 @@ static void test_single_point_inspection_matches_real_solid_and_liquid_inventori
     ASSERT_EQ(info.occupied,1u);ASSERT_EQ(info.material,DC_MATERIAL_WATER);
     ASSERT_TRUE(fabsf(info.temperature_K-(293.15f+100.f/4.18f))<1e-3f);ASSERT_EQ(info.wetness,1.f);
     ASSERT_TRUE(fr_thermal_gpu_inspect(g,22,20,&info,err,sizeof(err)));ASSERT_EQ(info.occupied,0u);
+    ASSERT_EQ(inspection->buffer,staging);
     fr_thermal_inspection_t untouched=info;memset(&untouched,0xa5,sizeof(untouched));info=untouched;
     ASSERT_TRUE(!fr_thermal_gpu_inspect(g,640,0,&info,err,sizeof(err))&&memcmp(&info,&untouched,sizeof(info))==0);
     ASSERT_TRUE(present(g,err,sizeof(err)));dc_gpu_destroy(g);PASS();

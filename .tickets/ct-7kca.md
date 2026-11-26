@@ -27,3 +27,7 @@ Experiment measured on RTX A2000 X11: moving thermal samples and fluxes to DEVIC
 **2026-11-26T21:11:08Z**
 
 On the integrated November baseline, a newly strengthened native thermal inspection test compiles and fails because samples and fluxes still occupy persistently mapped memory. The two existing display and hover checks pass. The current allocator preferred local mapped memory for this quarter-native fixture; the intended change reserves the mapped aperture for explicit bounded inspection instead. Capture paired half-native timing before drawing a performance conclusion.
+
+**2026-11-26T21:17:44Z**
+
+The device-only samples and flux buffers are zero-initialized on the GPU. Point inspection copies a single sample and its metadata in one submission into a lazily allocated reusable 32-byte staging buffer. Seven Vulkan suites passed 31 tests, and the final inspection suite passed all three checks including repeated reuse. Archived direct mapped scratch diagnostics from the Greek pool and bonfire tests in Git history. Half-native binaries are built for paired timing once the active GPU runs clear.
