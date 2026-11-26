@@ -89,17 +89,20 @@ static void check_native_fused_physics_tick(void) {
 }
 static void test_native_fused_physics_tick_keeps_packets_clock_and_removes_completion_wait(void) {
     char err[64]={0};
-    const char *const options[]={"DC_GAS_FUSED_TICK","DC_GAS_LOCAL_GEOMETRY","DC_GAS_ROTATE_PUBLISH","DC_GAS_FUSED_GEOMETRY"};
+    const struct {const char *name,*value;} options[]={
+        {"DC_GAS_FUSED_TICK","1"},{"DC_GAS_LOCAL_GEOMETRY","1"},
+        {"DC_GAS_ROTATE_PUBLISH","1"},{"DC_GAS_FUSED_GEOMETRY","1"},{"DC_FRAME_TIMINGS","0"}
+    };
     char *saved[sizeof(options)/sizeof(options[0])]={0};
     const size_t count=sizeof(saved)/sizeof(saved[0]);
     for(size_t i=0;i<count;++i) {
-        const char *old=getenv(options[i]);saved[i]=old?SDL_strdup(old):NULL;
+        const char *old=getenv(options[i].name);saved[i]=old?SDL_strdup(old):NULL;
         ASSERT_TRUE(!old||saved[i]);
-        ASSERT_EQ(SDL_setenv(options[i],"1",1),0);
+        ASSERT_EQ(SDL_setenv(options[i].name,options[i].value,1),0);
     }
     check_native_fused_physics_tick();
     for(size_t i=0;i<count;++i) {
-        int restored=saved[i]?SDL_setenv(options[i],saved[i],1):unsetenv(options[i]);
+        int restored=saved[i]?SDL_setenv(options[i].name,saved[i],1):unsetenv(options[i].name);
         SDL_free(saved[i]);
         ASSERT_EQ(restored,0);
     }
