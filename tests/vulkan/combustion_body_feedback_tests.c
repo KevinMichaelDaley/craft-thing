@@ -327,7 +327,91 @@ static void test_submerged_rigid_coating_burns_from_bound_oxidizer(void) {
     free(checkpoint);
     free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
+static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
+    enum {size = DC_CHUNK_CELLS, x = 20, y = 20, center = y * DC_CHUNK_SIDE + x};
+    const uint32_t donor_body = 0x80000001u;
+    const uint32_t sample_cells[] = {center - 1u, center + 1u};
+    const uint32_t sample_materials[] = {DC_MATERIAL_GOLD, DC_MATERIAL_MAGIC_INGREDIENT};
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_gas_state_t *gas = calloc(size, sizeof(*gas));
+    ASSERT_TRUE(chunk && gas && context(&g, err, sizeof(err)));
+    for (uint32_t row = y - 2u; row <= y + 2u; row++) {
+        for (uint32_t column = x - 2u; column <= x + 2u; column++) {
+            chunk->cells[row * DC_CHUNK_SIDE + column] = (dc_cell_t){
+                .material = DC_MATERIAL_WATER, .fluid_mass = DC_FLUID_FULL};
+        }
+    }
+    chunk->cells[center] = (dc_cell_t){.material = DC_MATERIAL_STONE};
+    for (uint32_t i = 0; i < 2u; i++) {
+        chunk->cells[sample_cells[i]] = (dc_cell_t){
+            .material = sample_materials[i], .flags = DC_CELL_LOADED_TERRAIN};
+    }
+    ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)) &&
+                dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_reactive_state_t start[3] = {0};
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE, 65536u, 0u, 530.f,
+                                          600200u, &start[0], err, sizeof(err)));
+    start[0].coating_oil_fuel_fp = 32768u;
+    start[0].coating_jelly_fuel_fp = 32768u;
+    start[0].coating_oxidizer_fp = 32768u;
+    start[0].coating_threshold = .01f;
+    start[0].coating_integral = .02f;
+    start[0].flags |= FR_REACTIVE_COATING_FLAMING;
+    start[0].thermal_energy = (float)fr_reactive_state_energy_at_temperature(&start[0], 530.f);
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g, 0, center, &start[0], err, sizeof(err)));
+    for (uint32_t i = 0; i < 2u; i++) {
+        ASSERT_TRUE(fr_reactive_state_default(sample_materials[i], 65536u, 0u, 293.15f,
+                                              600201u + i, &start[i + 1u], err, sizeof(err)) &&
+                    fr_gpu_reactive_seed_cell(g, 0, sample_cells[i], &start[i + 1u],
+                                             err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g, err, sizeof(err)));
+    fr_gas_model_t model = {.gas_constant = {.25984, .29680, .18892, .46152, 0},
+        .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71}, .kinetic_scale = 1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g, err, sizeof(err)) &&
+                fr_gas_gpu_enable(g, &model, .0012f, 293.15f, err, sizeof(err)) &&
+                fr_combustion_gpu_enable(g, err, sizeof(err)));
+    uint64_t admitted = 0u;
+    for (uint32_t i = 0; i < 3u; i++) admitted += fr_reactive_state_mass_fp(&start[i]);
+    fr_reactive_record_t records[3] = {0};
+    for (uint32_t step = 0; step < 12u; step++) {
+        bool found = false;
+        ASSERT_TRUE(fr_combustion_gpu_step(g, .125f, err, sizeof(err)) &&
+                    fr_gpu_reactive_read_body(g, donor_body, 0, 0, &records[0],
+                                              &found, err, sizeof(err)) && found);
+        for (uint32_t i = 0; i < 2u; i++) {
+            ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 0, sample_cells[i], &records[i + 1u],
+                                                  &found, err, sizeof(err)) && found);
+        }
+        double remaining = 0.;
+        for (uint32_t i = 0; i < 3u; i++) {
+            const fr_reactive_state_t *state = &records[i].state;
+            ASSERT_EQ(state->origin_id_low, start[i].origin_id_low);
+            ASSERT_TRUE(fr_reactive_state_valid(state, err, sizeof(err)));
+            ASSERT_TRUE(state->coating_oxidizer_fp <= start[0].coating_oxidizer_fp);
+            remaining += fr_reactive_state_mass_exact_fp(state);
+        }
+        ASSERT_TRUE(fr_gas_gpu_read_chunk(g, 0, gas, size, err, sizeof(err)));
+        double products = 0.;
+        for (uint32_t i = 0; i < size; i++)
+            products += gas[i].species[FR_GAS_EXHAUST] + gas[i].species[FR_GAS_SOOT];
+        ASSERT_TRUE(fabs(remaining + products * DC_FLUID_FULL - (double)admitted) < .01);
+    }
+    printf("Contact corrosion gold %.6f, ingredient %.6f\n",
+           records[1].state.corroded_fraction, records[2].state.corroded_fraction);
+    ASSERT_TRUE(records[1].state.corroded_fraction > 0.f);
+    ASSERT_TRUE(records[2].state.corroded_fraction > 0.f);
+    free(gas);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(void) {
+    if (getenv("DC_CORROSION_CONTACT_ONLY")) RUN(test_sustained_coating_contact_feeds_both_corrosion_samples);
+    else
     if(getenv("DC_SHOCK_BODY_ONLY")) RUN(test_rigid_wood_settles_impact_energy_before_ignition);
     else
     if(getenv("DC_CHAR_LEDGER_ONLY")) RUN(test_small_body_char_reaction_keeps_a_finite_temperature_ledger);
