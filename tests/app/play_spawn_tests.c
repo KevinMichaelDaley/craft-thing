@@ -171,6 +171,81 @@ static bool aim_at_rock(dc_gpu_t *gpu, const dc_gpu_world_body_t *rock) {
     return false;
 }
 
+static bool open_inventory_world(const char *directory) {
+    const uint32_t surface = 96u;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    view = dc_level_view_create_ground(directory, 314u, &ground, err, sizeof(err));
+    return view && dc_level_view_pan_pixels(view, 0, -INITIAL_CHUNK_Y * (int32_t)DC_CHUNK_SIDE) &&
+           dc_level_view_wait_visible(view, 120000u, err, sizeof(err)) &&
+           dc_players_enable_at(view, 64, 40, false, err, sizeof(err));
+}
+
+static bool inventory_aim(uint32_t player, int32_t x, int32_t y) {
+    fr_player_point_t point;
+    uint32_t local_x, local_y;
+    dc_cell_address(x, y, &point.chunk, &local_x, &local_y);
+    point.x = (float)local_x;
+    point.y = (float)local_y;
+    return dc_players_aim_override(view, player, &point, err, sizeof(err));
+}
+
+static bool inventory_key(uint32_t type, SDL_Scancode code) {
+    SDL_Event event = {.key = {.type = type, .keysym.scancode = code}};
+    return dc_players_event(view, &event);
+}
+
+static bool inventory_ticks(uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        dc_players_frame_time(view, .16);
+        if (!dc_players_step(view, 1.f / 60.f, err, sizeof(err))) return false;
+    }
+    return true;
+}
+
+static void test_owned_inventory_survives_paid_placement_and_a_late_rejoin(void) {
+    char directory[] = "build/play_inventory_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) && open_inventory_world(directory));
+    ASSERT_TRUE(dc_players_join(view, 42, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 73, 40, 0, DC_MATERIAL_WOOD, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 137, 40, 0, DC_MATERIAL_DENSE_WOOD, err, sizeof(err)));
+    ASSERT_TRUE(inventory_aim(0, 73, 40) && inventory_aim(1, 137, 40));
+    SDL_Event pad = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN, .which = 42,
+                                 .button = SDL_CONTROLLER_BUTTON_B}};
+    ASSERT_TRUE(inventory_key(SDL_KEYDOWN, SDL_SCANCODE_C) && dc_players_event(view, &pad));
+    ASSERT_TRUE(inventory_ticks(8));
+    pad.type = SDL_CONTROLLERBUTTONUP;
+    ASSERT_TRUE(inventory_key(SDL_KEYUP, SDL_SCANCODE_C) && dc_players_event(view, &pad));
+
+    fr_player_inventory_t inventory;
+    const uint64_t wood = (uint64_t)llround(DC_DENSITY_WOOD * DC_FLUID_FULL);
+    const uint64_t dense_wood = (uint64_t)llround(DC_DENSITY_DENSE_WOOD * DC_FLUID_FULL);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), wood);
+    ASSERT_TRUE(dc_players_inventory(view, 1, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_DENSE_WOOD), dense_wood);
+    ASSERT_TRUE(inventory_aim(0, 190, 45) && inventory_key(SDL_KEYDOWN, SDL_SCANCODE_4) &&
+                inventory_key(SDL_KEYUP, SDL_SCANCODE_4) && inventory_ticks(1));
+    ASSERT_TRUE(inventory_key(SDL_KEYDOWN, SDL_SCANCODE_R) &&
+                inventory_key(SDL_KEYUP, SDL_SCANCODE_R) && inventory_ticks(1));
+    dc_cell_t cell;
+    ASSERT_TRUE(read_cell(190, 45, &cell) && cell.material == DC_MATERIAL_WOOD);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 0u);
+
+    ASSERT_TRUE(close_world() && open_inventory_world(directory));
+    ASSERT_TRUE(read_cell(73, 40, &cell) && cell.material == DC_MATERIAL_AIR);
+    ASSERT_TRUE(read_cell(137, 40, &cell) && cell.material == DC_MATERIAL_AIR);
+    ASSERT_TRUE(read_cell(190, 45, &cell) && cell.material == DC_MATERIAL_WOOD);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 0u);
+    ASSERT_TRUE(close_world() && open_inventory_world(directory));
+    ASSERT_TRUE(dc_players_join(view, 82, err, sizeof(err)));
+    ASSERT_TRUE(dc_players_inventory(view, 1, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_DENSE_WOOD), dense_wood);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 0u);
+    PASS();
+}
+
 static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void) {
     char directory[] = "build/play_spawn_XXXXXX";
     ASSERT_TRUE(mkdtemp(directory));
@@ -248,6 +323,9 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     view = dc_play_scene_create(directory, 314u, err, sizeof(err));
     ASSERT_TRUE(view && dc_level_view_restored(view));
     ASSERT_TRUE(read_cell(-12, 74, &cell) && cell.material == DC_MATERIAL_AIR);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD),
+              (uint64_t)llround(DC_DENSITY_WOOD * DC_FLUID_FULL));
     ASSERT_TRUE(read_cell(-20, 96, &cell) && cell.material == DC_MATERIAL_WOOD);
     ASSERT_TRUE(read_cell(148, 74, &cell) && cell.material == DC_MATERIAL_WOOD);
     uint32_t restored[3] = {0};
@@ -350,11 +428,17 @@ static void test_play_admits_ambient_air_when_reopening_an_older_save(void) {
     fr_beaver_body_t original, restored;
     ASSERT_TRUE(dc_players_status(view, 0, &player, &original));
     ASSERT_TRUE(close_world());
+    char path[128];
+    ASSERT_TRUE(snprintf(path, sizeof(path), "%s/player_inventory.bin", directory) > 0);
+    ASSERT_TRUE(unlink(path) == 0 || errno == ENOENT);
 
     view = dc_play_scene_create(directory, 314u, err, sizeof(err));
     ASSERT_TRUE(view && dc_level_view_restored(view));
     ASSERT_TRUE(dc_players_status(view, 0, &player, &restored));
     ASSERT_EQ(restored.binding.body_id, original.binding.body_id);
+    fr_player_inventory_t inventory;
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 0u);
     dc_gpu_t *gpu = dc_level_view_gpu(view);
     const uint32_t slot = dc_gpu_find_active_chunk(gpu, (dc_chunk_coord_t){0, 0});
     fr_gas_checkpoint_chunk_t air;
@@ -369,6 +453,7 @@ int main(void) {
     RUN(test_play_combustion_changes_fur_and_reloads_its_gas);
     RUN(test_play_admits_ambient_air_when_reopening_an_older_save);
     RUN(test_play_loads_authored_trees_and_preserves_harvest_and_rocks);
+    RUN(test_owned_inventory_survives_paid_placement_and_a_late_rejoin);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
