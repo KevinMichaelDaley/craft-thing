@@ -460,8 +460,10 @@ static void test_delayed_greek_load_ignites_the_launcher_ensemble(void) {
         dc_gpu_t *gpu = greek_grid();
         ASSERT_TRUE(gpu);
         dc_siege_scene_t scene = {0};
-        ASSERT_TRUE(dc_siege_scene_build_risk(gpu, DC_SIEGE_LOAD_GREEK, seed,
-                                              false, &scene, err, sizeof(err)));
+        bool built = dc_siege_scene_build_risk(gpu, DC_SIEGE_LOAD_GREEK, seed,
+                                              false, &scene, err, sizeof(err));
+        if (!built) printf("Launcher fixture failed for seed %u (%s)\n", seed, err);
+        ASSERT_TRUE(built);
         ASSERT_TRUE(greek_ticks(gpu, 2u, err, sizeof(err)));
         ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
         /* Ten exposed dry seconds in the sling. */
