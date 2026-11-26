@@ -1,6 +1,6 @@
 ---
 id: ctpa-ptku
-status: in_progress
+status: closed
 deps: [ctpa-zfxm]
 links: []
 created: 2026-11-26T11:02:45Z
@@ -36,3 +36,7 @@ The combined sandbox regression passed 3/3 on the wetting revision, including th
 **2026-11-26T12:22:12Z**
 
 Heat-transfer substage. RED 46269073 reproduced zero heat transfer to the displaced fur and a missed probe on the live walking robe. GREEN 171c4e02 samples and deposits through the same projected parcel contacts. The final Vulkan runs pass 3/3 body and 6/6 live player cases. The source debit and owner gain matched at 33.713882 with the normal pose and within 0.000001 at 32.846755 after mirroring to the hat. The robe warms at its displayed pixel while the second player retains its starting energy. The thermal display, water, sprite, and sandbox suites passed at GREEN alongside player/reactive CPU tests. The refactor build and SPIR-V validation pass. Atmospheric oxygen selection, reaction placement, and live singeing across poses remain open. The strict full run for this branch is queued behind the two previous pinned revisions.
+
+**2026-11-26T12:50:35Z**
+
+Atmospheric contact now reserves oxygen and applies fuel reaction at the projected pose while keeping the canonical parcel and geometry owner. RED cb933543 and 31534eae reproduced missed local combustion and framebuffer singeing. RED 7b7d6925 reproduced a quarter-cell edge that incorrectly blocked air. RED 09c2601a against the prior shaders reproduced missed singeing with ordinary sandbox ambient air. Final Vulkan checks pass 4/4 body, 7/7 live player, 3/3 authored sandbox. Both mirrored orientations consumed 93 fuel units and 112.348581 Q16 oxygen units in the isolated fixture, with accounted fractional reserve and local surface emission. Real ambient air charred robe and hat by 6 and 9 Q16 units, respectively. Both pixels stayed darker on reversal with stable ownership and an unchanged second player. The sandbox fur burned from 39322 to 39213 fuel with its char and gas state preserved on reload. CPU, dependency, and SPIR-V checks passed. The wider rigid feedback suite had 10 passing cases and the existing submerged products failure reproduced on the predecessor, tracked by ctpc-wezp. The full suite for this revision is queued behind earlier pinned runs.

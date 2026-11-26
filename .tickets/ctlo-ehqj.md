@@ -31,3 +31,7 @@ GREEN+validation evidence (headless NVidia RTX A2000, X11 DISPLAY=:1, quarter-na
 **2026-11-03T21:04:34Z**
 
 Spread gap FIXED (see ct-e6fr 73af4228): fire sustains from cell-owned kindling and spreads - dry-bridge shows flaming fuel beyond the cleared boundary at sim46s and broken-ring escapes (forest suite 5/5 headless, --spread 2/0; captures refreshed under build/screenshots). Containment unchanged (still + both crosswinds zero outside ignition for 180s; sealed/vented recovery passes). Fixture deviation recorded: warmth enforcement window moved 30s->50s after ignition because the realistic kindling bootstrap warms the probe later than the old pre-armed parcels; ember band still met (1273K). Remaining gap vs full AC: none identified for the simulation clauses; displayed-variant long-run re-validation and the fresh capture set still owed before close.
+
+**2026-11-26T12:42:19Z**
+
+The pinned full suite on 2aa02c10 reported a still-air warmth failure at tests/app/forest_bonfire_tests.c:475. The 70-second probe read 297.69 K, below 298.15 K. The pinned 2d63f902 run passed this case, reading 315.10 K at 70 seconds. The forest fixture, combustion shaders, and gas source are identical across those revisions. Reproduce the variability with the same fixture under isolated GPU load before attributing it to the sandbox changes.

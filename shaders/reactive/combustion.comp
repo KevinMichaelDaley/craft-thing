@@ -87,6 +87,15 @@ bool body_reaction_air(ivec2 p) {
 bool body_corner_reachable(ivec2 parcel,ivec2 direction) {
     return body_reaction_air(parcel+ivec2(direction.x,0))||body_reaction_air(parcel+ivec2(0,direction.y));
 }
+uint body_reaction_neighbors(ivec2 receiver) {
+    uint neighbors=0u;
+    for(uint face=0u;face<8u;face++) {
+        ivec2 direction=body_directions[face],parcel=receiver+direction;
+        if(body_reaction_near(parcel)&&(face<4u||body_corner_reachable(parcel,-direction)))
+            neighbors|=1u<<face;
+    }
+    return neighbors;
+}
 #endif
 uint slot_generation(uint at) {
     if((params.unused.z|params.unused.w)==0u) return 0u;
@@ -848,18 +857,15 @@ void main() {
         return;
     }
     if(!body_reaction_receiver(p,at)) return;
-    bool near_body=false;
-    for(uint face=0u;face<8u;face++) {ivec2 q=p+body_directions[face];
-        if(face>=4u&&!body_corner_reachable(q,-body_directions[face])) continue;
-        near_body=near_body||body_reaction_near(q);}
-    if(!near_body) return;
+    uint neighbors=body_reaction_neighbors(p);
+    if(neighbors==0u) return;
     bool alternate=params.sparse!=0u&&(Words(params.gates_address).words[at]&8u)!=0u;
     GasField field=GasField(alternate?params.alternate_address:params.world_address);Gas gas=field.values[at];
     float admitted=0.,temperature=0.;uint sources=0u;
-    for(uint face=0u;face<8u;face++) {
-        ivec2 q=p+body_directions[face];
-        if(face<4u||body_corner_reachable(q,-body_directions[face]))
-            burn_body_neighbor(q,at,gas,admitted,temperature,sources);
+    while(neighbors!=0u) {
+        uint face=uint(findLSB(neighbors));
+        neighbors&=neighbors-1u;
+        burn_body_neighbor(p+body_directions[face],at,gas,admitted,temperature,sources);
     }
     uvec2 cell_handle=Handles(uvec2(root[6],root[7])).values[at];
     if(cell_handle.y!=0u)

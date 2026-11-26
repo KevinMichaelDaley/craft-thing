@@ -51,3 +51,7 @@ The ordinary sandbox has its own streamed atmosphere and real combustion under c
 **2026-11-26T11:48:43Z**
 
 A visible beaver texel now receives water at its current animation coordinates while keeping its canonical parcel ID. Live Vulkan framebuffer checks show the wet robe darken after reversal. The owning parcel retains moisture while hidden. The heating and combustion subtasks remain under ctpa-ptku.
+
+**2026-11-26T12:50:35Z**
+
+Pose exposure acceptance is complete under ctpa-ptku. Live Vulkan tests now verify wet robe darkening, heat transfer, and robe and hat singeing with normal sandbox ambient air across reversal. A second player retains independent material state. The sandbox fixture verifies combustion and exact fur/gas checkpoint reload. Parent-level authored animation and play acceptance should be audited before proceeding to ct-vkik.
