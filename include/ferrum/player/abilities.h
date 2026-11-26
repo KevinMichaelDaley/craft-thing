@@ -18,8 +18,9 @@ bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
                               uint32_t err_cap);
 
 /** Cast an area ice storm: soak the bounded disc around the target with
- * water and chill every reactive parcel inside the radius. Radius must
- * be at least one cell. */
+ * water and chill reactive cell parcels across active chunk pages.
+ * Target coordinates are canonical chunk-local cells. The radius must
+ * be 1 to 32 cells and the disc must fit inside the active grid. */
 bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t radius, char *err_buf, uint32_t err_cap);
 

@@ -1,6 +1,6 @@
 ---
 id: ct-yctv
-status: in_progress
+status: closed
 deps: []
 links: [ct-hk3v]
 created: 2026-11-26T05:35:44Z
@@ -18,3 +18,9 @@ The November 19 playtest added generic rigid bodies under a process-global count
 
 Archive the rigid-body hail prototype by recording its exact revision. A live Vulkan cast resolves the canonical target through the active page map, wets and cools the bounded disc across resident chunk seams, and adds no generic rigid bodies. Invalid and unmapped targets leave the world untouched.
 
+
+## Notes
+
+**2026-11-26T05:45:05Z**
+
+Archived prototype in Git history at 3811d47ffae6934c343c312845d3a28bb8444e34 (src/player/abilities.c). RED 5 passed and 3 failed. GREEN and REFACTOR each passed all 8 on NVIDIA RTX A2000. Storm retains bounded water and reactive cooling. Future actual hail needs explicit material, ownership, and lifetime.

@@ -8,6 +8,7 @@
 #include "../../src/vulkan/gpu_internal.h"
 
 enum { BOLT_SPEED_CELLS = 4u, BOLT_SIDE = 2u,
+       STORM_MAX_RADIUS = 32u,
        STORM_CHILL_KEEP_NUM = 3u, STORM_CHILL_KEEP_DEN = 10u };
 #define BOLT_TEMPERATURE_K 1300.f
 
@@ -133,27 +134,32 @@ bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
     return true;
 }
 
+static bool storm_target_cell(dc_gpu_t *gpu, const fr_player_point_t *target,
+                              uint32_t *x, uint32_t *y) {
+    for (uint32_t slot = 0u; slot < DC_GPU_CHUNK_SLOTS; slot++) {
+        uint32_t tile = gpu->slot_page[slot];
+        if (tile == UINT32_MAX) continue;
+        const uint32_t *registry = dc_gpu_structural_data(gpu) +
+            DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
+        if (registry[5] &&
+            memcmp(registry, &target->chunk, sizeof(target->chunk)) == 0) {
+            *x = tile % gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->x;
+            *y = tile / gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->y;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t radius, char *err_buf, uint32_t err_cap) {
-    if (!gpu || !target || radius == 0u || radius > 32u ||
+    if (!gpu || !target || radius == 0u || radius > STORM_MAX_RADIUS ||
         !(target->x >= 0.f && target->x < DC_CHUNK_SIDE &&
           target->y >= 0.f && target->y < DC_CHUNK_SIDE))
         return error(err_buf, err_cap, "Invalid ice storm target or radius");
-    uint32_t tile = UINT32_MAX;
-    for (uint32_t candidate = 0u; candidate < DC_GPU_CHUNK_SLOTS; candidate++) {
-        const uint32_t *registry =
-            dc_gpu_structural_data(gpu) + DC_STRUCTURAL_HEADER_WORDS +
-            candidate * 8u;
-        if (registry[5] &&
-            memcmp(registry, &target->chunk, sizeof(target->chunk)) == 0) {
-            tile = gpu->slot_page[candidate];
-            break;
-        }
-    }
-    if (tile == UINT32_MAX)
+    uint32_t x, y;
+    if (!storm_target_cell(gpu, target, &x, &y))
         return error(err_buf, err_cap, "Ice storm target is outside the active pages");
-    uint32_t x = tile % gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->x;
-    uint32_t y = tile / gpu->page_width * DC_CHUNK_SIDE + (uint32_t)target->y;
     if (x < radius || y < radius || x + radius >= gpu->width ||
         y + radius >= gpu->height)
         return error(err_buf, err_cap, "Ice storm extends outside the active grid");
@@ -162,14 +168,12 @@ bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
         return false;
 
     const uint32_t *pages = gpu->page_mapped;
-    for (uint32_t dy = 0u; dy <= radius * 2u; dy++)
-        for (uint32_t dx = 0u; dx <= radius * 2u; dx++) {
-            int32_t offset_x = (int32_t)dx - (int32_t)radius;
-            int32_t offset_y = (int32_t)dy - (int32_t)radius;
-            if (offset_x * offset_x + offset_y * offset_y >
-                (int32_t)(radius * radius))
-                continue;
-            uint32_t cell_x = x - radius + dx, cell_y = y - radius + dy;
+    int32_t reach = (int32_t)radius;
+    for (int32_t dy = -reach; dy <= reach; dy++)
+        for (int32_t dx = -reach; dx <= reach; dx++) {
+            if (dx * dx + dy * dy > reach * reach) continue;
+            uint32_t cell_x = (uint32_t)((int32_t)x + dx);
+            uint32_t cell_y = (uint32_t)((int32_t)y + dy);
             uint32_t page = pages[cell_y / DC_CHUNK_SIDE * gpu->page_width +
                                   cell_x / DC_CHUNK_SIDE];
             if (!page) continue;
