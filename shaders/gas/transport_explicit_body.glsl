@@ -37,7 +37,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
     if(length>FR_GAS_EXPLICIT_LINE_CAPACITY) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
     float speed=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE)
-        speed=max(speed,transport_activity_speed(transport_point(line,cell)));
+        speed=max(speed,transport_activity_speed(transport_line_point(line,cell)));
     speed=line_maximum(speed);
     if(speed==0.) {
         if(rank==0u) {transport_work[line*length].mass.w=-1.;atomicAdd(stats[FR_GAS_INACTIVE_LINE_COUNT_WORD],1u);}return;
@@ -48,7 +48,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
     uint stages=uint(ceil(courant/.9));
     stages=max(stages,1u);float peak=0.;
     for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {
-        uint atlas=gas_atlas(transport_point(line,cell));GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(transport_axis_input(atlas));
+        uint atlas=gas_atlas(transport_line_point(line,cell));GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(transport_axis_input(atlas));
         line_species[cell]=value.species;line_dynamics[cell]=value.dynamics;line_visual[cell]=vec4(value.pigment,0);
         peak=max(peak,max(value.species.z,value.dynamics.x));
     }
@@ -61,14 +61,14 @@ void FR_GAS_EXPLICIT_ENTRY() {
     for(uint stage=0u;stage<stages;stage++) {
         for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {
             if(stage!=0u) {
-                uint atlas=gas_atlas(transport_point(line,cell));GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
+                uint atlas=gas_atlas(transport_line_point(line,cell));GasFlux value=atlas==0xffffffffu?gas_empty_flux():transport_state(gas_provisional(atlas));
                 line_species[cell]=value.species;line_dynamics[cell]=value.dynamics;line_visual[cell]=vec4(value.pigment,0);
             }
             line_species[cell].z*=scale;line_dynamics[cell].x*=scale;line_visual[cell].rgb*=scale;
         }
         barrier();
         for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) {
-            ivec2 p=transport_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);uint atlas=gas_atlas(p);
+            ivec2 p=transport_line_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);uint atlas=gas_atlas(p);
             if(atlas==0xffffffffu) continue;
             GasFlux incoming=line_face_flux(p-step,seconds/float(stages)),outgoing=line_face_flux(p,seconds/float(stages));
             Gas previous=stage==0u?transport_axis_input(atlas):gas_provisional(atlas);

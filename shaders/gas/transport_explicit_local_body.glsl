@@ -7,7 +7,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
     if(rank==0u) {transport_work[line*length].mass.w=0.;if(line==0u) atomicOr(stats[15],262144u);}
     if(length>FR_GAS_EXPLICIT_LINE_CAPACITY||(FR_GAS_EXPLICIT_LINE_CAPACITY+FR_GAS_LOCAL_SIZE-1u)/FR_GAS_LOCAL_SIZE!=3u) {if(rank==0u) atomicAdd(stats[FR_GAS_IMPLICIT_LINE_COUNT_WORD],1u);return;}
     float speed=0.;
-    for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) speed=max(speed,transport_activity_speed(transport_point(line,cell)));
+    for(uint cell=rank;cell<length;cell+=FR_GAS_LOCAL_SIZE) speed=max(speed,transport_activity_speed(transport_line_point(line,cell)));
     speed=line_maximum(speed);
     if(speed==0.) {if(rank==0u) {transport_work[line*length].mass.w=-1.;atomicAdd(stats[FR_GAS_INACTIVE_LINE_COUNT_WORD],1u);}return;}
     float seconds=uintBitsToFloat(params.seconds),courant=seconds*max(speed,FR_GAS_PRACTICAL_MIXING_RATE);
@@ -17,7 +17,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
     vec4 rates[count];uint atlases[count];
     [[unroll]] for(uint k=0u;k<count;k++) {
         uint cell=rank+k*FR_GAS_LOCAL_SIZE;if(cell>=length) continue;
-        ivec2 p=transport_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
+        ivec2 p=transport_line_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
         atlases[k]=gas_atlas(p);Gas initial=atlases[k]==0xffffffffu?gas_empty():transport_axis_input(atlases[k]);
         rates[k]=vec4(transport_rates(p,-1).x,transport_rates(p,1).x,transport_rates(p-step,1).x,transport_rates(p+step,-1).x);
         GasFlux value=transport_state(initial);line_species[cell]=value.species;line_dynamics[cell]=value.dynamics;line_visual[cell]=vec4(value.pigment,0);
@@ -38,7 +38,7 @@ void FR_GAS_EXPLICIT_ENTRY() {
             uint cell=rank+k*FR_GAS_LOCAL_SIZE;if(cell>=length) continue;
             uint atlas=k==0u?atlases[0]:(k==1u?atlases[1]:atlases[2]);if(atlas==0xffffffffu) continue;
             vec4 own_rates=k==0u?rates[0]:(k==1u?rates[1]:rates[2]);
-            ivec2 p=transport_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
+            ivec2 p=transport_line_point(line,cell),step=transport_axis()==0u?ivec2(1,0):ivec2(0,1);
             GasFlux incoming=local_stage_face(p-step,interval,own_rates.z,own_rates.x),outgoing=local_stage_face(p,interval,own_rates.y,own_rates.w);
             Gas previous=stage==0u?transport_axis_input(atlas):gas_provisional(atlas);
             gas_write_provisional(atlas,transport_update_state(previous,incoming,outgoing,scale));
