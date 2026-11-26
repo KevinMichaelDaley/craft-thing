@@ -129,7 +129,8 @@ static bool greek_ball_water_contact(dc_gpu_t *gpu, uint32_t body,
             const dc_cell_t *cell = &chunk.cells[(origin_y + y) * DC_CHUNK_SIDE +
                                                  origin_x + x];
             (*faces)++;
-            if (cell->material == DC_MATERIAL_WATER && cell->fluid_mass >= DC_FLUID_FULL)
+            if (cell->material == DC_MATERIAL_WATER &&
+                cell->fluid_mass >= DC_FLUID_FULL * 3u / 4u)
                 (*wet_faces)++;
         }
     }
@@ -659,8 +660,8 @@ static void test_greek_burn_corrodes_coins_across_reload(void) {
     dc_gpu_t *gpu = greek_grid();
     ASSERT_TRUE(gpu);
     dc_siege_scene_t scene = {0};
-    ASSERT_TRUE(dc_siege_scene_build_douse_pool(gpu, DC_SIEGE_LOAD_GREEK,
-                                                &scene, err, sizeof(err)));
+    ASSERT_TRUE(dc_siege_scene_build_corrosion_pool(gpu, DC_SIEGE_LOAD_GREEK,
+                                                    &scene, err, sizeof(err)));
     ASSERT_TRUE(greek_ticks(gpu, 1u, err, sizeof(err)));
     ASSERT_TRUE(dc_siege_scene_ignite_load(gpu, &scene, 0.f, err, sizeof(err)));
     float coin_before = -1.f, ingredient_before = -1.f;

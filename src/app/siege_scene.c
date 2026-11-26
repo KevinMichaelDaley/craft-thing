@@ -27,6 +27,10 @@ enum {DC_SIEGE_TILES_X = 10, DC_SIEGE_TILES_Y = 7, DC_SIEGE_TILE_COUNT = 70,
       DC_SIEGE_POST_Y = 198u, DC_SIEGE_POST_W = 4u, DC_SIEGE_POST_H = 24u,
       DC_SIEGE_BAR_X = 84u, DC_SIEGE_BAR_Y = 188u,
       DC_SIEGE_BAR_W = 36u, DC_SIEGE_BAR_H = 4u,
+      DC_SIEGE_POOL_LEFT_X = 24u, DC_SIEGE_POOL_RIGHT_X = 40u,
+      DC_SIEGE_POOL_RIM_Y = 205u, DC_SIEGE_POOL_SURFACE_Y = 209u,
+      DC_SIEGE_POOL_LOAD_X = 32u, DC_SIEGE_POOL_LOAD_Y = 215u,
+      DC_SIEGE_LOAD_FILM_FP = 65536u, DC_SIEGE_POOL_FILM_FP = 16384u,
       /* Cocked release pose; the pivot spring is calibrated, not locked. */
       DC_SIEGE_SPRING_STIFFNESS = 20000u};
 
@@ -41,6 +45,12 @@ typedef struct {
     uint32_t flags;
     float wet;
 } siege_rect_t;
+
+typedef enum {
+    SIEGE_BASIN_NONE,
+    SIEGE_BASIN_DOUSE,
+    SIEGE_BASIN_CORROSION
+} siege_basin_t;
 
 static const siege_rect_t siege_floor = {0u, DC_SIEGE_FLOOR_Y, 480u, 40u,
                                           DC_MATERIAL_STONE,
@@ -78,6 +88,26 @@ static void siege_fill_rect(const siege_rect_t *rect, dc_chunk_t *chunks) {
             dc_cell_t *cell = &chunks[tile].cells[(y % 64u) * 64u + x % 64u];
             cell->material = rect->material;
             cell->flags = rect->flags;
+        }
+}
+
+static void siege_fill_pool(dc_chunk_t *chunks) {
+    const siege_rect_t rim[] = {
+        {DC_SIEGE_POOL_LEFT_X - 1u, DC_SIEGE_POOL_RIM_Y, 1u,
+         DC_SIEGE_FLOOR_Y - DC_SIEGE_POOL_RIM_Y, DC_MATERIAL_STONE,
+         DC_CELL_LOADED_TERRAIN, 0.f},
+        {DC_SIEGE_POOL_RIGHT_X + 1u, DC_SIEGE_POOL_RIM_Y, 1u,
+         DC_SIEGE_FLOOR_Y - DC_SIEGE_POOL_RIM_Y, DC_MATERIAL_STONE,
+         DC_CELL_LOADED_TERRAIN, 0.f},
+    };
+    siege_fill_rect(&rim[0], chunks);
+    siege_fill_rect(&rim[1], chunks);
+    for (uint32_t y = DC_SIEGE_POOL_SURFACE_Y; y < DC_SIEGE_FLOOR_Y; y++)
+        for (uint32_t x = DC_SIEGE_POOL_LEFT_X; x <= DC_SIEGE_POOL_RIGHT_X; x++) {
+            uint32_t tile = (y / 64u) * DC_SIEGE_TILES_X + x / 64u;
+            uint32_t local = (y % 64u) * 64u + x % 64u;
+            chunks[tile].cells[local].material = DC_MATERIAL_WATER;
+            chunks[tile].cells[local].fluid_mass = DC_FLUID_FULL;
         }
 }
 
@@ -164,7 +194,7 @@ static fr_structural_gpu_graph_t siege_wall(void) {
 static const uint32_t DC_SIEGE_MOUNT_ID = 0x70000001u;
 
 static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
-                                            dc_siege_load_t load, bool douse_pool,
+                                            dc_siege_load_t load, siege_basin_t basin,
                                             uint32_t seed, bool fireproof,
                                             dc_siege_scene_t *out, char *err_buf,
                                             uint32_t err_cap);
@@ -193,12 +223,8 @@ bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
             if (!found || parcel.state.coating_oil_fuel_fp == 0u) continue;
             if (!fr_reactive_state_valid(&parcel.state, err_buf, err_cap))
                 return siege_error(err_buf, err_cap, "Load parcel invalid pre-ignition");
-            /* The fuse both flags the film and strikes it to its ignition
-             * point: a cold film cannot sustain the reaction. The soak
-             * water flashes off instantly (the boil is magical — no
-             * per-tick steam spike for the transport to choke on); the
-             * pool rewets the film gradually and the burning film eats
-             * the inflow. */
+            /* Strike the film at its ignition point. Water stays on its
+             * parcel until wetting and evaporation move it. */
             double hot = fr_reactive_state_energy_at_temperature(
                 &parcel.state, 530.f);
             double current = fr_reactive_state_energy(&parcel.state);
@@ -212,24 +238,15 @@ bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
                     return false;
                 }
             }
-            /* The boil-off is magical: the soak water flashes off instantly
-             * rather than choking the transport with a steam spike; the
-             * pool rewets gradually and the burning film eats the inflow. */
-            parcel.state.bound_water_fp = 0u;
-            parcel.state.evaporation_fraction = 0.f;
             if (getenv("DC_GREEK_TRACE")) {
                 char why[128] = {0};
                 fr_reactive_state_valid(&parcel.state, why, sizeof(why));
-                fprintf(stderr, "ignite %u,%u dry valid %d (%s)\n", px, py,
+                fprintf(stderr, "ignite %u,%u valid %d (%s)\n", px, py,
                         fr_reactive_state_valid(&parcel.state, NULL, 0u) ? 1
                                                                           : 0,
                         why);
             }
             parcel.state.flags |= FR_REACTIVE_COATING_FLAMING;
-            parcel.state.coating_threshold = .5f;
-            /* The struck fuse flares late: the integral starts below zero
-             * and burns through at the film hazard rate before the flame
-             * becomes viable, so a launched load clears the carrier. */
             /* The struck fuse flares late: the ignition threshold sits
              * above the film integral, and the hazard burn-down at the
              * film's 5/s rate crosses it after fuse_seconds, letting a
@@ -243,38 +260,49 @@ bool dc_siege_scene_ignite_load(dc_gpu_t *gpu, dc_siege_scene_t *scene,
     return true;
 }
 
-/* Matched coating fuel: the oil and greek loads carry the same total film
- * mass (oil 65536 fp versus oil 32768 + jelly 32768) so the depletion-pace
- * comparison isolates the chemistry. The core is inert stone; the coating
- * is the only fuel and arrives pre-armed like the coal. */
-static void siege_arm_coating(fr_reactive_state_t *state, dc_siege_load_t load) {
+static void siege_stage_coating(fr_reactive_state_t *state, dc_siege_load_t load,
+                               uint32_t fuel_fp) {
     if (load == DC_SIEGE_LOAD_OIL) {
-        state->coating_oil_fuel_fp = 65536u;
+        state->coating_oil_fuel_fp = fuel_fp;
     } else if (load == DC_SIEGE_LOAD_GREEK) {
-        state->coating_oil_fuel_fp = 32768u;
-        state->coating_jelly_fuel_fp = 32768u;
-        state->coating_oxidizer_fp = 32768u;
-    } else {
-        return;
+        state->coating_oil_fuel_fp = fuel_fp / 2u;
+        state->coating_jelly_fuel_fp = fuel_fp / 2u;
+        state->coating_oxidizer_fp = fuel_fp / 2u;
     }
     state->coating_threshold = .01f;
-    state->coating_integral = .02f;
+    state->coating_integral = 0.f;
     /* The fuse stays cold in the pouch; dc_siege_scene_ignite_load lights
      * the film at the scenario's chosen moment (prompt launch, delayed
      * hold or never). A cold swing keeps the trajectory deterministic. */
 }
 
+static bool siege_ball_surface(int32_t dx, int32_t dy) {
+    int32_t outer_x = abs(dx) + 1;
+    int32_t outer_y = abs(dy) + 1;
+    const int32_t radius_squared = DC_SIEGE_COAL_RADIUS * DC_SIEGE_COAL_RADIUS;
+    return outer_x * outer_x + dy * dy > radius_squared ||
+           dx * dx + outer_y * outer_y > radius_squared;
+}
+
 bool dc_siege_scene_build_load(dc_gpu_t *gpu, bool wet_wall, dc_siege_load_t load,
                                dc_siege_scene_t *out, char *err_buf,
                                uint32_t err_cap) {
-    return dc_siege_scene_build_load_basin(gpu, wet_wall, load, false, 0u,
+    return dc_siege_scene_build_load_basin(gpu, wet_wall, load, SIEGE_BASIN_NONE, 0u,
                                            false, out, err_buf, err_cap);
 }
 
 bool dc_siege_scene_build_douse_pool(dc_gpu_t *gpu, dc_siege_load_t load,
                                      dc_siege_scene_t *out, char *err_buf,
                                      uint32_t err_cap) {
-    return dc_siege_scene_build_load_basin(gpu, false, load, true, 0u, false,
+    return dc_siege_scene_build_load_basin(gpu, false, load, SIEGE_BASIN_DOUSE, 0u, false,
+                                           out, err_buf, err_cap);
+}
+
+bool dc_siege_scene_build_corrosion_pool(dc_gpu_t *gpu, dc_siege_load_t load,
+                                         dc_siege_scene_t *out, char *err_buf,
+                                         uint32_t err_cap) {
+    return dc_siege_scene_build_load_basin(gpu, false, load, SIEGE_BASIN_CORROSION, 0u,
+                                           false,
                                            out, err_buf, err_cap);
 }
 
@@ -282,16 +310,17 @@ bool dc_siege_scene_build_risk(dc_gpu_t *gpu, dc_siege_load_t load,
                                uint32_t seed, bool fireproof,
                                dc_siege_scene_t *out, char *err_buf,
                                uint32_t err_cap) {
-    return dc_siege_scene_build_load_basin(gpu, false, load, false, seed,
+    return dc_siege_scene_build_load_basin(gpu, false, load, SIEGE_BASIN_NONE, seed,
                                            fireproof, out, err_buf, err_cap);
 }
 
 static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
-                                            dc_siege_load_t load, bool douse_pool,
+                                            dc_siege_load_t load, siege_basin_t basin,
                                             uint32_t seed, bool fireproof,
                                             dc_siege_scene_t *out, char *err_buf,
                                             uint32_t err_cap) {
     if (!gpu) return siege_error(err_buf, err_cap, "Missing siege GPU context");
+    const bool submerged = basin != SIEGE_BASIN_NONE;
     bool hot_coal = load == DC_SIEGE_LOAD_COAL;
     (void)hot_coal;
     dc_chunk_t *chunks = calloc(DC_SIEGE_TILE_COUNT, sizeof(*chunks));
@@ -329,15 +358,12 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                      (int32_t)lroundf(40.f * sinf(DC_SIEGE_COCKED_ANGLE));
     int32_t ball_y = DC_SIEGE_PIVOT_Y -
                      (int32_t)lroundf(40.f * cosf(-DC_SIEGE_COCKED_ANGLE));
-    if (douse_pool) {ball_x = 32; ball_y = 215;}
-    if (douse_pool) {
-        for (uint32_t y = 209u; y <= 220u; y++)
-            for (uint32_t x = 24u; x <= 40u; x++) {
-                uint32_t tile = (y / 64u) * DC_SIEGE_TILES_X + x / 64u;
-                uint32_t local = (y % 64u) * 64u + x % 64u;
-                chunks[tile].cells[local].material = DC_MATERIAL_WATER;
-                chunks[tile].cells[local].fluid_mass = DC_FLUID_FULL;
-            }
+    if (submerged) {
+        ball_x = DC_SIEGE_POOL_LOAD_X;
+        ball_y = DC_SIEGE_POOL_LOAD_Y;
+        siege_fill_pool(chunks);
+    }
+    if (basin == SIEGE_BASIN_CORROSION) {
         /* Coin and ingredient samples in the pool beside the load: the
          * burning brands smear greek film onto them and their finite
          * corrosion stock spends into spent rust. */
@@ -357,11 +383,10 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                 continue;
             uint32_t tile = ((uint32_t)y / 64u) * DC_SIEGE_TILES_X + (uint32_t)x / 64u;
             uint32_t local = ((uint32_t)y % 64u) * 64u + (uint32_t)x % 64u;
-            uint16_t core = douse_pool
-                                ? (uint16_t)DC_MATERIAL_WOOD
-                                : load == DC_SIEGE_LOAD_COAL
+            uint16_t core = load == DC_SIEGE_LOAD_COAL
                                       ? (uint16_t)DC_MATERIAL_COAL
-                                      : (uint16_t)DC_MATERIAL_STONE;
+                                      : submerged ? (uint16_t)DC_MATERIAL_WOOD
+                                                  : (uint16_t)DC_MATERIAL_STONE;
             chunks[tile].cells[local].material = core;
             chunks[tile].cells[local].flags = 0u;
             /* The rigid load displaces the pool water in its own cells. */
@@ -410,7 +435,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
      * the load; the dry pace comparison keeps inert stone cores. */
     uint16_t core_material = load == DC_SIEGE_LOAD_COAL
                                  ? (uint16_t)DC_MATERIAL_COAL
-                                 : douse_pool ? (uint16_t)DC_MATERIAL_WOOD
+                                 : submerged ? (uint16_t)DC_MATERIAL_WOOD
                                               : (uint16_t)DC_MATERIAL_STONE;
     const siege_rect_t coal_rects[1] = {{(uint32_t)(ball_x - DC_SIEGE_COAL_RADIUS),
                                          (uint32_t)(ball_y - DC_SIEGE_COAL_RADIUS),
@@ -427,15 +452,20 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     if (okay && (load == DC_SIEGE_LOAD_OIL || load == DC_SIEGE_LOAD_GREEK))
         for (uint32_t tile = 0; tile < DC_SIEGE_TILE_COUNT; tile++)
             for (uint32_t i = 0; i < packets[tile].count; i++) {
-                fr_reactive_state_t *state =
-                    &packets[tile].attachments[i].record.state;
+                fr_reactive_attachment_t *attachment = &packets[tile].attachments[i];
+                fr_reactive_state_t *state = &attachment->record.state;
                 if (state->material != core_material) continue;
-                siege_arm_coating(state, load);
-                /* The submerged douse fixture soaks the load: a quarter
-                 * capacity of bound water engages the greek roar (and the
-                 * ordinary oil's wet throttle) from the first tick. */
-                if (douse_pool)
-                    state->bound_water_fp = state->dry_mass_fp / 4u;
+                uint32_t fuel_fp = DC_SIEGE_LOAD_FILM_FP;
+                if (basin == SIEGE_BASIN_DOUSE) {
+                    int32_t x = chunks[tile].coord.x * DC_CHUNK_SIDE +
+                                attachment->local_index % DC_CHUNK_SIDE;
+                    int32_t y = chunks[tile].coord.y * DC_CHUNK_SIDE +
+                                attachment->local_index / DC_CHUNK_SIDE;
+                    if (!siege_ball_surface(x - ball_x, y - ball_y)) continue;
+                    /* Keep the film below the gravity-driven release limit. */
+                    fuel_fp = DC_SIEGE_POOL_FILM_FP;
+                }
+                siege_stage_coating(state, load, fuel_fp);
             }
     if (okay && hot_coal)
         /* Pre-armed locked ignition: the burning ball is viable from its
@@ -456,7 +486,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
                                         {27u, 216u, 1u, 1u,
                                          DC_MATERIAL_MAGIC_INGREDIENT, 0u,
                                          0.f}};
-    if (douse_pool) {
+    if (basin == SIEGE_BASIN_CORROSION) {
         okay = okay && siege_stage_region(chunks, coin_rects, 2u,
                                           DC_MATERIAL_GOLD, false, false,
                                           &ignored, &ignored, &ignored_cells,
@@ -603,7 +633,7 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
     }
     free(objects);
     objects = NULL;
-    for (uint32_t tick = 0; okay && tick < 5u; tick++)
+    for (uint32_t tick = 0; okay && !submerged && tick < 5u; tick++)
         okay = dc_gpu_rigid_step(gpu, err_buf, err_cap);
     if (okay) {
         for (uint32_t probe = 0x80000001u; probe <= 0x80000008u; probe++) {
@@ -627,6 +657,15 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
         okay = scene.coal_body != 0u && scene.arm_body != 0u;
         if (!okay) siege_error(err_buf, err_cap, "Siege bodies were not admitted");
     }
+    if (okay && submerged) {
+        const int32_t x = ball_x - DC_SIEGE_COAL_RADIUS;
+        const int32_t y = ball_y - DC_SIEGE_COAL_RADIUS;
+        okay = dc_gpu_set_body_motion(gpu, scene.coal_body, 0.f, 0.f,
+                                       DC_GPU_BODY_KINEMATIC, err_buf, err_cap) &&
+               fr_gpu_pose_authored_rigid(gpu, scene.coal_body,
+                   (dc_chunk_coord_t){x / 64, y / 64},
+                   (x % 64) * 65536, (y % 64) * 65536, 0.f, err_buf, err_cap);
+    }
     if (okay) {
         fr_revolute_joint_t pivot = {.id = 1u,
             .body_a = DC_SIEGE_MOUNT_ID, .body_b = scene.arm_body,
@@ -647,12 +686,14 @@ static bool dc_siege_scene_build_load_basin(dc_gpu_t *gpu, bool wet_wall,
             .anchor_a = {0.f, -22.f}, .anchor_b = {0.f, 0.f}};
         okay = fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) &&
                fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap) &&
-               fr_gpu_revolute_add(gpu, &pouch, err_buf, err_cap) &&
                dc_gpu_set_body_motion(gpu, scene.arm_body, DC_SIEGE_COCKED_ANGLE,
                                       0.f, 0u, err_buf, err_cap);
         scene.pivot_joint = pivot.id;
         scene.latch_joint = latch.id;
-        scene.pouch_joint = pouch.id;
+        if (okay && !submerged) {
+            okay = fr_gpu_revolute_add(gpu, &pouch, err_buf, err_cap);
+            scene.pouch_joint = pouch.id;
+        }
     }
     if (okay && !getenv("DC_SIEGE_NO_GAS")) {
         okay = dc_smoke_profile_defaults() &&
