@@ -12,6 +12,7 @@ uint carve_union_root(uint pixel) {
 }
 
 uint carve_union_attach_root(uint high,uint low) {
+    /* A stale root may already lead to a different component that must stay linked. */
     return atomicCompSwap(DC_FRAGMENT_LABEL(high),high+1u,low+1u);
 }
 
