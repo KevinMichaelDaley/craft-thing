@@ -38,3 +38,7 @@ After cap fix and query refactor, full tools/with-vulkan make -j8 test PASS. Sub
 **2026-10-30T21:55:29Z**
 
 2026-10-30 cache survives make clean: default device/driver/UUID file moved to XDG_CACHE_HOME/dungeoncraft (or HOME/.cache/dungeoncraft), with one-time legacy build/ file load and bounded128MiB save. Explicit DC_PIPELINE_CACHE_DIR supports isolated test path. RED opt-in outside-build test failed old code; GREEN test passed. A second actual 960x540 displayed launch loaded 70,334,447-byte user cache, GPU window1.046s and gas enabled3.006s. Full tools/with-vulkan make -j8 test PASS after refactor; focused outside-build and persistence1/1 each, displayed catapult2/2. Cold first-ever compile remains unresolved.
+
+**2026-11-26T15:25:12Z**
+
+The shared RTX cache was observed at 134108241 bytes near the 128 MiB cap. During the timed adhesion tests, the repeated launcher command spent substantial CPU time between scenes using that shared cache. The actual locked siege sweep uses a worktree-local DC_PIPELINE_CACHE_DIR. Its first context loaded zero bytes, saved 22922613 bytes, and subsequent fireproof and delayed contexts loaded and reused that cache. The prompt and stone-carrier controls passed. This is execution evidence for cache isolation across concurrent worktrees.
