@@ -6,7 +6,9 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/physics/authored_rigid_gpu.h"
 #include "ferrum/renderer/gpu.h"
+#include "ferrum/structural/gpu.h"
 #include "dungeoncraft/reactive_state_layout.h"
 #include "../../src/vulkan/reactive_storage_gpu.h"
 #include "../../src/vulkan/gas_gpu_internal.h"
@@ -367,7 +369,12 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
                     fr_gpu_reactive_seed_cell(g, 0, sample_cells[i], &start[i + 1u],
                                              err, sizeof(err)));
     }
-    ASSERT_TRUE(dc_gpu_admit_authored_rigid_cells(g, err, sizeof(err)));
+    const uint32_t object_cells = DC_GPU_CHUNK_SLOTS * size;
+    uint32_t *objects = calloc(object_cells, sizeof(*objects));
+    ASSERT_TRUE(objects);
+    objects[center] = 1u;
+    ASSERT_TRUE(fr_gpu_admit_rigid_objects(g, 600200u, objects, object_cells, err, sizeof(err)));
+    free(objects);
     fr_gas_model_t model = {.gas_constant = {.25984, .29680, .18892, .46152, 0},
         .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71}, .kinetic_scale = 1./512.};
     ASSERT_TRUE(fr_thermal_gpu_enable(g, err, sizeof(err)) &&
@@ -376,6 +383,12 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
     uint64_t admitted = 0u;
     for (uint32_t i = 0; i < 3u; i++) admitted += fr_reactive_state_mass_fp(&start[i]);
     fr_reactive_record_t records[3] = {0};
+    for (uint32_t i = 0; i < 2u; i++) {
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 0, sample_cells[i], &records[i + 1u],
+                                              &found, err, sizeof(err)) && found);
+        ASSERT_EQ(records[i + 1u].state.origin_id_low, start[i + 1u].origin_id_low);
+    }
     for (uint32_t step = 0; step < 12u; step++) {
         bool found = false;
         ASSERT_TRUE(fr_combustion_gpu_step(g, .125f, err, sizeof(err)) &&
@@ -403,6 +416,22 @@ static void test_sustained_coating_contact_feeds_both_corrosion_samples(void) {
            records[1].state.corroded_fraction, records[2].state.corroded_fraction);
     ASSERT_TRUE(records[1].state.corroded_fraction > 0.f);
     ASSERT_TRUE(records[2].state.corroded_fraction > 0.f);
+    const char *checkpoint = "build/combustion_contact_reload.bin";
+    ASSERT_TRUE(dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)) &&
+                fr_gpu_save_structure(g, checkpoint, err, sizeof(err)));
+    dc_gpu_destroy(g);
+    g = NULL;
+    ASSERT_TRUE(context(&g, err, sizeof(err)) && fr_gpu_load_structure(g, checkpoint, err, sizeof(err)) &&
+                dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)) &&
+                dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_reactive_record_t restored;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(g, donor_body, 0, 0, &restored, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(memcmp(&restored.state, &records[0].state, sizeof(restored.state)), 0);
+    for (uint32_t i = 0; i < 2u; i++) {
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 0, sample_cells[i], &restored, &found, err, sizeof(err)) && found);
+        ASSERT_EQ(memcmp(&restored.state, &records[i + 1u].state, sizeof(restored.state)), 0);
+    }
     free(gas);
     free(chunk);
     dc_gpu_destroy(g);
