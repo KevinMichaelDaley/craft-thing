@@ -1,7 +1,7 @@
 ---
 id: ctsl-7ay0
 status: in_progress
-deps: [ctpc-wezp, ctpc-xa7p]
+deps: [ctpc-wezp, ctpc-xa7p, ctpc-9yer]
 links: []
 created: 2026-11-26T13:27:27Z
 type: bug
@@ -35,3 +35,7 @@ Vulkan standing-pool comparison at 68b693be passed 1/1. Both porous-stone loads 
 **2026-11-26T14:01:59Z**
 
 The second matched 30-second replay passed with byte-for-byte identical telemetry. The stationary test setup stays confined to the douse case. Holding the load against the corrosion samples caused an invalid oxidizer diagnostic and missing gold record, reproduced on 69ba82e4 and tracked by ctss-cf7j. Restoring the moving load for the existing corrosion case passed with exactly the parent revision output, including the gold fraction 0.0269 after reload. All six CPU corrosion checks passed.
+
+**2026-11-26T15:35:14Z**
+
+The finite mixture debit now rounds proportionally at the real simulation cadence. A distinct terminal precision bug still leaves 2 oil, 2 jelly and 7 bound oxidizer Q16 after 900 simulated seconds at 60 Hz. ctpc-9yer tracks terminal fuel settlement before the complete time comparison. The existing 30-second matched submersion guard remains in use.

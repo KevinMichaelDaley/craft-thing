@@ -13,24 +13,25 @@ float coating_ignition_threshold(Words entry) {
         entry.words[state+FR_STATE_ORIGIN_LOW+1u]);
 }
 uint coating_oil_share(uint reacted,uint oil,uint total) {
-    uint high,low;
-    umulExtended(reacted,oil,high,low);
+    uint remainder,low;
+    umulExtended(reacted,oil,remainder,low);
     uint quotient=0u;
-    if(high==0u) {
+    if(remainder==0u) {
         quotient=low/total;
-        high=low%total;
+        remainder=low%total;
     } else {
         /* Divide the extended product on devices with 32-bit shader integers. */
         for(uint bit=0u;bit<32u;bit++) {
-            bool overflow=(high>>31u)!=0u;
-            high=(high<<1u)|(low>>31u);
+            bool overflow=(remainder>>31u)!=0u;
+            remainder=(remainder<<1u)|(low>>31u);
             low<<=1u;
-            bool subtract=overflow||high>=total;
-            if(subtract) high-=total;
+            bool subtract=overflow||remainder>=total;
+            if(subtract) remainder-=total;
             quotient=(quotient<<1u)|uint(subtract);
         }
     }
-    return quotient+uint(high>=total-total/2u);
+    /* At a tie, spend the oil unit; the next split sees the updated mixture. */
+    return quotient+uint(remainder>=total-total/2u);
 }
 void burn_coating(Words entry,inout Gas gas,inout float admitted,
                   inout float source_temperature,inout uint sources) {
