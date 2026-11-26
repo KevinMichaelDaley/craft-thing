@@ -10,13 +10,13 @@
 
 _Static_assert(sizeof(fr_reactive_profile_t)==FR_PROFILE_WORDS*sizeof(uint32_t),"GPU profile stride changed");
 _Static_assert(offsetof(fr_reactive_profile_t,fuel_yields)==56,"GPU profile yield offset changed");
-_Static_assert(sizeof(profiles)/sizeof(profiles[0])==DC_MATERIAL_COUNT,"Material registry changed");
+_Static_assert(sizeof(profiles)/sizeof(profiles[0])==FR_REACTIVE_PROFILE_COUNT,"Material registry changed");
 
 static bool error(char *err,uint32_t cap,const char *reason) {
     if(err&&cap) snprintf(err,cap,"%s",reason);
     return false;
 }
-uint32_t fr_reactive_profile_count(void) { return DC_MATERIAL_COUNT; }
+uint32_t fr_reactive_profile_count(void) { return FR_REACTIVE_PROFILE_COUNT; }
 const fr_reactive_profile_t *fr_reactive_profile(uint32_t material) {
     return material<fr_reactive_profile_count()?&profiles[material]:NULL;
 }
@@ -28,14 +28,24 @@ const fr_reactive_profile_t *fr_reactive_profile_for_body(uint32_t material) {
         DC_MATERIAL_MAGIC_INGREDIENT,DC_MATERIAL_CORROSION_RESIDUE,DC_MATERIAL_ASH};
     return material>0&&material<sizeof(terrain)?fr_reactive_profile(terrain[material]):NULL;
 }
+bool fr_reactive_profile_matches_body(uint32_t material,uint32_t body_material) {
+    const fr_reactive_profile_t *profile=fr_reactive_profile(material);
+    return profile&&body_material!=0u&&profile->legacy_body_material==body_material;
+}
 const char *fr_reactive_material_name(uint32_t material) {
     return material<fr_reactive_profile_count()?profile_names[material]:NULL;
 }
 bool fr_reactive_profile_valid(const fr_reactive_profile_t *profile,
                                char *err, uint32_t cap) {
-    if(!profile||profile->material>=DC_MATERIAL_COUNT||profile->phase>=FR_REACTIVE_PHASE_COUNT||
+    if(!profile||profile->material>=FR_REACTIVE_PROFILE_COUNT||profile->phase>=FR_REACTIVE_PHASE_COUNT||
        (profile->flags&~FR_PROFILE_FLAG_MASK)!=0) return error(err,cap,"Invalid reactive material identity/flags");
-    if(profile->legacy_body_material!=0) {
+    if(profile->material>=DC_MATERIAL_COUNT) {
+        const fr_reactive_profile_t *mapped=fr_reactive_profile_for_body(profile->legacy_body_material);
+        if(!mapped||!fr_reactive_profile_matches_body(profile->material,profile->legacy_body_material)||
+           profile->phase!=FR_REACTIVE_SOLID||(profile->flags&FR_REACTIVE_RIGID_CAPABLE)==0u||
+           profile->density!=mapped->density)
+            return error(err,cap,"Invalid body-surface material mapping");
+    } else if(profile->legacy_body_material!=0) {
         const fr_reactive_profile_t *mapped=fr_reactive_profile_for_body(profile->legacy_body_material);
         if(!mapped||mapped->material!=profile->material)
             return error(err,cap,"Invalid legacy body-material mapping");
@@ -54,6 +64,10 @@ bool fr_reactive_profile_valid(const fr_reactive_profile_t *profile,
     if(((profile->flags&FR_REACTIVE_FUEL)!=0)!=(profile->fuel_fraction>0)||
        ((profile->flags&FR_REACTIVE_BOUND_OXIDIZER)!=0)!=(profile->bound_oxidizer_fraction>0))
         return error(err,cap,"Fuel/oxidizer flags disagree with composition");
+    if((profile->flags&FR_REACTIVE_SOLID_COMBUSTION)!=0u&&
+       ((profile->flags&FR_REACTIVE_FUEL)==0u||profile->phase>=FR_REACTIVE_LIQUID||
+        profile->oxygen_per_fuel<=0.f))
+        return error(err,cap,"Invalid solid combustion profile");
     return true;
 }
 

@@ -4,7 +4,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "dungeoncraft/chunk.h"
 #include "dungeoncraft/reactive_profile_layout.h"
+
+/** Stable reaction-only IDs following the existing terrain registry. */
+enum {
+    FR_REACTIVE_BEAVER_FUR = DC_MATERIAL_COUNT,
+    FR_REACTIVE_BEAVER_TEXTILE,
+    FR_REACTIVE_BEAVER_TAIL,
+    FR_REACTIVE_PROFILE_COUNT
+};
 
 enum {
     FR_REACTIVE_SOLID,
@@ -17,7 +26,8 @@ enum {
     FR_REACTIVE_FUEL = FR_PROFILE_FLAG_FUEL,
     FR_REACTIVE_WATER_DOUSEABLE = FR_PROFILE_FLAG_WATER_DOUSEABLE,
     FR_REACTIVE_BOUND_OXIDIZER = FR_PROFILE_FLAG_BOUND_OXIDIZER,
-    FR_REACTIVE_RIGID_CAPABLE = FR_PROFILE_FLAG_RIGID_CAPABLE
+    FR_REACTIVE_RIGID_CAPABLE = FR_PROFILE_FLAG_RIGID_CAPABLE,
+    FR_REACTIVE_SOLID_COMBUSTION = FR_PROFILE_FLAG_SOLID_COMBUSTION
 };
 
 /** A 128-byte GPU-transferable profile. The four product yields partition fuel
@@ -45,13 +55,15 @@ typedef struct {
 /** Separate hazards retain which finite fuel reservoir could ignite. */
 typedef struct { float substrate, coating; } fr_reactive_ignition_rates_t;
 
-/** Number of registered profiles; material IDs are terrain registry IDs. */
+/** Number of profiles, including body surfaces beyond the terrain registry. */
 uint32_t fr_reactive_profile_count(void);
 /** Read an immutable profile; return NULL for an unregistered material ID. */
 const fr_reactive_profile_t *fr_reactive_profile(uint32_t material);
 /** Map the existing body-material namespace explicitly; unknown IDs return NULL.
  * Additional reactive body materials are admitted by the later geometry stage. */
 const fr_reactive_profile_t *fr_reactive_profile_for_body(uint32_t body_material);
+/** Validate a stored reaction profile against a packed collision material ID. */
+bool fr_reactive_profile_matches_body(uint32_t material, uint32_t body_material);
 /** Return a stable material label, or NULL for an unregistered material. */
 const char *fr_reactive_material_name(uint32_t material);
 /** Validate nonnegative finite coefficients, composition and retained-char energy. */

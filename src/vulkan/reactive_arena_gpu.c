@@ -163,8 +163,7 @@ bool fr_reactive_arena_apply(dc_gpu_t *g,fr_reactive_arena_gpu_t *arena,
         uint32_t op=requests[i].operation;
         if(requests[i].reserved||op<FR_REACTIVE_ARENA_ALLOCATE||op>FR_REACTIVE_ARENA_RETIRE)
             return error(err,cap,"Invalid reactive arena operation");
-        if(op!=FR_REACTIVE_ARENA_RETIRE&&(!fr_reactive_owner_valid(&requests[i].record.owner,err,cap)||
-            !fr_reactive_state_valid(&requests[i].record.state,err,cap))) return false;
+        if(op!=FR_REACTIVE_ARENA_RETIRE&&!fr_reactive_record_valid(&requests[i].record,err,cap)) return false;
     }
     if(!grow_requests(g,arena,count,err,cap)) return false;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive arena import wait failed");
