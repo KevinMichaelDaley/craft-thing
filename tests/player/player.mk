@@ -6,6 +6,13 @@ build/player_storm_footprint_tests: tests/player/storm_footprint_tests.c src/pla
 test_player_storm_footprint: build/player_storm_footprint_tests
 	./build/player_storm_footprint_tests
 test_player: test_player_storm_footprint
+build/player_cast_outcome_tests: tests/player/cast_outcome_tests.c src/app/player_session.c src/app/player_session.h src/player/control.c src/player/hotbar.c src/player/input.c src/world/chunk.c $(PLAYER_SRC)
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $(filter-out src/app/player_session.c,$(filter %.c,$^)) -Wl,--gc-sections -o $@ $(shell pkg-config --libs sdl2) -lm
+.PHONY: test_player_cast_outcomes
+test_player_cast_outcomes: build/player_cast_outcome_tests
+	./build/player_cast_outcome_tests
+test_player: test_player_cast_outcomes
 build/player_chew_tests: tests/player/chew_tests.c src/player/chew.c src/fire/material_profile.c include/ferrum/player/chew.h
 build/player_chew_tests: src/fire/material_profile_data.inc
 	mkdir -p build

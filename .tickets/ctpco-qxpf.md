@@ -1,0 +1,26 @@
+---
+id: ctpco-qxpf
+status: in_progress
+deps: []
+links: [ct-yctv, ct-q3hh]
+created: 2026-11-26T22:27:13Z
+type: bug
+priority: 1
+assignee: kmd
+parent: ct-exwr
+tags: [player, vulkan, input]
+---
+# Separate player cast refusals from execution failures
+
+The live player loop ignores failed fire-bolt and ice-storm results. Routine blocked placements need to leave the game running, while a transport, allocation or device failure must reach the caller before the world continues.
+
+## Acceptance Criteria
+
+Live cast rejects blocked and unloaded locations without effect or stale errors. Injected Vulkan work failures propagate to the caller, preserve the backend diagnostic and cannot trigger an automatic duplicate cast. Keep existing public success and refusal behavior and test both spells.
+
+
+## Notes
+
+**2026-11-26T22:29:22Z**
+
+RED drove the real player control and cast-frame loop. A failed bolt and a failed storm both returned successful progression and submitted the second movement command. Both ordinary refusal cases left their diagnostic in the healthy step buffer. All four new checks failed.

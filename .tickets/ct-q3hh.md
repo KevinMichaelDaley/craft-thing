@@ -2,7 +2,7 @@
 id: ct-q3hh
 status: closed
 deps: []
-links: []
+links: [ctpco-qxpf, ct-yctv]
 created: 2026-11-26T05:42:31Z
 type: bug
 priority: 1
