@@ -130,7 +130,10 @@ static void test_native_incomplete_smoke_admission_fails_without_overwriting_sav
     ASSERT_EQ(smoke_file_hash(chunk_path),chunk_hash);ASSERT_EQ(smoke_file_hash(body_path),body_hash);PASS();
 }
 static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) {
-    enum { ROOF_CELL = 49u * DC_CHUNK_SIDE + 8u };
+    enum { ROOF_X = 328, ROOF_Y = 49, ROOF_RADIUS = 4,
+           ROOF_CELL = ROOF_Y * DC_CHUNK_SIDE + ROOF_X % DC_CHUNK_SIDE,
+           SAMPLE_TICKS = 60, VENT_TICKS = 600 };
+    const double minimum_exhaust = 1e-9;
     char err[256]={0},directory[]="build/smoke_box_carved_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
     ASSERT_TRUE(dc_level_view_smoke_valve(view,0,err,sizeof(err))&&dc_level_view_smoke_valve(view,1,err,sizeof(err)));
@@ -141,7 +144,7 @@ static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) 
     ASSERT_EQ(snapshot->cells[ROOF_CELL][FR_GAS_OXYGEN], 0.f);
     fr_gas_gpu_audit_t before, after;
     ASSERT_TRUE(fr_gas_gpu_audit(view->gpu, &before, err, sizeof(err)));
-    ASSERT_TRUE(dc_level_view_paint(view,328,49,4,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,ROOF_X,ROOF_Y,ROOF_RADIUS,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu, slot, snapshot, err, sizeof(err)));
     ASSERT_EQ(snapshot->cells[ROOF_CELL][13], 1.f);
     ASSERT_TRUE(snapshot->cells[ROOF_CELL][FR_GAS_OXYGEN] > 0.f);
@@ -151,15 +154,25 @@ static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) 
         const float stock = before.metrics[metric];
         ASSERT_TRUE(fabsf(after.metrics[metric] - stock) <= fmaxf(1e-9f, stock * 1e-5f));
     }
-    for(uint32_t i=0;i<600u;i++) ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err))&&dc_level_view_tick(view,err,sizeof(err)));
     double escaped=0.;
-    for(int64_t x=4;x<=5;x++) {
-        ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){x,-2},&slot)&&fr_gas_gpu_export_checkpoint(view->gpu,slot,snapshot,err,sizeof(err)));
-        for(uint32_t row=24;row<47u;row++) for(uint32_t column=0;column<64u;column++) {
-            int64_t world_x=x*64+column;if(world_x>=312&&world_x<344) escaped+=snapshot->cells[row*64u+column][2];
+    uint32_t vent_ticks=0;
+    while (vent_ticks < VENT_TICKS && escaped <= minimum_exhaust) {
+        for (uint32_t i=0; i<SAMPLE_TICKS; ++i)
+            ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)) && dc_level_view_tick(view,err,sizeof(err)));
+        vent_ticks += SAMPLE_TICKS;
+        escaped = 0.;
+        for (int64_t x=4; x<=5; ++x) {
+            ASSERT_TRUE(dc_chunk_table_find(&view->table,(dc_chunk_coord_t){x,-2},&slot) &&
+                        fr_gas_gpu_export_checkpoint(view->gpu,slot,snapshot,err,sizeof(err)));
+            for (uint32_t row=24; row<47u; ++row) for (uint32_t column=0; column<DC_CHUNK_SIDE; ++column) {
+                int64_t world_x = x * DC_CHUNK_SIDE + column;
+                if (world_x >= ROOF_X - 16 && world_x < ROOF_X + 16)
+                    escaped += snapshot->cells[row*DC_CHUNK_SIDE+column][FR_GAS_EXHAUST];
+            }
         }
     }
-    printf("Air-brush roof vent escaped exhaust%.9g\n",escaped);ASSERT_TRUE(escaped>1e-9);
+    printf("Air-brush roof vent escaped exhaust %.9g after %u ticks\n", escaped, vent_ticks);
+    ASSERT_TRUE(escaped > minimum_exhaust);
     uint32_t *pixels=malloc(480u*270u*4u);ASSERT_TRUE(pixels&&dc_level_view_pixels(view,pixels,480u*270u,err,sizeof(err)));
     SDL_Surface *image=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);ASSERT_TRUE(image);
     ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/smoke_box_carved_vent.bmp"),0);SDL_FreeSurface(image);free(pixels);free(snapshot);

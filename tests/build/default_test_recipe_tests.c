@@ -10,16 +10,17 @@ static int g_pass=0,g_fail=0;
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
 
-static void test_default_recipe_runs_core_and_thermal_display(void) {
+static void test_default_recipe_runs_core_and_reactive_display(void) {
     FILE *pipe=popen("make -n test 2>&1","r");ASSERT_TRUE(pipe);
-    char line[4096];int core=0,thermal=0,overridden=0;
+    char line[4096];int core=0,thermal=0,smoke=0,overridden=0;
     while(fgets(line,sizeof(line),pipe)) {
         if(strcmp(line,"./build/gpu_tests\n")==0) core=1;
         if(strcmp(line,"./build/thermal_phase_gpu_display_tests\n")==0) thermal=1;
+        if(strstr(line,"source tools/smoke_profile && exec ./build/smoke_box_display_tests")) smoke=1;
         if(strstr(line,"overriding recipe")||strstr(line,"ignoring old recipe")) overridden=1;
     }
     ASSERT_EQ(pclose(pipe),0);
-    ASSERT_TRUE(core&&thermal&&!overridden);PASS();
+    ASSERT_TRUE(core&&thermal&&smoke&&!overridden);PASS();
 }
 static void test_live_player_binary_builds_its_drive_shader(void) {
     FILE *pipe=popen("make -n -B build/dungeoncraft_quarter_native 2>&1","r");ASSERT_TRUE(pipe);
@@ -31,7 +32,7 @@ static void test_live_player_binary_builds_its_drive_shader(void) {
 }
 int main(void) {
     printf("=== Default Test Recipe Tests ===\n\n");
-    RUN(test_default_recipe_runs_core_and_thermal_display);
+    RUN(test_default_recipe_runs_core_and_reactive_display);
     RUN(test_live_player_binary_builds_its_drive_shader);
     printf("\n=== Results: %d passed, %d failed ===\n",g_pass,g_fail);
     return g_fail>0?1:0;
