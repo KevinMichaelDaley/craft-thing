@@ -99,9 +99,94 @@ static void test_competing_rigid_coating_contacts_publish_both_offers(void) {
     check_rigid_coating_contacts(3u, destinations);
 }
 
+static void test_rigid_coating_transfer_uses_elapsed_contact_time(void) {
+    enum {samples = 3, parcel_count = samples * 2, y = 20, left = 19, right = 38};
+    static const uint32_t steps[samples] = {1u, 60u, 240u};
+    static const uint32_t film[3] = {32009u, 13u, 21u};
+    const uint32_t object_cells = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    uint32_t *objects = calloc(object_cells, sizeof(*objects));
+    ASSERT_TRUE(chunk && objects && context(&g, err, sizeof(err)));
+    for (uint32_t row = y - 1; row <= y + 1; row++)
+        for (uint32_t x = left; x <= right; x++)
+            chunk->cells[row * DC_CHUNK_SIDE + x] = (dc_cell_t){
+                .material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
+    uint32_t cells[parcel_count];
+    for (uint32_t i = 0; i < parcel_count; i++) {
+        cells[i] = y * DC_CHUNK_SIDE + left + 1u + 8u * (i / 2u) + i % 2u;
+        chunk->cells[cells[i]] = (dc_cell_t){.material = i % 2u ? DC_MATERIAL_WOOD : DC_MATERIAL_STONE};
+        objects[cells[i]] = i + 1u;
+    }
+    ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)) &&
+                dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_reactive_state_t original[parcel_count];
+    for (uint32_t i = 0; i < parcel_count; i++) {
+        ASSERT_TRUE(fr_reactive_state_default(chunk->cells[cells[i]].material, 65536u,
+                                              0u, 293.15f, 600400u + i, &original[i], err, sizeof(err)));
+        if (i % 2u == 0u) {
+            original[i].coating_oil_fuel_fp = film[0];
+            original[i].coating_jelly_fuel_fp = film[1];
+            original[i].coating_oxidizer_fp = film[2];
+            original[i].coating_threshold = .01f;
+            original[i].coating_integral = .02f;
+            original[i].thermal_energy = (float)fr_reactive_state_energy_at_temperature(&original[i], 293.15f);
+        }
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(g, 0, cells[i], &original[i], err, sizeof(err)));
+    }
+    ASSERT_TRUE(fr_gpu_admit_rigid_objects(g, 600400u, objects, object_cells, err, sizeof(err)));
+    fr_gas_model_t model = {.gas_constant = {.25984, .29680, .18892, .46152, 0},
+        .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71}, .kinetic_scale = 1./512.};
+    ASSERT_TRUE(fr_thermal_gpu_enable(g, err, sizeof(err)) &&
+                fr_gas_gpu_enable(g, &model, .0012f, 293.15f, err, sizeof(err)) &&
+                fr_combustion_gpu_enable(g, err, sizeof(err)));
+    uint32_t bodies[parcel_count] = {0};
+    for (uint32_t i = 0; i < parcel_count; i++) {
+        const uint32_t body = 0x80000001u + i;
+        fr_reactive_record_t parcel;
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g, body, 0, 0, &parcel, &found, err, sizeof(err)) && found);
+        uint32_t index = parcel.state.origin_id_low - original[0].origin_id_low;
+        ASSERT_TRUE(index < parcel_count && bodies[index] == 0u);
+        bodies[index] = body;
+    }
+    for (uint32_t i = 0; i < samples; i++) {
+        uint32_t donor = 2u * i;
+        fr_reactive_state_t lit = original[donor];
+        lit.flags |= FR_REACTIVE_COATING_FLAMING;
+        ASSERT_TRUE(fr_gpu_reactive_seed_body(g, bodies[donor], 0, 0, &lit, err, sizeof(err)));
+        for (uint32_t step = 0; step < steps[i]; step++) {
+            if (i == samples - 1u && step == steps[i] / 2u)
+                ASSERT_TRUE(fr_gpu_reactive_reserve_import(g, 70u, err, sizeof(err)));
+            ASSERT_TRUE(fr_combustion_gpu_step(g, 1.f / steps[i], err, sizeof(err)));
+        }
+        fr_reactive_record_t source, receiver;
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g, bodies[donor], 0, 0, &source, &found, err, sizeof(err)) && found);
+        ASSERT_TRUE(fr_gpu_reactive_read_body(g, bodies[donor + 1u], 0, 0, &receiver, &found, err, sizeof(err)) && found);
+        uint32_t received[3] = {receiver.state.coating_oil_fuel_fp, receiver.state.coating_jelly_fuel_fp,
+                                receiver.state.coating_oxidizer_fp};
+        printf("One second in %u steps moved %u/%u/%u Q16 film\n",
+               steps[i], received[0], received[1], received[2]);
+        for (uint32_t species = 0; species < 3u; species++)
+            ASSERT_EQ(received[species], film[species] / 4u);
+        ASSERT_EQ(source.state.coating_oil_fuel_fp + received[0], film[0]);
+        ASSERT_EQ(source.state.coating_jelly_fuel_fp + received[1], film[1]);
+        ASSERT_EQ(source.state.coating_oxidizer_fp + received[2], film[2]);
+        const double heat = fr_reactive_state_energy(&receiver.state) - fr_reactive_state_energy(&original[donor + 1u]);
+        ASSERT_TRUE(fabs(heat - contact_film_heat(received, 293.15)) < .01);
+    }
+    free(objects);
+    free(chunk);
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 static void run_rigid_coating_contact_cases(void) {
     RUN(test_reciprocal_rigid_coating_contact_preserves_film_heat);
     RUN(test_competing_rigid_coating_contacts_publish_both_offers);
+    RUN(test_rigid_coating_transfer_uses_elapsed_contact_time);
 }
 
 #endif
