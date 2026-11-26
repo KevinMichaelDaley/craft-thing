@@ -575,9 +575,10 @@ bool dc_gpu_set_window_title(dc_gpu_t *gpu, const char *title) {
     return true;
 }
 
-static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uint32_t cap) {
+static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7],
+                           bool carve_bodies, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
-    if(push[2]==3u&&push[6]==DC_MATERIAL_AIR&&!dc_gpu_runtime_prepare_fragments(gpu,err,cap)) return false;
+    if(carve_bodies&&!dc_gpu_runtime_prepare_fragments(gpu,err,cap)) return false;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset compute command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -592,7 +593,7 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
         .memoryBarrierCount = 1, .pMemoryBarriers = &upload_barrier };
     vkCmdPipelineBarrier2(gpu->command, &upload_dependency);
     dc_gpu_record_component_baseline(gpu);
-    if(push[2]==3u && push[6]==DC_MATERIAL_AIR)
+    if(carve_bodies)
         dc_gpu_record_body_carve(gpu,push[3],push[4],push[5]);
     if (push[2] == 2u && fr_renderer_active(gpu)) {
         fr_renderer_record(gpu);
@@ -639,14 +640,14 @@ static bool dispatch_cells(dc_gpu_t *gpu, const uint32_t push[7], char *err, uin
 bool dc_gpu_pattern(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
-    return dispatch_cells(gpu, push, err, cap);
+    return dispatch_cells(gpu, push, false, err, cap);
 }
 
 bool dc_gpu_paint(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t radius,
                   uint32_t rgba, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 1, x, y, radius, rgba };
-    return dispatch_cells(gpu, push, err, cap);
+    return dispatch_cells(gpu, push, false, err, cap);
 }
 
 bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -654,27 +655,31 @@ bool dc_gpu_render_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
     uint32_t push[7] = { gpu->width, gpu->height, 2,
                          dc_gpu_render_flags(gpu), (uint32_t)gpu->overlay,
                          gpu->view_x, gpu->view_y };
-    return dispatch_cells(gpu, push, err, cap);
+    return dispatch_cells(gpu, push, false, err, cap);
 }
 
-bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
-                           uint32_t radius, uint16_t material,
-                           char *err, uint32_t cap) {
+static bool paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                           uint32_t radius, uint16_t material, bool carve_bodies,
+                           bool *terrain_changed, char *err, uint32_t cap) {
+    enum { TERRAIN_CHANGED = 2u };
+    if (terrain_changed) *terrain_changed = false;
     if (!gpu) return error(err, cap, "GPU context is null");
     uint32_t push[7] = { gpu->width, gpu->height, 3, x, y, radius, material };
     if(!fr_thermal_prepare_paint(gpu,x,y,radius,material,err,cap)) return false;
     dc_gpu_structural_data(gpu)[DC_STRUCTURAL_BRUSH_RESULT_WORD]=0u;
     bool okay;
-    do {okay=dispatch_cells(gpu,push,err,cap);}
-    while(okay&&material==DC_MATERIAL_AIR&&dc_gpu_runtime_carve_retry(gpu));
+    do {okay=dispatch_cells(gpu,push,carve_bodies,err,cap);}
+    while(okay&&carve_bodies&&dc_gpu_runtime_carve_retry(gpu));
     if(okay) {
         uint32_t *state=dc_gpu_structural_data(gpu);
+        if (terrain_changed)
+            *terrain_changed = (state[DC_STRUCTURAL_BRUSH_RESULT_WORD] & TERRAIN_CHANGED) != 0u;
         if(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&16u)
             return error(err,cap,"Thermal brush admission exceeded its preflight reservation");
         gpu->body_refresh_pending|=(state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&3u)!=0u;
         dc_gpu_fluid_uploads_invalidate(gpu);
         if (material == DC_MATERIAL_WATER) gpu->fluid_work_possible=true;
-        if((state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&2u)!=0u) state[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
+        if((state[DC_STRUCTURAL_BRUSH_RESULT_WORD]&TERRAIN_CHANGED)!=0u) state[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1u;
     }
     if(okay&&gpu->gas) {
         fr_gas_gpu_geometry_changed(gpu,gpu->fluid_work_possible||gpu->body_refresh_pending||
@@ -682,6 +687,19 @@ bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
         okay=fr_gas_gpu_refresh_geometry(gpu,err,cap);
     }
     return okay;
+}
+
+bool dc_gpu_paint_material(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                           uint32_t radius, uint16_t material,
+                           char *err, uint32_t cap) {
+    return paint_material(gpu, x, y, radius, material,
+                          material == DC_MATERIAL_AIR, NULL, err, cap);
+}
+
+bool dc_gpu_carve_terrain_cell(dc_gpu_t *gpu, uint32_t x, uint32_t y,
+                               bool *removed, char *err, uint32_t cap) {
+    return paint_material(gpu, x, y, 0u, DC_MATERIAL_AIR, false, removed,
+                          err, cap);
 }
 
 bool dc_gpu_set_tick_water_source(dc_gpu_t *gpu, bool enabled,

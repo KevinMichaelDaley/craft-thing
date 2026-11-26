@@ -1,13 +1,7 @@
-#include <math.h>
-#include <stdlib.h>
 #include <string.h>
 
+#include "dungeoncraft/chunk.h"
 #include "ferrum/player/chew.h"
-#include "dungeoncraft/material_density.h"
-#include "ferrum/fire/gpu.h"
-
-
-enum { CHEW_REACH_CELLS = 12u, CHEW_RATE_PER_SECOND_FP = 300u };
 
 void fr_player_inventory_init(fr_player_inventory_t *inventory) {
     if (!inventory) return;
@@ -20,9 +14,7 @@ uint64_t fr_player_inventory_mass(const fr_player_inventory_t *inventory,
     return inventory->mass_fp[kind];
 }
 
-
-
-static dc_item_kind_t contract_wood_kind(uint16_t material) {
+dc_item_kind_t fr_player_inventory_kind(uint16_t material) {
     return material == DC_MATERIAL_WOOD ? DC_ITEM_WOOD :
            material == DC_MATERIAL_DENSE_WOOD ? DC_ITEM_DENSE_WOOD :
            material == DC_MATERIAL_STONE ? DC_ITEM_STONE : 0u;
@@ -35,8 +27,8 @@ bool fr_chew_work_advance(fr_chew_work_t *work,const fr_chew_target_t *target,
         work->work=0u;work->armed=false;
         *bite_ready=false;return true;
     }
-    dc_item_kind_t kind=contract_wood_kind(target->material);
-    bool eligible=target->reachable&&target->eligible&&kind!=0u;
+    bool eligible=target->reachable&&target->eligible&&target->dry_mass_fp&&
+         fr_player_inventory_kind(target->material)!=0u;
     if(!eligible) {
         work->work=0u;work->parcel_id=target->parcel_id;
         work->generation=target->generation;
@@ -73,7 +65,8 @@ bool fr_chew_work_advance(fr_chew_work_t *work,const fr_chew_target_t *target,
 bool fr_chew_work_committed(fr_chew_work_t *work,const fr_chew_target_t *target) {
     if(!work||!target||!work->armed||work->parcel_id!=target->parcel_id||
        work->generation!=target->generation||
-       work->dry_mass_fp!=target->dry_mass_fp)
+       work->dry_mass_fp!=target->dry_mass_fp||work->material!=target->material||
+       !target->eligible||!target->reachable)
         return false;
     work->armed=false;work->work=0u;
     return true;

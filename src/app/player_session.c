@@ -293,10 +293,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
     if(s->failure[0]) return players_error(err,cap,s->failure);
-    double chew_added=s->presentation_clock?s->pending_action_ms:(double)seconds*1000.;
-    double chew_seconds=chew_added/1000.;
-    if(chew_seconds<0||chew_seconds>1.) chew_seconds=0;
-    s->milliseconds+=chew_added;
+    s->milliseconds+=s->presentation_clock?s->pending_action_ms:(double)seconds*1000.;
     s->pending_action_ms=0;
     uint64_t elapsed=(uint64_t)s->milliseconds;s->milliseconds-=elapsed;
     fr_player_drive_input_t drive[FR_INPUT_PLAYERS];
@@ -310,12 +307,13 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             x=(uint32_t)((float)VIEW_WIDTH*.5f+input.values[FR_INPUT_AIM_X]*80.f);
             y=(uint32_t)((float)VIEW_HEIGHT*.5f+input.values[FR_INPUT_AIM_Y]*80.f);valid=true;
         }
-        valid=valid&&s->input.focused&&s->input.players[n].context==FR_INPUT_GAMEPLAY;
+        bool can_aim=s->input.focused&&s->input.players[n].context==FR_INPUT_GAMEPLAY;
+        valid=valid&&can_aim;
         dc_chunk_coord_t chunk;uint32_t lx,ly;
         dc_cell_address((int64_t)x+v->camera_offset_x,(int64_t)y+v->camera_offset_y,&chunk,&lx,&ly);
         chunk.x+=v->origin.x;chunk.y+=v->origin.y;
         input.has_target=valid;input.target=(fr_player_point_t){chunk,(float)lx,(float)ly};
-        if(s->aim_override[n]) {input.has_target=true;input.target=s->aim_point[n];}
+        if(s->aim_override[n]&&can_aim) {input.has_target=true;input.target=s->aim_point[n];}
         fr_player_action_t old_action=s->players[n].action;
         uint64_t action_elapsed=elapsed;
         if(s->presentation_clock&&old_action!=FR_PLAYER_CAST&&
@@ -323,7 +321,22 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             uint64_t now=SDL_GetTicks64(),age=now>=s->cast_pressed_at[n]?now-s->cast_pressed_at[n]:0;
             if(age<action_elapsed) action_elapsed=age;
         }
-        if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,s->fire,s->ice,false,action_elapsed,&s->cast_events[n])) return false;
+        dc_gpu_world_body_t self;
+        bool has_body=s->bodies[n].binding.body_id&&
+            dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap);
+        bool harvestable=false;
+        bool chew_held=input.values[FR_INPUT_CHEW]>0.f;
+        if(chew_held||s->chew_work[n].bank.work) {
+            if(has_body&&input.has_target) {
+                fr_player_point_t origin={self.chunk,self.body.x_fp/65536.f,self.body.y_fp/65536.f};
+                bool casting=old_action==FR_PLAYER_CAST||
+                    (input.pressed&((1u<<FR_INPUT_FIRE)|(1u<<FR_INPUT_ICE)));
+                if(!fr_player_harvest_tick(v->gpu,&s->inventory[n],&s->chew_work[n],
+                    &origin,&input.target,chew_held&&!casting,elapsed,&harvestable,err,cap))
+                    return false;
+            } else s->chew_work[n]=(fr_player_chew_t){0};
+        }
+        if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,s->fire,s->ice,harvestable,action_elapsed,&s->cast_events[n])) return false;
         if(s->trace&&(old_action!=s->players[n].action||s->cast_events[n].ability)) {
             uint32_t frame;fr_player_frame(&s->players[n],&frame);
             fprintf(stderr,"[player-action] wall%llu player%u action%u frame%u elapsed%llu event%u facing%d ray_enabled%d\n",
@@ -335,21 +348,9 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
         s->prev_pressed[n]=input.pressed;
         if(!s->manipulation[n].carry_weight)
             s->manipulation[n]=(fr_player_manipulation_t){.carry_weight=60.0,.throw_force=4.0,.reach=24.0};
-        dc_gpu_world_body_t self;
-        if(s->bodies[n].binding.body_id&&dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap)) {
+        if(has_body) {
             float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
             float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
-            /* Chewing world wood into the player's own inventory, driven by
-             * the same deterministic player clock as the animations. */
-            if(input.values[FR_INPUT_CHEW]>0.f&&(s->aim_override[n]||input.has_target)) {
-                fr_player_point_t chew_target=s->aim_override[n]?s->aim_point[n]:input.target;
-                if(!fr_player_chew_wood_tick(v->gpu,&s->inventory[n],
-                    &s->chew_work[n],&chew_target,
-                    (float)chew_seconds*300.f,err,cap)) {
-                    fprintf(stderr,"chew failed: %s\n",err);
-                    return false;
-                }
-            }
             /* Sandbox ability dispatch: the fire ability launches a burning
              * bolt and the ice ability casts a bounded storm at the target.
              * Ray-equipped demo scenes keep their beam behaviour. */

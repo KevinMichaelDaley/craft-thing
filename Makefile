@@ -1907,7 +1907,7 @@ test_combustion: build/combustion_tests
 build/reactive_state_tests: tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_state.h include/ferrum/fire/material_profile.h src/fire/material_profile_data.inc
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/fire/reactive_state_tests.c $(REACTIVE_STATE_SRC) -o $@ -lm
-build/chew_inventory_tests: tests/player/chew_inventory_tests.c include/ferrum/player/chew.h src/player/chew.c src/player/chew_world.c include/dungeoncraft/gpu.h
+build/chew_inventory_tests: tests/player/chew_inventory_tests.c include/ferrum/player/chew.h src/player/chew.c src/player/chew_world.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/chew_inventory_tests.c src/player/chew.c src/player/chew_world.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_chew_inventory
 test_chew_inventory: build/chew_inventory_tests

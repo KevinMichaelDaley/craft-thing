@@ -499,3 +499,14 @@ void dc_gpu_structural_track_chunk(dc_gpu_t *gpu, uint32_t slot,
     ++p[4];
     p[5] = 1;
 }
+
+uint32_t dc_gpu_find_active_chunk(dc_gpu_t *gpu, dc_chunk_coord_t coord) {
+    const uint32_t *registry = dc_gpu_structural_data(gpu) + DC_STRUCTURAL_HEADER_WORDS;
+    for (uint32_t slot = 0; slot < DC_GPU_CHUNK_SLOTS; ++slot) {
+        const uint32_t *owner = registry + slot * 8u;
+        if (gpu->slot_page[slot] != UINT32_MAX && owner[5] &&
+            memcmp(owner, &coord, sizeof(coord)) == 0)
+            return slot;
+    }
+    return UINT32_MAX;
+}

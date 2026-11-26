@@ -73,6 +73,13 @@ static void teardown(void) {
     gpu = NULL;
 }
 
+static bool harvest_for(fr_player_inventory_t *inventory, fr_player_chew_t *chew,
+                        const fr_player_point_t *aim, uint64_t elapsed_ms) {
+    bool eligible;
+    return fr_player_harvest_tick(gpu, inventory, chew, aim, aim, true,
+                                   elapsed_ms, &eligible, err, sizeof(err));
+}
+
 static void test_chew_credits_removed_wood_mass(void) {
     ASSERT_TRUE(setup_world());
     fr_player_inventory_t inv;
@@ -80,10 +87,8 @@ static void test_chew_credits_removed_wood_mass(void) {
     fr_player_chew_t chew = {0};
     fr_player_point_t target = target_at(222.f, 214.f);
     uint32_t local = 30u + 22u * 64u;
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &target, 300.f,
-                                    err, sizeof(err)));
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &target, 300.f,
-                                    err, sizeof(err)));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &target, 1000u));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &target, 1000u));
     uint64_t wood = fr_player_inventory_mass(&inv, DC_ITEM_WOOD);
     printf("chew inventory wood %llu fp\n", (unsigned long long)wood);
     /* Each completed tick banks at most one bite: two bites, two cells. */
@@ -104,13 +109,12 @@ static void test_dense_wood_takes_longer_per_cell(void) {
     /* One 1.0-second chewing window completes a wood bite (0.6 s at the
      * fixed rate) but a dense pocket needs 1.2 s, so it only banks. */
     fr_player_point_t target = target_at(232.f, 214.f);
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &target, 300.f,
-                                    err, sizeof(err)));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &target, 1000u));
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_DENSE_WOOD), 0u);
     /* The dense pocket banked real work toward its first bite. */
-    ASSERT_TRUE(chew.work > 0u);
-    ASSERT_EQ(chew.material, DC_MATERIAL_DENSE_WOOD);
+    ASSERT_TRUE(chew.bank.work > 0u);
+    ASSERT_EQ(chew.bank.material, DC_MATERIAL_DENSE_WOOD);
     teardown();
     PASS();
 }
@@ -120,10 +124,9 @@ static void test_effort_carries_across_ticks_and_cadences(void) {
     fr_player_inventory_init(&one);
     fr_player_chew_t chew = {0};
     fr_player_point_t target = target_at(222.f, 214.f);
-    /* Ten 30-effort ticks. */
+    /* Ten 100 ms ticks. */
     for (uint32_t tick = 0u; tick < 10u; tick++)
-        ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &one, &chew, &target, 30.f,
-                                        err, sizeof(err)));
+        ASSERT_TRUE(harvest_for(&one, &chew, &target, 100u));
     uint64_t slow = fr_player_inventory_mass(&one, DC_ITEM_WOOD);
     teardown();
     ASSERT_TRUE(setup_world());
@@ -131,9 +134,7 @@ static void test_effort_carries_across_ticks_and_cadences(void) {
     fr_player_inventory_init(&two);
     fr_player_chew_t chew2 = {0};
     target = target_at(222.f, 230.f);
-    /* The same 300 total effort in one tick. */
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &two, &chew2, &target, 300.f,
-                                    err, sizeof(err)));
+    ASSERT_TRUE(harvest_for(&two, &chew2, &target, 1000u));
     uint64_t fast = fr_player_inventory_mass(&two, DC_ITEM_WOOD);
     printf("cadence wood slow %llu fast %llu\n",
            (unsigned long long)slow, (unsigned long long)fast);
@@ -147,16 +148,13 @@ static void test_invalid_targets_never_credit(void) {
     fr_player_inventory_t inv;
     fr_player_inventory_init(&inv);
     fr_player_chew_t chew = {0};
-    /* Air, stone floor, and empty grid corners hold nothing to chew. */
-    fr_player_point_t air = target_at(222.f, 233.f);
-    fr_player_point_t stone = target_at(240.f, 240.f);
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &air, 300.f, err,
-                                    sizeof(err)));
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &stone, 300.f,
-                                    err, sizeof(err)));
+    fr_player_point_t air = target_at(222.f, 235.f);
+    fr_player_point_t unmapped = {{4, 3}, 40.f, 40.f};
+    ASSERT_TRUE(harvest_for(&inv, &chew, &air, 1000u));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &unmapped, 1000u));
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
     /* Nothing banked: invalid targets are transactional no-ops. */
-    ASSERT_EQ(chew.work, 0u);
+    ASSERT_EQ(chew.bank.work, 0u);
     teardown();
     PASS();
 }
@@ -168,9 +166,7 @@ static void test_chewing_a_support_releases_detached_wood(void) {
     /* Cut the pillar at row 30; the trunk above detaches as rigid wood. */
     for (uint32_t bite = 0u; bite < 120u; bite++) {
         fr_player_point_t bite_target = target_at(222.f, 222.f);
-        ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew,
-                                        &bite_target, 300.f, err,
-                                        sizeof(err)));
+        ASSERT_TRUE(harvest_for(&inv, &chew, &bite_target, 1000u));
         ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
     }
     uint64_t wood = fr_player_inventory_mass(&inv, DC_ITEM_WOOD);
@@ -219,8 +215,7 @@ static void test_matching_local_cell_in_another_chunk_is_not_harvested(void) {
     fr_player_inventory_t inv = {0};
     fr_player_chew_t chew = {0};
     fr_player_point_t aim = {{3, 3}, 20.f, 20.f};
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &aim, 300.f,
-                                        err, sizeof(err)));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &aim, 1000u));
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
     ASSERT_EQ(cell_material(1u, cell), DC_MATERIAL_WOOD);
     PASS();
@@ -232,15 +227,42 @@ static void test_harvest_remapped_stone_and_credit_only_its_owner(void) {
     fr_player_point_t aim = {{-30, 112}, 20.f, 20.f};
     ASSERT_TRUE(map_cell(1u, aim.chunk, 2u, 2u, cell, DC_MATERIAL_STONE));
     fr_player_inventory_t inv = {0}, other = {0};
-    fr_player_chew_t chew = {0};
+    fr_player_chew_t chew = {0}, other_chew = {0};
+    ASSERT_TRUE(harvest_for(&other, &other_chew, &aim, 1000u));
+    ASSERT_TRUE(other_chew.bank.work > 0u);
     for (uint32_t tick = 0u; tick < 4u; ++tick)
-        ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &aim, 300.f,
-                                            err, sizeof(err)));
+        ASSERT_TRUE(harvest_for(&inv, &chew, &aim, 1000u));
+    ASSERT_TRUE(harvest_for(&other, &other_chew, &aim, 3000u));
     ASSERT_INT_EQ(cell_material(1u, cell), DC_MATERIAL_AIR);
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_STONE),
               (uint64_t)lround(DC_DENSITY_STONE * 65536.));
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
     ASSERT_EQ(fr_player_inventory_mass(&other, DC_ITEM_STONE), 0u);
+    ASSERT_EQ(other_chew.bank.work, 0u);
+    PASS();
+}
+
+static void test_harvest_at_seam_credits_the_actual_partial_parcel(void) {
+    ASSERT_TRUE(setup_world());
+    const uint32_t cell = 22u * DC_CHUNK_SIDE;
+    const uint32_t dry_mass = 12500u;
+    ASSERT_TRUE(map_cell(6u, (dc_chunk_coord_t){4, 3}, 4u, 3u, cell,
+                         DC_MATERIAL_WOOD));
+    fr_reactive_state_t parcel;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD, dry_mass, 0u, 293.15f,
+                                         UINT64_C(0x73000000), &parcel, err,
+                                         sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(gpu, 6u, cell, &parcel, err, sizeof(err)));
+
+    fr_player_inventory_t inv = {0};
+    fr_player_chew_t chew = {0};
+    fr_player_point_t aim = {{3, 3}, 63.f, 22.f};
+    ASSERT_TRUE(harvest_for(&inv, &chew, &aim, 190u));
+    ASSERT_EQ(cell_material(6u, cell), DC_MATERIAL_WOOD);
+    ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), 0u);
+    ASSERT_TRUE(harvest_for(&inv, &chew, &aim, 1u));
+    ASSERT_EQ(cell_material(6u, cell), DC_MATERIAL_AIR);
+    ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD), dry_mass);
     PASS();
 }
 
@@ -252,17 +274,15 @@ static void test_full_inventory_preserves_cell_for_retry(void) {
     inv.mass_fp[DC_ITEM_WOOD] = UINT64_MAX - mass + 1u;
     fr_player_chew_t chew = {0};
     fr_player_point_t aim = {{3, 3}, 30.f, 22.f};
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &aim, 300.f,
-                                        err, sizeof(err)));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &aim, 1000u));
     ASSERT_EQ(cell_material(11u, cell), DC_MATERIAL_WOOD);
     ASSERT_EQ(inv.mass_fp[DC_ITEM_WOOD], UINT64_MAX - mass + 1u);
-    ASSERT_TRUE(chew.armed);
+    ASSERT_TRUE(chew.bank.armed);
     inv.mass_fp[DC_ITEM_WOOD] = 0u;
-    ASSERT_TRUE(fr_player_chew_wood_tick(gpu, &inv, &chew, &aim, 1.f,
-                                        err, sizeof(err)));
+    ASSERT_TRUE(harvest_for(&inv, &chew, &aim, 1u));
     ASSERT_EQ(cell_material(11u, cell), DC_MATERIAL_AIR);
     ASSERT_EQ(inv.mass_fp[DC_ITEM_WOOD], mass);
-    ASSERT_TRUE(!chew.armed);
+    ASSERT_TRUE(!chew.bank.armed);
     PASS();
 }
 
@@ -275,6 +295,7 @@ int main(void) {
     RUN(test_chewing_a_support_releases_detached_wood);
     RUN(test_matching_local_cell_in_another_chunk_is_not_harvested);
     RUN(test_harvest_remapped_stone_and_credit_only_its_owner);
+    RUN(test_harvest_at_seam_credits_the_actual_partial_parcel);
     RUN(test_full_inventory_preserves_cell_for_retry);
     printf("\nResults: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

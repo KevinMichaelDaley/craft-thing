@@ -19,9 +19,13 @@ typedef struct {
     uint64_t mass_fp[8u];
 } fr_player_inventory_t;
 
+/** Reset all material balances. */
 void fr_player_inventory_init(fr_player_inventory_t *inventory);
+/** Return the dry mass held for one inventory kind. */
 uint64_t fr_player_inventory_mass(const fr_player_inventory_t *inventory,
                                   dc_item_kind_t kind);
+/** Map a harvestable terrain material to its inventory kind, or return zero. */
+dc_item_kind_t fr_player_inventory_kind(uint16_t material);
 
 /** One chewable localized wood pocket: identity, eligibility and the
  * occupied amount priced at the shared physical density. */
@@ -57,18 +61,20 @@ bool fr_chew_work_advance(fr_chew_work_t *work,const fr_chew_target_t *target,
  * clearing the bank; false for stale identities or without a banked bite. */
 bool fr_chew_work_committed(fr_chew_work_t *work,const fr_chew_target_t *target);
 
-/** Per-player chewing work state; progress carries across ticks. */
-typedef fr_chew_work_t fr_player_chew_t;
+/** Per-player work tied to one world cell and its resident owner. */
+typedef struct {
+    fr_chew_work_t bank;
+    dc_chunk_coord_t chunk;
+    uint32_t local, slot;
+} fr_player_chew_t;
 
-/** One chewing tick at the world target. Effort is seconds * rate against
- * the shared physical density of the reachable wood; a completed bite
- * carves exactly one localized cell through the transactional carve
- * pipeline (unsupported wood releases through the ordinary structural
- * path) and credits the responsible inventory atomically. Invalid,
- * unreachable or non-wood targets change nothing. */
-bool fr_player_chew_wood_tick(dc_gpu_t *gpu,
-                         fr_player_inventory_t *inventory,
-                         fr_player_chew_t *chew, const fr_player_point_t *target,
-                         float effort, char *err_buf, uint32_t err_cap);
+/** Resolve a reachable terrain cell at or adjacent to the aim and advance
+ * its harvest work by elapsed_ms while held. A NULL aim clears the bank.
+ * Release pauses progress while the same material and owner remain valid.
+ * A committed terrain cut credits its dry mass to this inventory once. */
+bool fr_player_harvest_tick(dc_gpu_t *gpu, fr_player_inventory_t *inventory,
+    fr_player_chew_t *chew, const fr_player_point_t *origin,
+    const fr_player_point_t *aim, bool held, uint64_t elapsed_ms,
+    bool *eligible, char *err_buf, uint32_t err_cap);
 
 #endif
