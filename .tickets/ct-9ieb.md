@@ -1,6 +1,6 @@
 ---
 id: ct-9ieb
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-02T01:02:23Z
@@ -31,3 +31,7 @@ Verified on the RTX A2000 that the demo retains the authored framing for 330 liv
 **2026-11-26T10:21:19Z**
 
 Framebuffer RED c0e3f9cc detects generated walk artwork while the fire-ray mode is active (226 channel differences); GREEN 9d74dc1b restores the supplied idle pose for movement in this mode. The same run checks all six sandbox poses and finishes 4/4. Both scenes use the same canonical player ownership.
+
+**2026-11-26T10:22:51Z**
+
+The isolated live demo regression finished 1/1 after 330 ticks. The real pile consumed 9,938 fuel mass units, produced 1,961 char units and reached 67 flaming parcels. The authored camera, exact restored gas checkpoints and restored pile inventory all passed. The existing ray blocker and intent checks ran in the clean broad Vulkan suite. Frame-time optimization continues under ct-b42x.
