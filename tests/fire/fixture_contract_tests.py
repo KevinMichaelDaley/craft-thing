@@ -34,6 +34,9 @@ class FireFixtureContractTests(unittest.TestCase):
         self.assertEqual(data["acceptance"]["frame_budget_ms"], 30)
         self.assertEqual(data["acceptance"]["consecutive_runs"], 2)
         self.assertEqual(data["acceptance"]["measured_frames"], 1000)
+        self.assertEqual(data["acceptance"]["first_second_coverage_fraction_max"], 0.25)
+        self.assertEqual(data["acceptance"]["smoke_coverage_opacity"], 0.2)
+        self.assertEqual(data["acceptance"]["flame_coverage_linear_emission"], 0.1)
 
     def test_all_three_fixture_maps_are_reproducible_and_keep_material_roles(self):
         module, data = self.inputs()

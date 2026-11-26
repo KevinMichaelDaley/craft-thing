@@ -1,6 +1,6 @@
 ---
 id: ctgc-er4w
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T16:25:36Z
@@ -22,3 +22,9 @@ Measure displayed smoke alpha and visible linear flame power on each presented t
 
 A real displayed prompt shot has a positive visible fire signal and covers at most a quarter of the viewport on every frame of the first simulated second. Include threshold, overlap, viewport and transient burst regressions.
 
+
+## Notes
+
+**2026-11-26T16:38:51Z**
+
+The native RED run opened the pouch at tick 26 and completed all 60 frames after release, but submitted no visible flame because the shared siege setup left the thermal diagnostic selected. The normal compositor now renders in siege scenes. The locked native target passed with peak union 7447 of 129600 pixels (5.75 percent), well inside the locked 25 percent. At the peak, 7438 smoke and 614 flame pixels overlapped at 605 pixels. The Vulkan regression checked the nonzero viewport origin, presentation readiness, alternate thresholds, clipping, overlap, the diagnostic overlay, and clearing on the next frame. Fixture regressions reject a transient burst even if terminal coverage is low.

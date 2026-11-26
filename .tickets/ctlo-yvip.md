@@ -63,3 +63,7 @@ Full-suite order dependence found: test_submerged_greek_keeps_reacting_while_oil
 **2026-11-26T13:27:28Z**
 
 The conservative pending-stock build completes both 30-second dousing controls. The late-rate ratio was 1.75 compared with 2.04 on 109361df. Both runs measured zero bound water on the oil load over the sampled interval. ctsl-7ay0 tracks proving matched real submersion and the existing half-time criterion.
+
+**2026-11-26T16:31:38Z**
+
+The c0fbf8a3 launcher sweep completed at 64/64. The subsequent exact 080cd1cf sweep completed both controls and 21 ignitions before allocation failed while staging seed 991418. The pinned rerun started after the long pool process exited. It is independently required for the later revision.
