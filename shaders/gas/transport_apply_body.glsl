@@ -3,6 +3,7 @@
 float transport_balance_stock(float stock,float incoming,float outgoing) {
     vec2 received=gas_two_sum(stock,incoming);
     vec2 sent=gas_two_sum(received.x,-outgoing);
+    /* Retain the low terms from both face updates before rounding the cell. */
     precise float residual=received.y+sent.y;
     precise float balance=sent.x+residual;
     return balance;
@@ -14,9 +15,10 @@ Gas transport_update_state(Gas source,GasFlux incoming,GasFlux outgoing,float tr
     vec2 carrier=vec2(
         transport_balance_stock(source.species.z*trace_scale,incoming.species.z,outgoing.species.z),
         transport_balance_stock(source.dynamics.x*trace_scale,incoming.dynamics.x,outgoing.dynamics.x));
-    vec3 pigment;
-    for(uint k=0u;k<3u;k++)
-        pigment[k]=transport_balance_stock(source.visual[k]*trace_scale,incoming.pigment[k],outgoing.pigment[k]);
+    vec3 pigment=vec3(
+        transport_balance_stock(source.visual.r*trace_scale,incoming.pigment.r,outgoing.pigment.r),
+        transport_balance_stock(source.visual.g*trace_scale,incoming.pigment.g,outgoing.pigment.g),
+        transport_balance_stock(source.visual.b*trace_scale,incoming.pigment.b,outgoing.pigment.b));
     GasFlux net=GasFlux(incoming.species-outgoing.species,incoming.dynamics-outgoing.dynamics,vec3(0));net.dynamics.y=0.;net.species.z=0.;net.dynamics.x=0.;
     Gas value=gas_add_flux(source,net,1.);value.species.z=carrier.x/trace_scale;value.dynamics.x=carrier.y/trace_scale;value.visual.rgb=pigment/trace_scale;
     GasFlux energy=gas_empty_flux();

@@ -11,6 +11,7 @@ static void test_transport_roundoff_preserves_balanced_and_trace_fluxes(void) {
     dc_gpu_address_buffer_t input = {0}, output = {0};
     fr_renderer_compute_t compute = {0};
     float packets[2][16] = {{0}};
+    /* A balanced exchange crosses an exponent boundary. A nearly empty donor retains a trace. */
     const float initial[] = {0x1.800006p0f, 1.5f};
     const float transferred[] = {.75f, 0x1p-30f};
     const float sent[] = {.75f, 1.5f};
