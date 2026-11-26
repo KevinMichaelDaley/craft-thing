@@ -106,6 +106,10 @@ static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
         uint32_t frame;
         if(!fr_player_frame(player,&frame)) return players_error(err,cap,"Cannot publish invalid player frame");
         fr_player_action_t action=player->action;
+        if(s->ray_enabled&&action==FR_PLAYER_WALK) {
+            action=FR_PLAYER_IDLE;
+            frame=0;
+        }
         fr_beaver_frame_layout_t layout=s->layouts[action][frame];
         bool flip=player->facing<0;
         uint32_t horizontal_pad=flip?layout.canvas_width-layout.x-layout.width:layout.x;
