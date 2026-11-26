@@ -1,6 +1,6 @@
 ---
 id: ct-il37
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T19:47:37Z
@@ -27,3 +27,7 @@ Follow-up from restored recipe: gpu_dependency_tests flagged build/player_chew_t
 **2026-11-26T05:50:21Z**
 
 On November 25, test_default_recipe passed 2/2 and GPU dependency lint passed 9/9. The full make -k test run revealed the live player footprint failure fixed under ct-rrwn and the fire demo gas checkpoint failure tracked by ct-ztym. A complete rerun through test failures is pending.
+
+**2026-11-26T10:13:23Z**
+
+The full Vulkan make -k -i test rerun in /tmp/craft-goal-full-test.log reached the final stream tests and logged 231 build-binary/Python invocations, including the thermal display tests. The log has no test failure lines, ignored make errors, or recipe override warnings. The baseline live player and gas checkpoint failures were repaired under ct-rrwn and ct-ztym. On current main, make test_default_recipe passes 2/2 and GPU dependency lint passes 9/9. The broad run crossed later rebuilds and is not an exact single-revision result.
