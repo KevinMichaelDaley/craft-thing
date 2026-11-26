@@ -1,11 +1,15 @@
 #ifndef DC_APP_LEVEL_INTERNAL_H
 #define DC_APP_LEVEL_INTERNAL_H
 #include "dungeoncraft/stream.h"
+#include "dungeoncraft/world_save.h"
 #include "level.h"
+#include "player_inventory_save.h"
 struct dc_level_view {
     struct dc_player_session *players;
     dc_gpu_t *gpu;
     dc_streamer_t *stream;
+    dc_world_save_t *save;
+    fr_player_inventory_t saved_inventory[FR_INPUT_PLAYERS];
     dc_chunk_table_t table;
     dc_chunk_coord_t origin,mapped_origin;
     uint32_t camera_offset_x,camera_offset_y;
@@ -23,7 +27,7 @@ struct dc_level_view {
     uint32_t from_slot,to_slot;
     uint64_t from_generation,to_generation;
     bool destination_bound,smoke_box,stream_ambient_gas;
-    bool closing,closing_structure_saved;
+    bool closing,closing_structure_saved,player_save_staged;
     dc_chunk_colors_t *save_colors;
     bool save_color_stale[DC_GPU_CHUNK_SLOTS];
     uint32_t smoke_closed;
@@ -32,6 +36,9 @@ struct dc_level_view {
 
 /** Dispose of an unpublished level during failed construction. */
 void dc_level_view_discard(dc_level_view_t *view);
+
+/** Keep gameplay world changes private until the player inventory can be saved with them. */
+bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t cap);
 
 /** Configure the standard ambient gas model before streaming chunk stock. */
 bool dc_level_view_configure_atmosphere(dc_level_view_t *view, char *err, uint32_t cap);

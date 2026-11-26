@@ -18,7 +18,6 @@
 #include "player_view.h"
 #include "view_config.h"
 
-#define PLAYER_TRANSACTION UINT64_C(0x4245415600000000)
 struct dc_player_session {
     fr_input_t input;
     fr_player_registry_t registry;
@@ -59,6 +58,12 @@ static bool players_error(char *err,uint32_t cap,const char *text) {
     if(err&&cap) snprintf(err,cap,"%s",text);
     return false;
 }
+
+bool dc_players_save_inventory(dc_level_view_t *v,char *err,uint32_t cap) {
+    if(!v||!v->players) return players_error(err,cap,"Cannot stage missing player inventory");
+    return dc_player_inventory_stage(v->save,v->players->inventory,err,cap);
+}
+
 static uint32_t players_pack(const fr_prop_appearance_t *a) {
     uint32_t packed=0;
     for(unsigned c=0;c<4;c++) {
@@ -125,7 +130,7 @@ static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
 static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
     struct dc_player_session *s=v->players;uint32_t n=s->count;
     if(n>=FR_INPUT_PLAYERS) return players_error(err,cap,"Local player capacity reached");
-    uint64_t transaction=PLAYER_TRANSACTION+n+1;uint32_t found=0;
+    uint64_t transaction=DC_PLAYER_TRANSACTION_BASE+n+1u;uint32_t found=0;
     for(uint32_t slot=0;slot<dc_gpu_body_capacity(v->gpu);slot++) {
         dc_body_storage_owner_t *o=dc_gpu_body_owner(v->gpu,slot);
         if(o->state==DC_BODY_OWNER_LIVE&&o->source_transaction.low==(uint32_t)transaction&&
@@ -193,6 +198,10 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,
     if(v->players) return true;
     struct dc_player_session *s=calloc(1,sizeof(*s));
     if(!s) return players_error(err,cap,"Cannot allocate player session");
+    if(!dc_level_view_stage_player_save(v,err,cap)) {
+        free(s);return false;
+    }
+    memcpy(s->inventory,v->saved_inventory,sizeof(s->inventory));
     s->follow_camera=follow_camera;
     v->players=s;s->spawn_x=x;s->spawn_y=y;s->trace=getenv("DC_PLAYER_INPUT_TRACE")!=NULL;fr_input_init(&s->input);
     bool okay=SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER)==0&&
@@ -405,9 +414,12 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
             if(has_body&&input.has_target) {
                 fr_player_point_t origin={self.chunk,self.body.x_fp/65536.f,self.body.y_fp/65536.f};
                 bool casting=old_action==FR_PLAYER_CAST||cast_pressed;
-                if(!fr_player_harvest_tick(v->gpu,&s->inventory[n],&s->chew_work[n],
-                    &origin,&input.target,chew_held&&!casting,elapsed,&harvestable,err,cap))
-                    return false;
+                fr_player_inventory_t before=s->inventory[n];
+                bool okay=fr_player_harvest_tick(v->gpu,&s->inventory[n],&s->chew_work[n],
+                    &origin,&input.target,chew_held&&!casting,elapsed,&harvestable,err,cap);
+                if(memcmp(&before,s->inventory+n,sizeof(before))!=0)
+                    dc_chunk_table_mark_dirty(&v->table,s->chew_work[n].slot);
+                if(!okay) return false;
             } else s->chew_work[n]=(fr_player_chew_t){0};
         }
         if(!fr_player_control_tick(&s->controls[n],&s->players[n],&input,selected_spell,s->ice,harvestable,action_elapsed,&s->cast_events[n])) return false;

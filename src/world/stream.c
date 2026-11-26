@@ -16,6 +16,7 @@ typedef struct {
     job_kind_t kind;
     dc_chunk_coord_t coord;
     uint64_t generation;
+    const char *staging;
     dc_chunk_t *chunk;
     dc_chunk_colors_t *colors;
     fr_reactive_chunk_t *reactive;
@@ -37,6 +38,7 @@ _Static_assert(sizeof(chunk_header_t) == 32, "Chunk file header layout changed")
 
 struct dc_streamer {
     char *directory;
+    char *staging;
     uint64_t seed;
     uint32_t capacity;
     dc_ground_profile_t ground;
@@ -52,10 +54,10 @@ struct dc_streamer {
     bool stop;
 };
 
-static bool chunk_path(const dc_streamer_t *stream, dc_chunk_coord_t coord,
+static bool chunk_path(const char *directory, dc_chunk_coord_t coord,
                        char *path, size_t cap, bool temporary) {
     int count = snprintf(path, cap, "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin%s",
-        stream->directory, (uint64_t)coord.x, (uint64_t)coord.y,
+        directory, (uint64_t)coord.x, (uint64_t)coord.y,
         temporary ? ".tmp" : "");
     return count > 0 && (size_t)count < cap;
 }
@@ -73,15 +75,16 @@ static bool prefix_hash(FILE *file,long end,uint64_t *out) {
 static void release_channel(fr_reactive_chunk_t *channel) {
     if(channel) {fr_reactive_chunk_release(channel);free(channel);}
 }
-static bool save_chunk(const dc_streamer_t *stream,const dc_chunk_t *chunk,
+static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const uint8_t *thermal,size_t thermal_bytes,const fr_gas_checkpoint_chunk_t *gas,
     const uint8_t *bulk_packet,size_t bulk_bytes) {
     dc_chunk_colors_t ambient_colors={0};
     if(reactive&&!colors) colors=&ambient_colors;
     char temporary[1024], final[1024];
-    if (!chunk_path(stream, chunk->coord, temporary, sizeof(temporary), true) ||
-        !chunk_path(stream, chunk->coord, final, sizeof(final), false)) return false;
+    const char *directory=staging?staging:stream->directory;
+    if (!chunk_path(directory, chunk->coord, temporary, sizeof(temporary), true) ||
+        !chunk_path(directory, chunk->coord, final, sizeof(final), false)) return false;
     FILE *file = fopen(temporary, "w+b");
     if (!file) return false;
     chunk_header_t header = { .magic = {'D', 'C', 'C', '1'}, .version = 5,
@@ -147,15 +150,19 @@ static bool load_gas_checkpoint(FILE *file,size_t bytes,fr_gas_checkpoint_chunk_
     return *gas&&fread(*gas,bytes,1,file)==1&&gas_checkpoint_valid(*gas);
 }
 
-static dc_chunk_t *load_chunk(const dc_streamer_t *stream,dc_chunk_coord_t coord,
+static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc_chunk_coord_t coord,
     dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,
     fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     chunk->coord=coord;
     char path[1024];
-    if (!chunk_path(stream, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
+    if (!chunk_path(staging?staging:stream->directory, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
     FILE *file = fopen(path, "rb");
+    if (!file && errno == ENOENT && staging) {
+        if (!chunk_path(stream->directory, coord, path, sizeof(path), false)) { free(chunk); return NULL; }
+        file = fopen(path, "rb");
+    }
     if (!file && errno == ENOENT) {
         if (stream->ground_surface) {
             if (!dc_generate_chunk_ground(coord,&stream->ground,chunk)) {free(chunk);return NULL;}
@@ -275,10 +282,10 @@ static int worker_main(void *arg) {
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
             result.colors=calloc(1,sizeof(*result.colors));
-            result.chunk = result.colors?load_chunk(stream,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas,&result.bulk):NULL;
+            result.chunk = result.colors?load_chunk(stream,job.staging,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas,&result.bulk):NULL;
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
-            result.kind = save_chunk(stream,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,
+            result.kind = save_chunk(stream,job.staging,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,
                 job.gas,job.bulk_packet,job.bulk_bytes) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
             free(job.chunk);
             free(job.colors);
@@ -347,12 +354,27 @@ fail_alloc:
     return NULL;
 }
 
+bool dc_stream_stage(dc_streamer_t *stream, const char *directory) {
+    if (!stream || !directory || !directory[0] || strlen(directory) > 950) return false;
+    size_t length = strlen(directory) + 1;
+    char *staging = malloc(length);
+    if (!staging) return false;
+    memcpy(staging, directory, length);
+    mtx_lock(&stream->mutex);
+    bool ready = !stream->stop && !stream->staging;
+    if (ready) stream->staging = staging;
+    mtx_unlock(&stream->mutex);
+    if (!ready) free(staging);
+    return ready;
+}
+
 static bool queue_job(dc_streamer_t *stream, stream_job_t job) {
     mtx_lock(&stream->mutex);
     if (stream->stop || stream->job_count == stream->capacity) {
         mtx_unlock(&stream->mutex);
         return false;
     }
+    job.staging = stream->staging;
     stream->jobs[stream->job_tail] = job;
     stream->job_tail = (stream->job_tail + 1u) % stream->capacity;
     ++stream->job_count;
@@ -490,5 +512,5 @@ void dc_stream_destroy(dc_streamer_t *stream) {
     cnd_destroy(&stream->jobs_ready);
     mtx_destroy(&stream->mutex);
     free(stream->ground_surface);
-    free(stream->directory); free(stream->jobs); free(stream->results); free(stream);
+    free(stream->staging);free(stream->directory); free(stream->jobs); free(stream->results); free(stream);
 }

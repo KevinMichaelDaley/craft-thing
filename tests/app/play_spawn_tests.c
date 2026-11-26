@@ -207,7 +207,7 @@ static void test_owned_inventory_survives_paid_placement_and_a_late_rejoin(void)
     ASSERT_TRUE(mkdtemp(directory) && open_inventory_world(directory));
     ASSERT_TRUE(dc_players_join(view, 42, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_paint(view, 73, 40, 0, DC_MATERIAL_WOOD, err, sizeof(err)));
-    ASSERT_TRUE(dc_level_view_paint(view, 137, 40, 0, DC_MATERIAL_DENSE_WOOD, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view, 137, 40, 0, DC_MATERIAL_WOOD, err, sizeof(err)));
     ASSERT_TRUE(inventory_aim(0, 73, 40) && inventory_aim(1, 137, 40));
     SDL_Event pad = {.cbutton = {.type = SDL_CONTROLLERBUTTONDOWN, .which = 42,
                                  .button = SDL_CONTROLLER_BUTTON_B}};
@@ -218,11 +218,10 @@ static void test_owned_inventory_survives_paid_placement_and_a_late_rejoin(void)
 
     fr_player_inventory_t inventory;
     const uint64_t wood = (uint64_t)llround(DC_DENSITY_WOOD * DC_FLUID_FULL);
-    const uint64_t dense_wood = (uint64_t)llround(DC_DENSITY_DENSE_WOOD * DC_FLUID_FULL);
     ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
     ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), wood);
     ASSERT_TRUE(dc_players_inventory(view, 1, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_DENSE_WOOD), dense_wood);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), wood);
     ASSERT_TRUE(inventory_aim(0, 190, 45) && inventory_key(SDL_KEYDOWN, SDL_SCANCODE_4) &&
                 inventory_key(SDL_KEYUP, SDL_SCANCODE_4) && inventory_ticks(1));
     ASSERT_TRUE(inventory_key(SDL_KEYDOWN, SDL_SCANCODE_R) &&
@@ -241,7 +240,36 @@ static void test_owned_inventory_survives_paid_placement_and_a_late_rejoin(void)
     ASSERT_TRUE(close_world() && open_inventory_world(directory));
     ASSERT_TRUE(dc_players_join(view, 82, err, sizeof(err)));
     ASSERT_TRUE(dc_players_inventory(view, 1, &inventory));
-    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_DENSE_WOOD), dense_wood);
+    ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), wood);
+    PASS();
+}
+
+static void test_failed_inventory_save_keeps_the_previous_harvest_and_balance(void) {
+    char directory[] = "build/play_inventory_rollback_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory) && open_inventory_world(directory));
+    ASSERT_TRUE(dc_level_view_paint(view, 73, 40, 0, DC_MATERIAL_WOOD, err, sizeof(err)));
+    ASSERT_TRUE(close_world() && open_inventory_world(directory));
+    ASSERT_TRUE(inventory_aim(0, 73, 40) && inventory_key(SDL_KEYDOWN, SDL_SCANCODE_C));
+    ASSERT_TRUE(inventory_ticks(4) && inventory_key(SDL_KEYUP, SDL_SCANCODE_C));
+    dc_cell_t cell;
+    ASSERT_TRUE(read_cell(73, 40, &cell) && cell.material == DC_MATERIAL_AIR);
+    fr_player_inventory_t inventory;
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
+    ASSERT_TRUE(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD) > 0u);
+
+    char incomplete[192];
+    int length = snprintf(incomplete, sizeof(incomplete),
+        "%s/.level-save-draft/chunk_00000000000000ff_00000000000000ff.bin.tmp", directory);
+    ASSERT_TRUE(length > 0 && (size_t)length < sizeof(incomplete));
+    FILE *file = fopen(incomplete, "wb");
+    ASSERT_TRUE(file && fclose(file) == 0);
+    bool saved = dc_level_view_destroy(view, err, sizeof(err));
+    view = NULL;
+    ASSERT_TRUE(!saved && strstr(err, "Cannot commit staged world save"));
+
+    ASSERT_TRUE(open_inventory_world(directory));
+    ASSERT_TRUE(read_cell(73, 40, &cell) && cell.material == DC_MATERIAL_WOOD);
+    ASSERT_TRUE(dc_players_inventory(view, 0, &inventory));
     ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), 0u);
     PASS();
 }
@@ -454,6 +482,7 @@ int main(void) {
     RUN(test_play_admits_ambient_air_when_reopening_an_older_save);
     RUN(test_play_loads_authored_trees_and_preserves_harvest_and_rocks);
     RUN(test_owned_inventory_survives_paid_placement_and_a_late_rejoin);
+    RUN(test_failed_inventory_save_keeps_the_previous_harvest_and_balance);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

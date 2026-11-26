@@ -35,6 +35,8 @@ dc_streamer_t *dc_stream_create(const char *directory, uint64_t seed,
  */
 dc_streamer_t *dc_stream_create_ground(const char *directory, uint64_t seed,
                                        uint32_t queue_capacity, const dc_ground_profile_t *ground);
+/** Direct new saves to staging and prefer staged chunks for new loads. */
+bool dc_stream_stage(dc_streamer_t *stream, const char *directory);
 
 /** Queue a nonblocking chunk load or generation. */
 bool dc_stream_request_load(dc_streamer_t *stream, dc_chunk_coord_t coord,

@@ -258,7 +258,7 @@ build/draw_gpu.o: src/vulkan/draw_gpu.c src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 CHUNK_OBJ = build/chunk.o
-STREAM_OBJ = build/stream.o build/bulk_phase_packet.o
+STREAM_OBJ = build/stream.o build/bulk_phase_packet.o build/world_save.o
 GENERATE_OBJ = build/generate.o
 SHADER = build/shaders/pattern.comp.spv
 RIGID_SHADER = build/shaders/rigid.comp.spv
@@ -303,8 +303,9 @@ build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) 
 test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
-NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/fire/bulk_phase_packet.c src/world/generate.c
+NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
 PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_view.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
+PLAYER_RUNTIME_SRC += src/app/player_inventory_save.c
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
 build/rigid_dynamics_visual_tests: tests/app/rigid_dynamics_visual_tests.c tests/vulkan/compound_fixture.h $(GPU_OBJ) src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -679,6 +680,16 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 build/stream.o: src/world/stream.c src/world/stream_gas.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/world_save.o: src/world/world_save.c include/dungeoncraft/world_save.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/world_save_tests: tests/world/world_save_tests.c src/app/player_inventory_save.c build/world_save.o
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@
+.PHONY: test_world_save
+test_world_save: build/world_save_tests
+	./build/world_save_tests
+test: test_world_save
+build/dungeoncraft build/controls_tests: src/app/player_inventory_save.c src/app/player_inventory_save.h include/dungeoncraft/world_save.h
 build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c src/fire/bulk_phase_internal.h include/ferrum/fire/bulk_phase.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -2213,8 +2224,8 @@ build/reactive_chunk_gpu.o: src/vulkan/reactive_chunk_gpu.c src/vulkan/reactive_
 build/reactive_chunk_gpu_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reactive_chunk_gpu_tests build/reactive_chunk_tests build/reactive_stream_tests
-build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/reactive_checkpoint_display_tests: tests/vulkan/reactive_checkpoint_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/reactive_archive_tests: tests/fire/reactive_archive_tests.c src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_archive.h

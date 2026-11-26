@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "dungeoncraft/stream.h"
+#include "dungeoncraft/world_save.h"
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -286,6 +287,48 @@ static void test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime(
     ASSERT_EQ(result.bulk->slime_excess[100],-3.25f);
     dc_stream_result_release(&result);dc_stream_destroy(stream);free(chunk);free(bulk);PASS();
 }
+static void test_staged_chunk_reload_prefers_the_current_world_edit(void) {
+    char directory[] = "build/staged_stream_XXXXXX", err[128] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_world_save_t *save = dc_world_save_open(directory, err, sizeof(err));
+    dc_streamer_t *stream = dc_stream_create(directory, 314, 2);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(save && stream && chunk);
+    chunk->coord = (dc_chunk_coord_t){-1, 0};
+    chunk->cells[0].material = DC_MATERIAL_WOOD;
+    ASSERT_TRUE(dc_stream_request_save(stream, chunk, 1) && wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
+    ASSERT_TRUE(dc_stream_stage(stream, dc_world_save_directory(save, true)));
+    ASSERT_TRUE(dc_stream_request_load(stream, chunk->coord, 2) && wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_WOOD);
+    dc_stream_result_release(&result);
+
+    chunk->cells[0].material = DC_MATERIAL_AIR;
+    ASSERT_TRUE(dc_stream_request_save(stream, chunk, 3) && dc_stream_request_load(stream, chunk->coord, 4));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_AIR);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    dc_world_save_close(save);
+
+    stream = dc_stream_create(directory, 314, 2);
+    ASSERT_TRUE(stream && dc_stream_request_load(stream, chunk->coord, 5) && wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_WOOD);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     RUN(test_worker_generates_saves_and_reloads_chunk);
     RUN(test_shutdown_flushes_queued_saves);
@@ -295,6 +338,7 @@ int main(void) {
     RUN(test_version_four_grain_radius_migrates);
     RUN(test_color_chunk_roundtrip_and_corruption_rejection);
     RUN(test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime);
+    RUN(test_staged_chunk_reload_prefers_the_current_world_edit);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -53,4 +53,7 @@ bool dc_players_split_screen(dc_level_view_t *view, uint32_t count,
 /** Release controller, input and drive ownership before the level's GPU. */
 void dc_players_destroy(dc_level_view_t *view);
 
+/** Write owned material balances into the active world save transaction. */
+bool dc_players_save_inventory(dc_level_view_t *view, char *err, uint32_t cap);
+
 #endif

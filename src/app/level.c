@@ -489,6 +489,8 @@ dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t see
     Uint64 started=SDL_GetTicks64();
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
+    view->save = dc_world_save_open(directory, err, cap);
+    if (!view->save || !dc_player_inventory_load(view->save, view->saved_inventory, err, cap)) goto fail;
     view->origin.y = INITIAL_CHUNK_Y;
     view->mapped_origin.y = INITIAL_CHUNK_Y;
     if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS)) goto fail;
@@ -529,10 +531,24 @@ void dc_level_view_discard(dc_level_view_t *view) {
     if (!view) return;
     dc_players_destroy(view);
     dc_stream_destroy(view->stream);
+    dc_world_save_close(view->save);
     free(view->save_colors);
     dc_gpu_destroy(view->gpu);
     dc_chunk_table_destroy(&view->table);
     free(view);
+}
+
+bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (view->player_save_staged) return true;
+    if (!dc_world_save_begin(view->save, err, cap)) return false;
+    const char *staging = dc_world_save_directory(view->save, true);
+    char body_path[sizeof(view->body_path)];
+    int length = snprintf(body_path, sizeof(body_path), "%s/rigid_bodies.bin", staging);
+    if (length < 0 || (size_t)length >= sizeof(body_path) || !dc_stream_stage(view->stream, staging))
+        return error(err, cap, "Cannot stage player world saves");
+    memcpy(view->body_path, body_path, (size_t)length + 1);
+    view->player_save_staged = true;
+    return true;
 }
 
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
@@ -943,15 +959,18 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
+    bool staged = dc_world_save_directory(view->save, true) != NULL;
+    bool okay = !staged || dc_players_save_inventory(view, err, cap);
     dc_players_destroy(view);
-    bool okay = true;
     view->closing=true;
     uint64_t save_start=SDL_GetTicks64();
-    if (!fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) okay = false;
-    else view->closing_structure_saved=true;
+    if (okay) {
+        okay = fr_gpu_save_structure(view->gpu, view->body_path, err, cap);
+        view->closing_structure_saved = okay;
+    }
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save final structure%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));
-    view->save_colors=malloc((size_t)view->table.capacity*sizeof(*view->save_colors));
+    if (okay) view->save_colors=malloc((size_t)view->table.capacity*sizeof(*view->save_colors));
     if(view->save_colors&&!fr_renderer_capture_chunk_colors(view->gpu,view->save_colors,
         view->table.capacity,err,cap)) {
         free(view->save_colors);view->save_colors=NULL;
@@ -967,7 +986,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_set_active(&view->table, i, false);
     uint64_t deadline = 0;
-    for (;;) {
+    while (okay) {
         if (!process_results(view, err, cap) || !schedule_saves(view, err, cap)) { okay = false; break; }
         if (!deadline) deadline = SDL_GetTicks64() +
                         (uint64_t)view->table.capacity * 50u + 5000u;
@@ -986,6 +1005,8 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if(okay&&!view->closing_structure_saved)
         okay=fr_gpu_save_structure(view->gpu,view->body_path,err,cap);
     dc_stream_destroy(view->stream);
+    if (okay && staged) okay = dc_world_save_commit(view->save, err, cap);
+    dc_world_save_close(view->save);
     free(view->save_colors);
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save flushed%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));
