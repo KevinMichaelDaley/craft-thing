@@ -1,5 +1,47 @@
 #ifndef GAS_CHECKPOINT_CASES_H
 #define GAS_CHECKPOINT_CASES_H
+static void test_native_saturated_pigment_round_trips_compensated_carrier(void) {
+    const uint32_t count=DC_CHUNK_SIDE*DC_CHUNK_SIDE;
+    char err[256]={0};dc_gpu_t *g=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    fr_gas_state_t *input=calloc(count,sizeof(*input)),*out=calloc(count,sizeof(*out));
+    double *volumes=calloc(count,sizeof(*volumes));
+    fr_gas_checkpoint_chunk_t *saved=calloc(1,sizeof(*saved)),*restored=calloc(1,sizeof(*restored));
+    ASSERT_TRUE(chunk&&input&&out&&volumes&&saved&&restored&&context(&g,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+    fr_gas_model_t model=reference_model();
+    ASSERT_TRUE(fr_gas_gpu_enable(g,&model,1.f,300.f,err,sizeof(err)));
+    for(uint32_t i=0;i<count;i++) volumes[i]=1.;
+    input[0].species[FR_GAS_EXHAUST]=.1;
+    input[1].species[FR_GAS_EXHAUST]=.06;
+    input[1].species[FR_GAS_SOOT]=.09;
+    for(uint32_t i=0;i<2u;i++) {
+        double carrier=input[i].species[FR_GAS_EXHAUST]+input[i].species[FR_GAS_SOOT];
+        input[i].pigment[0]=carrier;
+        input[i].pigment[1]=carrier/2.;
+        for(uint32_t k=0;k<FR_GAS_SPECIES;k++)
+            input[i].energy+=input[i].species[k]*model.heat_capacity_cv[k]*300.;
+        ASSERT_TRUE((double)(float)carrier>carrier);
+    }
+    ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volumes,count,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,count,err,sizeof(err)));
+    for(uint32_t i=0;i<2u;i++) {
+        fr_gas_thermo_t thermo;
+        ASSERT_TRUE(fr_gas_thermodynamics(&model,out+i,volumes[i],&thermo,err,sizeof(err)));
+        ASSERT_EQ(out[i].pigment[0],out[i].species[FR_GAS_EXHAUST]+out[i].species[FR_GAS_SOOT]);
+        ASSERT_EQ(out[i].pigment[1],(double)(float)input[i].pigment[1]);
+    }
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,saved,err,sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_import_checkpoint(g,0,saved,err,sizeof(err)));
+    input[0].pigment[0]*=1.01;
+    ASSERT_TRUE(!fr_gas_gpu_seed_chunk(g,0,input,volumes,count,err,sizeof(err)));
+    saved->cells[0][8]=nextafterf(saved->cells[0][8],INFINITY);
+    ASSERT_TRUE(!fr_gas_gpu_import_checkpoint(g,0,saved,err,sizeof(err)));
+    saved->cells[0][8]=nextafterf(saved->cells[0][8],0.f);
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(g,0,restored,err,sizeof(err)));
+    ASSERT_EQ(memcmp(saved,restored,sizeof(*saved)),0);
+    dc_gpu_destroy(g);free(chunk);free(input);free(out);free(volumes);free(saved);free(restored);PASS();
+}
 static void test_native_new_streamed_slot_initializes_once_without_refilling_existing_or_dormant_stock(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
     fr_gas_checkpoint_chunk_t *old=malloc(sizeof(*old)),*out=malloc(sizeof(*out)),*fresh=malloc(sizeof(*fresh));

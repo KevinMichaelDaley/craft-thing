@@ -688,6 +688,7 @@ int main(void) {
     RUN(test_native_practical_offset_wall_does_not_drive_sealed_neighbor);
     RUN(test_native_practical_variable_intervals_stay_finite_without_retry_stalls);
     RUN(test_native_checkpoint_preserves_compensation_geometry_valves_and_ownership);
+    RUN(test_native_saturated_pigment_round_trips_compensated_carrier);
     RUN(test_native_new_streamed_slot_initializes_once_without_refilling_existing_or_dormant_stock);
     RUN(test_native_geometry_carving_and_multi_cell_displacement_keep_finite_stock);
     RUN(test_native_oil_volume_excludes_gas_and_routes_oxygen);
