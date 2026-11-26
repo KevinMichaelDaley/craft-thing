@@ -576,6 +576,7 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
 #include "gas_audit_precision_cases.h"
 #include "gas_activity_boundary_cases.h"
 #include "gas_explicit_stock_cases.h"
+#include "gas_subgrid_boundary_cases.h"
 int main(void) {
     if(getenv("DC_GAS_AUDIT_ONLY")) {
         RUN(test_cold_audit_keeps_trace_products_across_workgroups);
@@ -668,6 +669,7 @@ int main(void) {
     RUN(test_native_stationary_heat_mixes_diagonally_in_the_optimized_path);
     RUN(test_native_vorticity_rolls_a_rising_plume_sideways_without_creating_stock);
     RUN(test_native_subgrid_smoke_gains_detail_without_stock_or_mean_impulse);
+    RUN(test_native_subgrid_curl_keeps_zero_impulse_at_finish_boundaries);
     RUN(test_smoke_detail_moves_with_uniform_resolved_flow);
     RUN(test_quarter_native_smoke_wavelet_advects_and_displaces_boundary);
     RUN(test_transported_low_density_smoke_is_readable_on_the_dark_display);

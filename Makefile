@@ -2042,11 +2042,15 @@ build/gas_publication_display_tests: tests/vulkan/gas_pressure_feedback_cases.h
 build/gas_publication_display_tests: tests/vulkan/gas_pressure_noise_cases.h tests/vulkan/gas_local_stage_cases.h tests/vulkan/gas_sor_tile_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_roundoff_cases.h build/shaders/gas_roundoff_test.comp.spv build/shaders/gas_buoyancy_test.comp.spv
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_explicit_stock_cases.h
+build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_subgrid_boundary_cases.h build/shaders/gas_subgrid_boundary_test.comp.spv
 build/gas_display_tests: build/shaders/gas_buoyancy_test.comp.spv
 build/shaders/gas_buoyancy_test.comp.spv: shaders/diagnostics/gas_buoyancy_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/gas_roundoff_test.comp.spv: shaders/diagnostics/gas_roundoff_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/gas_subgrid_boundary_test.comp.spv: shaders/diagnostics/gas_subgrid_boundary_test.comp $(wildcard shaders/gas/*.glsl) include/dungeoncraft/gas_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/gas_reference_tests: tests/fire/gas_reference_tests.c src/fire/gas.c src/fire/gas_reference.c src/fire/gas_internal.h include/ferrum/fire/gas.h

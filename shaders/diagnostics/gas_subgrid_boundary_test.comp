@@ -1,0 +1,16 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "../gas/acoustic.glsl"
+#include "../gas/vorticity.glsl"
+
+layout(set=0,binding=24,std430) writeonly buffer Impulses {vec2 impulses[];};
+
+void main() {
+    uint index=gas_index();
+    if(index>=params.width*params.height) return;
+    uvec2 p=uvec2(index%params.width,index/params.width);
+    uint tile=(p.y/8u)*((params.width+7u)/8u)+p.x/8u;
+    impulses[index]=vec2(0.);
+    if((activity[gas_tile_count()+tile]&2u)!=0u&&gas_cached(ivec2(p)).metric.z>0.)
+        impulses[index]=gas_subgrid_momentum(ivec2(p),uintBitsToFloat(params.seconds));
+}
