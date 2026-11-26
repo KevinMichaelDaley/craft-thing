@@ -1,6 +1,6 @@
 ---
 id: ctsc-jisc
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T14:19:25Z
@@ -31,3 +31,7 @@ The prior shader fails both locked reciprocal and competing contacts because it 
 **2026-11-26T14:55:46Z**
 
 The targeted Vulkan coating suite passed 6 cases. The clean pool corrosion replay remained gold .009047 and ingredient .565406, the moving-load reload remained .0269 for gold, and submerged dousing retained 45080/0 Q16 late-window consumption. Updated prompt and fireproof controls passed. In the first updated delayed run seeds 0 through 3 had 11, 13, 13 and 9 flaming arm parcels, respectively. Seed 4 aborted during scene construction while other GPU tests were active, with no diagnostic in that test version. The retry prints construction errors and runs after the other siege jobs. The measured per-call transfer share is tracked in ctrc-q7uv.
+
+**2026-11-26T15:05:05Z**
+
+The serialized Vulkan --risk retry completed 2/2 checks. The prompt case opened its actual pouch and retained all 943728 Q16 arm fuel with zero flaming parcels. The fireproof carrier remained active. All 16 existing delayed seeds ignited, with 5 to 15 flaming arm parcels per seed. The parent ticket still tracks the full 64 locked seeds and the application-level criteria.
