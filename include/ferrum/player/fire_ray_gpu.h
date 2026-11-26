@@ -15,7 +15,8 @@ bool fr_fire_ray_gpu_create(dc_gpu_t *gpu,const fr_player_body_binding_t *bindin
 /** Validate an additional emitter and reach a completed queue boundary. */
 bool fr_fire_ray_gpu_prepare_emitter(fr_fire_ray_gpu_t *ray,const fr_player_body_binding_t *binding,
                                     char *err,uint32_t cap);
-/** Append the prepared emitter while preserving existing ray commands and history. */
+/** Append the prepared emitter before the next submission that uses the ray.
+ * Existing commands and history stay in their current slots. */
 void fr_fire_ray_gpu_commit_emitter(fr_fire_ray_gpu_t *ray,const fr_player_body_binding_t *binding);
 /** Advance existing rays; only emit=true with a newer nonzero sequence starts
  * one. Direction is latched at emission. Air and fuel-bearing substrates pass;

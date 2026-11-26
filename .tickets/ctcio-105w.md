@@ -1,6 +1,6 @@
 ---
 id: ctcio-105w
-status: in_progress
+status: closed
 deps: []
 links: [ctpco-qxpf, ctwi-7ukj, ct-1i55, ctcr-uh5f]
 created: 2026-11-26T22:36:30Z
@@ -28,3 +28,7 @@ RED drove the real player tick through a UI round trip, disconnected device stat
 **2026-11-26T22:41:29Z**
 
 GREEN and refactor passed all eight player-loop cases with normal and ASan/UBSan builds. The UI round trip and disconnected device now emit zero old storms, unfocused input emits zero new rays while the existing ray simulation still advances, and a published cast continues recovery. Input, clock, player and build-tool checks passed. Actual SDL reconnect and focus-loss window scenarios are compiled and queued.
+
+**2026-11-26T23:04:32Z**
+
+Native RED reproduced the stale world effects in both scenarios. GREEN passed both SDL scenarios: the disconnected player left zero water while the sibling cast delivered 65536 Q16, and focus loss discarded the old cast while a fresh press succeeded. The separate two-window routing checks passed 2/2.

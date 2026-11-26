@@ -22,6 +22,8 @@ static bool beaver_body_created_by(const dc_body_storage_owner_t *owner,uint64_t
         owner->source_transaction.high==(uint32_t)(transaction>>32);
 }
 
+/* Rewind only when this shape ends at the pool cursor, so earlier geometry
+ * stays valid. */
 static uint32_t beaver_body_geometry_tail(dc_gpu_t *g,uint32_t slot) {
     const dc_gpu_body_record_t *body=dc_gpu_body_record(g,slot);
     if(!(body->piece_count&DC_GPU_PIXEL_BODY_FLAG)) return UINT32_MAX;

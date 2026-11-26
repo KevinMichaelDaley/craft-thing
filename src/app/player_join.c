@@ -96,6 +96,7 @@ static bool players_add(dc_level_view_t *v,int64_t device,const fr_input_t *prep
         return false;
     }
 
+    /* Body admission is complete. Publish the prepared owners before the next frame. */
     if(staging_slot!=UINT32_MAX) dc_chunk_table_mark_dirty(&v->table,staging_slot);
     s->input=*prepared;
     memcpy(s->values[n],join.values,sizeof(join.values));

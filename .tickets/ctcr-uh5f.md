@@ -1,6 +1,6 @@
 ---
 id: ctcr-uh5f
-status: in_progress
+status: closed
 deps: []
 links: [ct-1i55, ctcio-105w, ctcri-jd9z]
 created: 2026-11-26T22:43:13Z
@@ -28,3 +28,7 @@ RED reproduced three production host failures: direct rejoin sought a new player
 **2026-11-26T22:50:57Z**
 
 GREEN and refactor: eleven production-session host cases pass normally and with ASan/UBSan. A failed Start leaves the vacant poison-free router byte-for-byte intact, and a subsequent Start maps the replacement device. Direct rejoin preserves the physical binding, generation, inventory and UI context. The main app, controls, native actions and split fixtures compile. The native replacement replay and full suite remain queued. Failures later in new-body GPU admission are tracked under ctcri-jd9z.
+
+**2026-11-26T23:04:32Z**
+
+The native RED replay failed as expected. The fixed SDL/Vulkan test preserved the same disconnected beaver on direct rejoin, and Start activated split-screen with editor focus recovering the full view. Both native cases passed.

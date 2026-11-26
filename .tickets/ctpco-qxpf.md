@@ -1,6 +1,6 @@
 ---
 id: ctpco-qxpf
-status: in_progress
+status: closed
 deps: []
 links: [ct-yctv, ct-q3hh, ctwi-7ukj, ctcio-105w]
 created: 2026-11-26T22:27:13Z
@@ -32,3 +32,7 @@ GREEN and refactor: the real player step passes all four failure/refusal control
 **2026-11-26T22:41:29Z**
 
 Exact f69cbd0a passed both native injected backend tests. The real launch path distinguishes an unloaded footprint from a failed readback, and a refused Vulkan storm submission preserves its diagnostic and does not wet the target. The visible player-actions regression is queued.
+
+**2026-11-26T23:04:32Z**
+
+Native verification completed on f69cbd0a. Both injected Vulkan checks and all six visible player-action checks passed.

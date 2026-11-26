@@ -28,3 +28,7 @@ The controller router now stages input in src/app/player_join.c. The remaining f
 **2026-11-26T22:55:10Z**
 
 RED production session fixture injects failures separately in movement, ray, and sprite setup. All three paths returned failure with two published seats and the newly created body and parcels still live. Eleven existing input and cast checks passed.
+
+**2026-11-26T23:04:32Z**
+
+GREEN passed all 14 production session tests, including the individual drive, ray, and sprite failure controls and their retries. Seven ray scheduling cases passed, including append of a new emitter without replacing an active ray. The SDL/Vulkan fault-injection fixture and body, ray, and action binaries compiled.
