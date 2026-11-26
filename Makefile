@@ -2032,7 +2032,7 @@ build/thermal_precision_tests: tests/fire/thermal_precision_tests.c $(REACTIVE_S
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(REACTIVE_STATE_SRC) -o $@ -lm
 build/gas_transport_tests build/gas_implicit_tests build/gas_display_tests: include/ferrum/fire/gas_constants.h
 build/gas_display_tests: tests/vulkan/gas_practical_cases.h
-build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_audit_precision_cases.h
+build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_audit_precision_cases.h tests/vulkan/gas_activity_boundary_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_geometry_cases.h
 build/gas_display_tests build/gas_publication_display_tests: tests/vulkan/gas_partial_void_cases.h
 build/gas_publication_display_tests: tests/vulkan/gas_geometry_cache_cases.h

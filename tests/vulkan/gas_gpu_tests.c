@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #define main gas_cell_fixture_main
 #include "reactive_cell_gpu_tests.c"
 #undef main
@@ -571,6 +572,7 @@ static void test_native_subnormal_colored_stock_is_valid_and_retained_at_rest(vo
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);PASS();
 }
 #include "gas_audit_precision_cases.h"
+#include "gas_activity_boundary_cases.h"
 int main(void) {
     if(getenv("DC_GAS_AUDIT_ONLY")) {
         RUN(test_cold_audit_keeps_trace_products_across_workgroups);
@@ -667,6 +669,8 @@ int main(void) {
     RUN(test_smoke_wavelet_does_not_draw_across_solid_wall);
     RUN(test_native_quiet_air_sleeps_but_motion_heat_and_pressure_still_wake);
     RUN(test_native_practical_safe_line_matches_explicit_flux_inside_stiff_interval);
+    RUN(test_practical_small_step_preserves_exhaust_at_dormant_donor);
+    RUN(test_practical_large_step_preserves_exhaust_at_dormant_donor);
     RUN(test_native_cold_audit_reduces_stock_and_does_not_advance_physics);
     RUN(test_cold_audit_keeps_trace_products_across_workgroups);
     RUN(test_native_hot_gas_audit_weights_tiny_spikes_by_heat_capacity);
