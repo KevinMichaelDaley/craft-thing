@@ -692,6 +692,7 @@ int main(void) {
     RUN(test_native_partial_void_contraction_displaces_mixture_without_cut_cell_pressure_spikes);
     RUN(test_native_valve_only_refresh_preserves_restored_physical_void);
     RUN(test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas);
+    RUN(test_transport_roundoff_preserves_balanced_and_trace_fluxes);
     RUN(test_compact_practical_profile_admits_without_denorm_control);
     RUN(test_practical_policy_does_not_require_large_cfl_transport);
     printf("%d passed, %d failed, %d skipped\n",g_pass,g_fail,g_skip);return g_fail!=0||g_pass==0;

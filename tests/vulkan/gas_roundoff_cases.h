@@ -4,6 +4,58 @@
 #include "dungeoncraft/gas_layout.h"
 #include "../../src/vulkan/body_address_gpu.h"
 #include "../../src/vulkan/renderer_internal.h"
+
+static void test_transport_roundoff_preserves_balanced_and_trace_fluxes(void) {
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    dc_gpu_address_buffer_t input = {0}, output = {0};
+    fr_renderer_compute_t compute = {0};
+    float packets[2][16] = {{0}};
+    const float initial[] = {0x1.800006p0f, 1.5f};
+    const float transferred[] = {.75f, 0x1p-30f};
+    const float sent[] = {.75f, 1.5f};
+    for (uint32_t i = 0; i < 2u; ++i) {
+        packets[i][0] = transferred[i];
+        packets[i][1] = sent[i];
+        packets[i][2] = packets[i][4] = initial[i];
+        packets[i][8] = packets[i][9] = packets[i][10] = initial[i];
+    }
+    ASSERT_TRUE(dc_gpu_create(&g, 64u, 64u, "build/shaders/pattern.comp.spv", err, sizeof(err)) &&
+        dc_gpu_address_buffer_create(g, sizeof(packets), true, &input, err, sizeof(err)) &&
+        dc_gpu_address_buffer_create(g, sizeof(packets), true, &output, err, sizeof(err)));
+    memcpy(input.mapped, packets, sizeof(packets));
+    VkDescriptorBufferInfo buffers[12];
+    for (uint32_t i = 0; i < 12u; ++i) buffers[i] = (VkDescriptorBufferInfo){input.buffer, 0, input.bytes};
+    buffers[1] = (VkDescriptorBufferInfo){output.buffer, 0, output.bytes};
+    ASSERT_TRUE(fr_renderer_compute_init(g,&compute,buffers,12u,16u,
+        "build/shaders/gas_roundoff_test.comp.spv",err,sizeof(err)) && fr_renderer_begin(g));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    const uint32_t push[4] = {2u, 1u, 0u, 0u};
+    vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,compute.pipeline);
+    vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,compute.pipeline_layout,
+        0,1,&compute.descriptor,0,NULL);
+    vkCmdPushConstants(g->command,compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatch(g->command,1,1,1);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    ASSERT_TRUE(fr_renderer_submit(g));
+    memcpy(packets, output.mapped, sizeof(packets));
+    fr_renderer_compute_destroy(g,&compute);
+    dc_gpu_address_buffer_destroy(g,&input);
+    dc_gpu_address_buffer_destroy(g,&output);
+    dc_gpu_destroy(g);
+    printf("Transport balance %.12g expected %.12g, trace %.12g expected %.12g\n",
+        packets[0][2], initial[0], packets[1][2], transferred[1]);
+    for (uint32_t i = 0; i < 2u; ++i) {
+        float expected = i == 0u ? initial[0] : transferred[1];
+        ASSERT_EQ(packets[i][2], expected);
+        ASSERT_EQ(packets[i][4], expected);
+        for (uint32_t color = 8u; color < 11u; ++color) ASSERT_EQ(packets[i][color], expected);
+    }
+    PASS();
+}
+
 static void test_native_massless_underflow_energy_reconciles_without_erasing_tiny_colored_gas(void) {
     char err[256]={0};dc_gpu_t *g=NULL;ASSERT_TRUE(context(&g,err,sizeof(err)));
     dc_gpu_address_buffer_t input={0},output={0},model={0},stats={0};fr_renderer_compute_t compute={0};

@@ -3,9 +3,23 @@
 #extension GL_EXT_spirv_intrinsics : require
 /* Exercise the compact transport path's native flush-to-zero arithmetic. */
 spirv_execution_mode(extensions=["SPV_KHR_float_controls"],capabilities=[4465],4460,32);
-#include "../gas/storage.glsl"
+#define FR_GAS_COMPACT_WORK 1
+#include "../gas/transport_implicit.glsl"
+#include "../gas/transport_apply_body.glsl"
 void main() {
     uint index=gas_index();if(index>=params.width*params.height) return;
+    if(params.bank==0u) {
+        Gas source=world[index];
+        GasFlux incoming=gas_empty_flux(),outgoing=gas_empty_flux();
+        incoming.species.z=source.species.x;
+        incoming.dynamics.x=source.species.x;
+        incoming.pigment=vec3(source.species.x);
+        outgoing.species.z=source.species.y;
+        outgoing.dynamics.x=source.species.y;
+        outgoing.pigment=vec3(source.species.y);
+        bank0[index]=transport_update_state(source,incoming,outgoing,1.);
+        return;
+    }
     Gas value=gas_practical_state(world[index]);bank0[index]=value;
     bool valid=false;gas_primitive(value,valid);if(valid) atomicOr(stats[0],1u<<index);
 }
