@@ -38,7 +38,7 @@ float gas_subgrid_potential(ivec2 p,float dt) {
         /* This potential contributes to p, the cell to its right and the cell below. */
         if(d==0u||d==2u) {
             ivec2 q=p+gas_direction(d);
-            if(!gas_finishes_tile(gas_activity_tile(q))||gas_cached(q).metric.z<=0.) return 0.;
+            if(!gas_finishes_tile(gas_activity_tile(q))||gas_cache_source(neighbor).metric.z<=0.) return 0.;
         }
     }
     float curl=gas_curl(p);if(abs(curl)<.001) return 0.;

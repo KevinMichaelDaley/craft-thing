@@ -16,6 +16,7 @@ layout(set=0,binding=22,std430) restrict buffer Matrix {vec4 matrix[];};
 layout(set=0,binding=23,std430) restrict buffer Indirect {uint indirect[];};
 uint gas_tile_count() {return ((params.width+7u)/8u)*((params.height+7u)/8u);}
 uint gas_activity_tile(ivec2 p) {return (uint(p.y)/8u)*((params.width+7u)/8u)+uint(p.x)/8u;}
+/* Match the tiles dispatched by final_compact. */
 bool gas_finishes_tile(uint tile) {return (activity[gas_tile_count()+tile]&2u)!=0u;}
 vec2 gas_large_pressure_state(Gas value,float old_pressure) {
     precise float mass=(((value.species.x+value.species.y)+value.species.z)+value.species.w)+value.dynamics.x;
