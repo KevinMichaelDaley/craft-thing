@@ -1218,17 +1218,18 @@ int main(int argc, char **argv) {
         fprintf(stderr,"DC_BENCHMARK_WATER_POUR requires visible x,y,radius (radius <=32)\n");return 1;
     }
     char err[256] = {0};
-    uint32_t play_surface=fire_demo?VIEW_HEIGHT-32:96;
-    dc_ground_profile_t play_ground={.width=1,.soil_depth=1,.surface=&play_surface};
-    dc_level_view_t *view = play ? dc_level_view_create_ground(directory,seed,&play_ground,err,sizeof(err)) :
+    uint32_t fire_surface=VIEW_HEIGHT-32;
+    dc_ground_profile_t fire_ground={.width=1,.soil_depth=1,.surface=&fire_surface};
+    dc_level_view_t *view = play && !fire_demo ? dc_play_scene_create(directory,seed,err,sizeof(err)) :
+        fire_demo ? dc_level_view_create_ground(directory,seed,&fire_ground,err,sizeof(err)) :
         scene_path ? dc_prop_scene_create(directory,seed,scene_path,err,sizeof(err)) :
         (bonfire?dc_level_view_create_bonfire(directory,seed,err,sizeof(err)):
         (smoke_box?dc_level_view_create_smoke_box(directory,seed,err,sizeof(err)):dc_level_view_create(directory, seed, err, sizeof(err))));
     if (!view) { fprintf(stderr, "Level create: %s\n", err); return 1; }
-    if(play&&(!dc_level_view_pan_pixels(view,0,-INITIAL_CHUNK_Y*64)||
-        (fire_demo&&!dc_beaver_fire_configure(view,err,sizeof(err)))||
+    if(fire_demo&&(!dc_level_view_pan_pixels(view,0,-INITIAL_CHUNK_Y*64)||
+        !dc_beaver_fire_configure(view,err,sizeof(err))||
         !dc_level_view_wait_visible(view,120000,err,sizeof(err))||
-        !(fire_demo?dc_beaver_fire_setup(view,err,sizeof(err)):dc_players_enable(view,err,sizeof(err))))) {
+        !dc_beaver_fire_setup(view,err,sizeof(err)))) {
         fprintf(stderr,"Player setup: %s\n",err);dc_level_view_destroy(view,err,sizeof(err));return 1;
     }
     if (scene_path && !dc_prop_scene_load(view,scene_path,err,sizeof(err))) {

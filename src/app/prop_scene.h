@@ -9,6 +9,9 @@ dc_level_view_t *dc_prop_scene_create(const char *directory, uint64_t seed,
 
 /** Load one terrain asset centered on world chunk (0,0), without stepping physics. */
 bool dc_prop_scene_load(dc_level_view_t *view, const char *path, char *err, uint32_t cap);
+/** Open the normal play world and author the spawn clearing only on creation. */
+dc_level_view_t *dc_play_scene_create(const char *directory, uint64_t seed,
+                                      char *err, uint32_t cap);
 /** Exercise actual scene placement, brush editing, paused frames and physics in a window. */
 int dc_prop_scene_smoke(const char *path);
 

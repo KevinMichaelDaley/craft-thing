@@ -29,4 +29,7 @@ struct dc_level_view {
     uint32_t smoke_closed;
     bool gas_admitted[DC_GPU_CHUNK_SLOTS];
 };
+
+/** Dispose of an unpublished level during failed construction. */
+void dc_level_view_discard(dc_level_view_t *view);
 #endif
