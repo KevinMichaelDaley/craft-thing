@@ -39,3 +39,7 @@ Corrected validation audit: DC_VK_SYNC_VALIDATE is not recognized. With DC_VK_VA
 **2026-11-15T09:07:58Z**
 
 The large-body air brush gate (body_carve_tests ms<30) now measures 39-45 ms consistently on this machine, matching the 39 ms recorded on this ticket. Functional assertions (pixel count, mass conservation) all pass. The gate blocked the test: recipe chain at Makefile:780 during the ct-unkh verification run.
+
+**2026-11-26T21:43:01Z**
+
+The still-running full suite at 1d0fc902 measured 130.949 ms against the unchanged 30 ms large-body brush gate on the RTX A2000. The focused assertion reported exactly 36,051 remaining pixels and passed its mass check before the timing failure. Other Vulkan work was active, so this result needs an isolated timing comparison before attributing the latency to solver work.

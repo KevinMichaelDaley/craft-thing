@@ -22,6 +22,7 @@ typedef struct {
     uint64_t checksum;
 } player_inventory_save_t;
 
+enum { PLAYER_INVENTORY_VERSION = 1 };
 _Static_assert(sizeof(player_inventory_record_t) == 9u * sizeof(uint64_t), "Inventory record layout changed");
 
 static bool inventory_error(char *err, uint32_t cap, const char *message) {
@@ -36,7 +37,7 @@ static uint64_t inventory_checksum(const player_inventory_save_t *save) {
 static bool inventory_path(const dc_world_save_t *world, bool staging, char *path, size_t size) {
     const char *directory = dc_world_save_directory(world, staging);
     if (!directory) return false;
-    int length = snprintf(path, size, "%s/player_inventory.bin", directory);
+    int length = snprintf(path, size, "%s/" DC_WORLD_PLAYER_RECORD, directory);
     return length > 0 && (size_t)length < size;
 }
 
@@ -60,7 +61,7 @@ bool dc_player_inventory_load(const dc_world_save_t *world, fr_player_inventory_
     player_inventory_save_t save;
     bool okay = fread(&save, sizeof(save), 1, file) == 1 && fgetc(file) == EOF && !ferror(file);
     okay = fclose(file) == 0 && okay;
-    if (!okay || memcmp(save.magic, "DPI1", 4) != 0 || save.version != 1u ||
+    if (!okay || memcmp(save.magic, "DPI1", 4) != 0 || save.version != PLAYER_INVENTORY_VERSION ||
         save.checksum != inventory_checksum(&save))
         return inventory_error(err, cap, "Invalid player inventory snapshot");
     for (uint32_t n = 0; n < FR_INPUT_PLAYERS; ++n) {
@@ -80,7 +81,7 @@ bool dc_player_inventory_stage(const dc_world_save_t *world, const fr_player_inv
     char path[1024];
     if (!balances || !inventory_path(world, true, path, sizeof(path)))
         return inventory_error(err, cap, "Invalid player inventory staging path");
-    player_inventory_save_t save = {.magic = {'D','P','I','1'}, .version = 1u};
+    player_inventory_save_t save = {.magic = {'D','P','I','1'}, .version = PLAYER_INVENTORY_VERSION};
     for (uint32_t n = 0; n < FR_INPUT_PLAYERS; ++n) {
         save.players[n].owner = DC_PLAYER_TRANSACTION_BASE + n + 1u;
         save.players[n].inventory = balances[n];

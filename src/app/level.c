@@ -510,7 +510,7 @@ dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t see
                                     DC_GPU_CHUNK_SLOTS * 2u, ground);
     if (!view->stream) { error(err, cap, "Cannot start chunk streaming worker"); goto fail; }
     bonfire_startup_trace("stream worker",started);
-    int length = snprintf(view->body_path, sizeof(view->body_path), "%s/rigid_bodies.bin", directory);
+    int length = snprintf(view->body_path, sizeof(view->body_path), "%s/" DC_WORLD_BODY_RECORD, directory);
     if (length < 0 || (size_t)length >= sizeof(view->body_path)) {
         error(err, cap, "World directory path is too long"); goto fail;
     }
@@ -543,7 +543,7 @@ bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t 
     if (!dc_world_save_begin(view->save, err, cap)) return false;
     const char *staging = dc_world_save_directory(view->save, true);
     char body_path[sizeof(view->body_path)];
-    int length = snprintf(body_path, sizeof(body_path), "%s/rigid_bodies.bin", staging);
+    int length = snprintf(body_path, sizeof(body_path), "%s/" DC_WORLD_BODY_RECORD, staging);
     if (length < 0 || (size_t)length >= sizeof(body_path) || !dc_stream_stage(view->stream, staging))
         return error(err, cap, "Cannot stage player world saves");
     memcpy(view->body_path, body_path, (size_t)length + 1);

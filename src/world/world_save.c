@@ -12,6 +12,10 @@
 #include "dungeoncraft/world_save.h"
 
 enum { WORLD_DIRECTORY_LIMIT = 900, WORLD_PATH_CAP = 1024 };
+enum { CHUNK_PREFIX_LENGTH = sizeof("chunk_") - 1, CHUNK_COORD_LENGTH = 16,
+       CHUNK_SEPARATOR = CHUNK_PREFIX_LENGTH + CHUNK_COORD_LENGTH,
+       CHUNK_SUFFIX = CHUNK_SEPARATOR + 1 + CHUNK_COORD_LENGTH,
+       CHUNK_NAME_LENGTH = CHUNK_SUFFIX + sizeof(".bin") - 1 };
 static const char draft_name[] = ".level-save-draft";
 static const char committed_name[] = ".level-save-committed";
 static const char publish_name[] = ".level-save-publish";
@@ -34,13 +38,15 @@ static bool valid_file(const char *name, bool discard) {
     size_t length = strlen(name);
     if (discard && length > 4 && strcmp(name + length - 4, ".tmp") == 0)
         length -= 4;
-    if ((length == sizeof("rigid_bodies.bin") - 1 && strncmp(name, "rigid_bodies.bin", length) == 0) ||
-        (length == sizeof("player_inventory.bin") - 1 && strncmp(name, "player_inventory.bin", length) == 0))
+    if ((length == sizeof(DC_WORLD_BODY_RECORD) - 1 && strncmp(name, DC_WORLD_BODY_RECORD, length) == 0) ||
+        (length == sizeof(DC_WORLD_PLAYER_RECORD) - 1 && strncmp(name, DC_WORLD_PLAYER_RECORD, length) == 0))
         return true;
-    if (length != 43 || strncmp(name, "chunk_", 6) != 0 || name[22] != '_' ||
-        strncmp(name + 39, ".bin", 4) != 0) return false;
+    if (length != CHUNK_NAME_LENGTH || strncmp(name, "chunk_", CHUNK_PREFIX_LENGTH) != 0 ||
+        name[CHUNK_SEPARATOR] != '_' || strncmp(name + CHUNK_SUFFIX, ".bin", sizeof(".bin") - 1) != 0)
+        return false;
     const char *hex = "0123456789abcdef";
-    return strspn(name + 6, hex) == 16 && strspn(name + 23, hex) == 16;
+    return strspn(name + CHUNK_PREFIX_LENGTH, hex) == CHUNK_COORD_LENGTH &&
+           strspn(name + CHUNK_SEPARATOR + 1, hex) == CHUNK_COORD_LENGTH;
 }
 
 static bool sync_file(int directory, const char *name) {
@@ -78,8 +84,8 @@ static bool visit_files(int root, const char *subdirectory, file_action_t action
         switch (action) {
         case SYNC_FILES:
             okay = sync_file(source, name);
-            bodies |= strcmp(name, "rigid_bodies.bin") == 0;
-            inventory |= strcmp(name, "player_inventory.bin") == 0;
+            bodies |= strcmp(name, DC_WORLD_BODY_RECORD) == 0;
+            inventory |= strcmp(name, DC_WORLD_PLAYER_RECORD) == 0;
             break;
         case PUBLISH_FILES: okay = publish_file(source, root, name); break;
         case DISCARD_FILES: okay = unlinkat(source, name, 0) == 0; break;

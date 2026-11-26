@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define DC_WORLD_BODY_RECORD "rigid_bodies.bin"
+#define DC_WORLD_PLAYER_RECORD "player_inventory.bin"
+
 typedef struct dc_world_save dc_world_save_t;
 
 /** Open one writer and finish publishing any committed save before loading. */

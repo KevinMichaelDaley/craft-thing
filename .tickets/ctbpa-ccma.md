@@ -28,3 +28,7 @@ Two local players retain distinct exact balances through a completed save and re
 **2026-11-26T21:24:07Z**
 
 The native reproduction extends the existing authored tree harvest/reopen case in tests/app/play_spawn_tests.c. The added assertion compiled and failed on the reopened balance (0 versus 39,322 Q16) while the persisted cell was still air. Reproduction log is /tmp/craft-harvest-inventory-reload.log.
+
+**2026-11-26T21:43:01Z**
+
+The pre-fix native suite kept the cut terrain and lost the restored Q16 balance. The save now stages dirty chunks, the body checkpoint and a validated inventory record under the same world writer. It synchronizes the staged files and publishes the committed transaction with recovery on the next open if publication stops. The two-seat fixture verifies harvest, one paid terrain placement, a save with one seat absent and a rejoin on a different controller. Four visible play cases and four filesystem/inventory cases passed, including ASan/UBSan. The extra native precommit failure fixture and broad suite are running or queued.
