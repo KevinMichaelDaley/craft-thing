@@ -17,6 +17,7 @@
 #include "view_config.h"
 
 #define PLAYER_TRANSACTION UINT64_C(0x4245415600000000)
+enum { PLAYER_CAMERA_DEAD_ZONE = 8, PLAYER_CAMERA_MAX_PAN = 1024 };
 struct dc_player_session {
     fr_input_t input;
     fr_player_registry_t registry;
@@ -255,6 +256,37 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     }
     return handled;
 }
+
+static double player_view_axis(int64_t chunk, int64_t origin, int32_t position,
+                               uint32_t offset) {
+    /* Subtract before converting so large origins retain cell precision. */
+    double chunk_delta = chunk >= origin
+        ? (double)((uint64_t)chunk - (uint64_t)origin)
+        : -(double)((uint64_t)origin - (uint64_t)chunk);
+    return chunk_delta * DC_CHUNK_SIDE + position / 65536.0 - offset;
+}
+
+static int32_t player_camera_pan(double position, uint32_t extent) {
+    double delta = position - extent / 2u;
+    double distance = fabs(delta) - PLAYER_CAMERA_DEAD_ZONE;
+    if (distance <= 0.0) return 0;
+    return (int32_t)copysign(fmin(distance, PLAYER_CAMERA_MAX_PAN), delta);
+}
+
+static void players_follow_camera(dc_level_view_t *v) {
+    if (!dc_players_gameplay(v)) return;
+    uint32_t id = v->players->bodies[0].binding.body_id;
+    dc_gpu_world_body_t body;
+    if (!id || !dc_gpu_read_world_body(v->gpu, id, &body, NULL, 0)) return;
+    double x = player_view_axis(body.chunk.x, v->origin.x, body.body.x_fp,
+                                v->camera_offset_x);
+    double y = player_view_axis(body.chunk.y, v->origin.y, body.body.y_fp,
+                                v->camera_offset_y);
+    int32_t dx = player_camera_pan(x, v->gpu->view_width);
+    int32_t dy = player_camera_pan(y, v->gpu->view_height);
+    if (dx || dy) dc_level_view_pan_pixels(v, dx, dy);
+}
+
 bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     if(!v||!v->players||!isfinite(seconds)||seconds<=0||seconds>.25f) return false;
     struct dc_player_session *s=v->players;
@@ -359,23 +391,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
     s->sequence++;
     if(!fr_player_drive_gpu_submit(s->drive,drive,s->count,err,cap)||!players_publish(v,err,cap)) return false;
     if(s->split&&!split_refresh(v,err,cap)) return false;
-    /* The camera follows the keyboard player so walking never leaves the
-     * screen; panning shifts the streaming origin so chunks load in. */
-    if(dc_players_gameplay(v)) {
-        dc_gpu_world_body_t self;
-        if(s->bodies[0].binding.body_id&&
-           dc_gpu_read_world_body(v->gpu,s->bodies[0].binding.body_id,&self,err,cap)) {
-            float wx=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
-            float wy=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
-            int32_t vx=(int32_t)(wx-(float)v->origin.x*64.f)-(int32_t)v->camera_offset_x;
-            int32_t vy=(int32_t)(wy-(float)v->origin.y*64.f)-(int32_t)v->camera_offset_y;
-            int32_t dx=vx-(int32_t)(v->gpu->view_width/2u);
-            int32_t dy=vy-(int32_t)(v->gpu->view_height/2u);
-            if(dx<-8) dx+=8; else if(dx>8) dx-=8; else dx=0;
-            if(dy<-8) dy+=8; else if(dy>8) dy-=8; else dy=0;
-            if(dx||dy) dc_level_view_pan_pixels(v,dx,dy);
-        }
-    }
+    players_follow_camera(v);
     if(s->ray) {
         fr_fire_ray_input_t rays[FR_INPUT_PLAYERS];
         for(uint32_t n=0;n<s->count;n++) rays[n]=(fr_fire_ray_input_t){n+1,s->sequence,s->players[n].facing,s->cast_events[n].ability==s->fire};
@@ -434,14 +450,12 @@ static bool split_refresh(dc_level_view_t *v,char *err,uint32_t cap) {
         dc_gpu_world_body_t self;
         if(!dc_gpu_read_world_body(v->gpu,s->bodies[n].binding.body_id,&self,err,cap))
             continue;
-        float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f-
-            (float)v->origin.x*64.f-v->camera_offset_x;
-        float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f-
-            (float)v->origin.y*64.f-v->camera_offset_y;
-        uint32_t cx=px>(float)(view_w/2u)?(uint32_t)px-view_w/2u:0u;
-        uint32_t cy=py>(float)(view_h/2u)?(uint32_t)py-view_h/2u:0u;
-        if(cx>grid_w-view_w) cx=grid_w-view_w;
-        if(cy>grid_h-view_h) cy=grid_h-view_h;
+        double px=player_view_axis(self.chunk.x,v->origin.x,self.body.x_fp,
+                                   v->camera_offset_x);
+        double py=player_view_axis(self.chunk.y,v->origin.y,self.body.y_fp,
+                                   v->camera_offset_y);
+        uint32_t cx=(uint32_t)fmin(fmax(px-view_w/2u,0.0),grid_w-view_w);
+        uint32_t cy=(uint32_t)fmin(fmax(py-view_h/2u,0.0),grid_h-view_h);
         crops[active++]=(dc_presentation_focus_t){cx,cy,view_w,view_h};
     }
     if(active!=count) return players_error(err,cap,"Split screen needs every viewport player admitted");

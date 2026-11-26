@@ -24,3 +24,7 @@ Exercise movement, chunk transitions, editor camera controls, split-screen frami
 **2026-11-26T05:47:40Z**
 
 First stage separates editor/UI camera ownership from single-player gameplay follow and computes view-relative positions before converting from signed chunk coordinates. Split-screen viewport sizing, tracking and per-controller aim remain in scope.
+
+**2026-11-26T05:51:42Z**
+
+The live camera test reproduced editor drift and passes once gameplay alone drives camera follow. Published view positions now subtract signed world chunk origins before floating-point conversion. Split layout and reticle ownership remain under this ticket.
