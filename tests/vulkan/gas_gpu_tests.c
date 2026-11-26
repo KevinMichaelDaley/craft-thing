@@ -551,6 +551,7 @@ static void test_native_large_cfl_packet_matches_composed_oracle_in_one_step(voi
 #include "gas_practical_cases.h"
 #ifdef FR_GAS_PUBLICATION_TEST
 #include "gas_publication_cases.h"
+#include "gas_pressure_feedback_cases.h"
 #include "gas_multigrid_cases.h"
 #include "gas_geometry_cache_cases.h"
 #include "gas_pressure_noise_cases.h"
@@ -596,6 +597,8 @@ int main(void) {
 #ifdef FR_GAS_PUBLICATION_TEST
     RUN(test_native_rotated_bank_conducts_from_the_published_owner);
     RUN(test_native_publication_uses_one_submission_and_preserves_rejected_state);
+    RUN(test_native_publication_with_standalone_heat_uses_two_submissions);
+    RUN(test_native_practical_pressure_feedback_keeps_rejected_grain_force);
     RUN(test_native_tick_waits_its_fence_without_draining_presentation_queue);
     RUN(test_native_temporal_sor_matches_global_and_bounds_dispatches);
     RUN(test_native_multigrid_bounds_work_and_preserves_reference_flow);

@@ -107,7 +107,7 @@ static void test_native_rotated_bank_conducts_from_the_published_owner(void) {
     ASSERT_TRUE(regular_heat>1e-5&&rotated_heat>1e-5&&exact);
     PASS();
 }
-static void test_native_publication_uses_one_submission_and_preserves_rejected_state(void) {
+static void check_native_publication(bool coupled) {
     char err[256]={0};const char *old=getenv("DC_GAS_ROTATE_PUBLISH");char *saved=old?SDL_strdup(old):NULL;
     ASSERT_EQ(SDL_setenv("DC_GAS_ROTATE_PUBLISH","1",1),0);
     dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));fr_gas_state_t *input=malloc(4096*sizeof(*input)),*out=malloc(4096*sizeof(*out));
@@ -121,10 +121,12 @@ static void test_native_publication_uses_one_submission_and_preserves_rejected_s
     }
     ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,c,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_enable(g,&m,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err)));
+    if(coupled) ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_step(g,.01f,err,sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,input,4096,err,sizeof(err)));
     g_publication_submits=0;ASSERT_TRUE(fr_gas_gpu_step(g,.01f,err,sizeof(err)));
-    printf("Practical accepted publication submissions%u\n",g_publication_submits);ASSERT_EQ(g_publication_submits,1u);
+    printf("Practical accepted publication with coupled heat %u, submissions %u\n",coupled,g_publication_submits);
+    ASSERT_EQ(g_publication_submits,coupled?1u:2u);
     ASSERT_TRUE(fr_gas_gpu_read_chunk(g,0,out,4096,err,sizeof(err))&&memcmp(input,out,4096*sizeof(*out))!=0);
     memcpy(input,out,4096*sizeof(*out));fr_gas_gpu_clock_t before,after;ASSERT_TRUE(fr_gas_gpu_clock(g,&before));
     ASSERT_TRUE(!fr_gas_gpu_step(g,1e30f,err,sizeof(err)));err[0]=0;
@@ -137,7 +139,14 @@ static void test_native_publication_uses_one_submission_and_preserves_rejected_s
         ASSERT_TRUE(memcmp(input,out,4096*sizeof(*out))==0);
     }
     ASSERT_TRUE(present(g,err,sizeof(err)));free(c);free(input);free(out);free(volume);dc_gpu_destroy(g);
-    ASSERT_EQ(SDL_setenv("DC_GAS_ROTATE_PUBLISH",saved?saved:"0",1),0);SDL_free(saved);PASS();
+    ASSERT_EQ(saved?SDL_setenv("DC_GAS_ROTATE_PUBLISH",saved,1):unsetenv("DC_GAS_ROTATE_PUBLISH"),0);
+    SDL_free(saved);PASS();
+}
+static void test_native_publication_uses_one_submission_and_preserves_rejected_state(void) {
+    check_native_publication(true);
+}
+static void test_native_publication_with_standalone_heat_uses_two_submissions(void) {
+    check_native_publication(false);
 }
 static void test_native_tick_waits_its_fence_without_draining_presentation_queue(void) {
     char err[256]={0};dc_gpu_t *g=NULL;dc_chunk_t *c=calloc(1,sizeof(*c));ASSERT_TRUE(c);

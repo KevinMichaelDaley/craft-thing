@@ -1,6 +1,6 @@
 ---
 id: ctgp-mjc2
-status: open
+status: in_progress
 deps: []
 links: [ctsg-6060]
 created: 2026-11-26T19:10:19Z
@@ -28,3 +28,7 @@ Keep the existing one-submission check for the supported fused route and verify 
 **2026-11-26T19:23:32Z**
 
 The exact 9513f4f3 Vulkan publication run also reported 40/48 submissions with exact packets for full fused ticks, versus 8/16 expected. The fused geometry comparison fails the same submission gate. Trace the geometry and full-tick count separately while preserving the matching packets.
+
+**2026-11-26T20:12:29Z**
+
+Native Vulkan RED isolated the separate grain feedback command. A warm rotating publication used two submissions with coupled thermal and three with standalone conduction. The real grain fixture produced +0.199835166 horizontal force and preserved the sentinel on rejection, but submitted twice. The coupled fused-geometry fixture measured 16 versus 24 submissions across eight edits with exact packets, one excess submission per accepted interval. Keep its 8/16 gate.

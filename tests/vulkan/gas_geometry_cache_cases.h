@@ -12,6 +12,7 @@ static void test_native_fused_geometry_keeps_edited_stock_and_removes_completion
         for(uint32_t i=0;i<4096u;i++) {input[i]=reference_air(model,.0012,300,60);volume[i]=1.;}
         ASSERT_TRUE(context(&g,err,sizeof(err))&&dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err))&&dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
         ASSERT_TRUE(fr_gas_gpu_enable(g,&model,.0012,300,err,sizeof(err))&&fr_gas_gpu_set_pressure_policy(g,FR_GAS_PRESSURE_PRACTICAL,err,sizeof(err))&&fr_gas_gpu_seed_chunk(g,0,input,volume,4096,err,sizeof(err)));
+        ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_combustion_gpu_enable(g,err,sizeof(err)));
         chunk->coord.x=8;ASSERT_TRUE(dc_gpu_upload_chunk(g,1,chunk,err,sizeof(err))&&dc_gpu_set_page(g,8,0,1,err,sizeof(err)));
         for(uint32_t i=0;i<4096u;i++) input[i]=reference_air(model,.0012,300,.001);
         ASSERT_TRUE(fr_gas_gpu_seed_chunk(g,1,input,volume,4096,err,sizeof(err))&&fr_gas_gpu_export_checkpoint(g,1,quiet,err,sizeof(err)));
