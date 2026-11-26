@@ -27,4 +27,43 @@ static void test_gas_atomic_stream_preserves_private_stock_geometry_and_valves(v
     ASSERT_TRUE(dc_stream_request_load(s,c->coord,8)&&wait_result(s,&r));ASSERT_EQ(r.kind,DC_STREAM_LOADED);ASSERT_TRUE(!r.gas);dc_stream_result_release(&r);
     dc_stream_destroy(s);free(c);free(gas);free(expected);PASS();
 }
-int main(void) {RUN(test_gas_atomic_stream_preserves_private_stock_geometry_and_valves);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
+static void test_gas_stream_retains_pending_products_at_zero_volume(void) {
+    char directory[] = "build/gas_stream_pending_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_streamer_t *stream = dc_stream_create(directory, 123, 4);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_gas_checkpoint_chunk_t *gas = calloc(1, sizeof(*gas));
+    ASSERT_TRUE(stream && chunk && gas);
+    const uint32_t source = 1300u;
+    chunk->coord = (dc_chunk_coord_t){-3, 5};
+    chunk->cells[source] = (dc_cell_t){.material = DC_MATERIAL_WATER, .fluid_mass = DC_FLUID_FULL};
+    gas->cells[source][2] = .0014f;
+    gas->cells[source][4] = .0002f;
+    gas->cells[source][5] = 5.f;
+    gas->cells[source][9] = .0002f;
+    gas->cells[source][11] = 1e-9f;
+    gas->gates[source] = 1u;
+    ASSERT_TRUE(dc_stream_request_save_gas(stream, chunk, NULL, NULL, NULL, gas, 1));
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_stream_request_load(stream, chunk->coord, 2) && wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_TRUE(result.gas && memcmp(gas, result.gas, sizeof(*gas)) == 0);
+    ASSERT_EQ(result.chunk->cells[source].fluid_mass, DC_FLUID_FULL);
+    dc_stream_result_release(&result);
+    gas->cells[source][5] = gas->cells[source][11] = 0.f;
+    ASSERT_TRUE(!dc_stream_request_save_gas(stream, chunk, NULL, NULL, NULL, gas, 3));
+    dc_stream_destroy(stream);
+    free(gas);
+    free(chunk);
+    PASS();
+}
+
+int main(void) {
+    RUN(test_gas_atomic_stream_preserves_private_stock_geometry_and_valves);
+    RUN(test_gas_stream_retains_pending_products_at_zero_volume);
+    printf("%d passed, %d failed\n", g_pass, g_fail);
+    return g_fail != 0;
+}
