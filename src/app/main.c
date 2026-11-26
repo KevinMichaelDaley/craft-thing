@@ -1251,6 +1251,7 @@ int main(int argc, char **argv) {
     }
     printf("Propagated lighting: %s%s\n",lighting?"enabled":"disabled",
            lighting?"":" (enable with --lighting)");
+    fflush(stdout);
     if (demo_coupled &&
         (!dc_level_view_set_spring_enabled(view, false) ||
          !setup_coupled_materials(view, err, sizeof(err)))) {

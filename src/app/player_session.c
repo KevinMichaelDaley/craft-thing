@@ -145,6 +145,7 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
        !fr_player_hotbar_put_material(&s->hotbar[n],4u,DC_MATERIAL_WOOD)||
        !fr_input_add_player(&s->input,n+1)||!fr_input_connect(&s->input,device,n+1)||
        !fr_input_sdl_defaults(&s->input,device,device!=FR_INPUT_KEYBOARD_DEVICE)) return players_error(err,cap,"Cannot bind player input owner");
+    s->manipulation[n] = (fr_player_manipulation_t){.carry_weight=60., .throw_force=4., .reach=24.};
     s->device[n]=device;s->count++;
     fr_player_body_binding_t bindings[FR_INPUT_PLAYERS];
     for(uint32_t p=0;p<s->count;p++) bindings[p]=s->bodies[p].binding;
@@ -163,9 +164,15 @@ static void players_open(struct dc_player_session *s,int index) {
         s->controllers[n]=SDL_GameControllerOpen(index);return;
     }
 }
+static void players_release_carry(dc_level_view_t *v, uint32_t seat) {
+    fr_player_carry_t *carry = &v->players->carry[seat];
+    if (carry->body_id) fr_player_manipulation_drop(v->gpu, carry, NULL, 0u);
+}
+
 void dc_players_destroy(dc_level_view_t *v) {
     if(!v||!v->players) return;
     struct dc_player_session *s=v->players;
+    for (uint32_t n = 0; n < s->count; ++n) players_release_carry(v, n);
     fr_fire_ray_gpu_destroy(s->ray);
     fr_player_drive_gpu_destroy(s->drive);
     for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]) SDL_GameControllerClose(s->controllers[n]);
@@ -199,6 +206,7 @@ bool dc_players_enable(dc_level_view_t *v,char *err,uint32_t cap) {
         puts("R places one terrain cell and B places a rigid block at the aim using inventory. G grabs, E drops, and F throws.");
         puts("Controller Start joins. D-pad up/right/down/left selects slots 1-4, X casts the selected spell, and Y casts ice.");
         puts("The right shoulder places terrain and the left shoulder places a rigid block.");
+        puts("Click the right stick to grab, the left stick to throw, and press Back to drop.");
     }
     return true;
 }
@@ -228,17 +236,27 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
     if(!v||!v->players||!e) return false;
     struct dc_player_session *s=v->players;
     if(e->type==SDL_KEYDOWN&&e->key.keysym.scancode==SDL_SCANCODE_TAB) {
-        if(!e->key.repeat) {s->editor=!s->editor;dc_players_ui(v,false);}
+        if(!e->key.repeat) {
+            s->editor=!s->editor;
+            if (s->editor)
+                for (uint32_t n = 0; n < s->count; ++n) players_release_carry(v, n);
+            dc_players_ui(v,false);
+        }
         return true;
     }
     if(e->type==SDL_KEYDOWN&&e->key.keysym.scancode==SDL_SCANCODE_F2) return true;
     if(e->type==SDL_CONTROLLERDEVICEADDED) players_open(s,e->cdevice.which);
     if(e->type==SDL_CONTROLLERDEVICEREMOVED) {
-        for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cdevice.which) s->device[n]=INT64_MIN;
+        for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cdevice.which) {
+            players_release_carry(v, n);
+            s->device[n]=INT64_MIN;
+        }
         for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(s->controllers[n]&&SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(s->controllers[n]))==e->cdevice.which) {
             SDL_GameControllerClose(s->controllers[n]);s->controllers[n]=NULL;
         }
     }
+    if (e->type == SDL_WINDOWEVENT && e->window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+        for (uint32_t n = 0; n < s->count; ++n) players_release_carry(v, n);
     if(e->type==SDL_CONTROLLERBUTTONDOWN&&e->cbutton.button==SDL_CONTROLLER_BUTTON_START) {
         for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cbutton.which) return true;
         for(uint32_t n=1;n<s->count;n++) if(s->device[n]==INT64_MIN) {
@@ -372,11 +390,7 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
                 (unsigned long long)SDL_GetTicks64(),n+1,s->players[n].action,frame+1,
                 (unsigned long long)s->players[n].elapsed_ms,s->cast_events[n].ability,s->players[n].facing,s->ray!=NULL);fflush(stderr);
         }
-        if(!s->manipulation[n].carry_weight)
-            s->manipulation[n]=(fr_player_manipulation_t){.carry_weight=60.0,.throw_force=4.0,.reach=24.0};
         if(has_body) {
-            float px=(float)self.chunk.x*64.f+self.body.x_fp/65536.f;
-            float py=(float)self.chunk.y*64.f+self.body.y_fp/65536.f;
             /* Sandbox ability dispatch: the fire ability launches a burning
              * bolt and the ice ability casts a bounded storm at the target.
              * Ray-equipped demo scenes keep their beam behaviour. */
@@ -388,13 +402,17 @@ bool dc_players_step(dc_level_view_t *v,float seconds,char *err,uint32_t cap) {
                     fr_player_cast_ice_storm(v->gpu,&cast->target,6u,err,cap);
             }
             bool acted=false;
-            if(input.has_target&&(edges&(1u<<FR_INPUT_GRAB))) {fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
-            else if(edges&(1u<<FR_INPUT_DROP)) {fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);acted=true;}
-            else if(input.has_target&&(edges&(1u<<FR_INPUT_THROW))) {fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],px,py,&input.target,err,cap);acted=true;}
-            if(!acted&&!fr_player_manipulation_tick(v->gpu,&s->carry[n],px,py,err,cap)) return false;
+            if (!self.body.active) players_release_carry(v, n);
+            else if (input.has_target && (edges & (1u << FR_INPUT_GRAB)))
+                acted=fr_player_manipulation_grab(v->gpu,&s->carry[n],&s->manipulation[n],&self,&input.target,err,cap);
+            else if (edges & (1u << FR_INPUT_DROP))
+                acted=fr_player_manipulation_drop(v->gpu,&s->carry[n],err,cap);
+            else if (input.has_target && (edges & (1u << FR_INPUT_THROW)))
+                acted=fr_player_manipulation_throw(v->gpu,&s->carry[n],&s->manipulation[n],&input.target,err,cap);
+            if (!acted && !fr_player_manipulation_tick(v->gpu,&s->carry[n],&self)) return false;
             if (!players_place_item(v, &s->inventory[n], &input, &item, err, cap))
                 return false;
-        }
+        } else players_release_carry(v,n);
         drive[n]=(fr_player_drive_input_t){n+1,s->sequence+1,s->players[n].intent.move_x,s->players[n].intent.jump_pressed};
     }
     if(s->sequence==UINT64_MAX) return players_error(err,cap,"Player command sequence exhausted");

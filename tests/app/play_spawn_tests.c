@@ -1,6 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <math.h>
+#include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -36,23 +38,66 @@ static bool close_world(void) {
     return okay;
 }
 
+static bool wait_for_play_start(int output) {
+    static const char marker[] = "Propagated lighting:";
+    const uint64_t deadline = SDL_GetTicks64() + 300000u;
+    struct pollfd stream = {.fd = output, .events = POLLIN};
+    size_t matched = 0;
+    char text[1024];
+    while (SDL_GetTicks64() < deadline) {
+        int ready = poll(&stream, 1, 1000);
+        if (ready < 0 && errno != EINTR) return false;
+        if (ready <= 0) continue;
+        ssize_t bytes = read(output, text, sizeof(text));
+        if (bytes < 0 && errno == EINTR) continue;
+        if (bytes <= 0) return false;
+        fwrite(text, 1, (size_t)bytes, stdout);
+        for (ssize_t i = 0; i < bytes; ++i) {
+            if (text[i] == marker[matched]) {
+                if (++matched == sizeof(marker) - 1u) return true;
+            } else matched = text[i] == marker[0] ? 1u : 0u;
+        }
+    }
+    return false;
+}
+
 static bool launch_play(const char *directory) {
-    char capture[256];
-    int length = snprintf(capture, sizeof(capture), "%s/clearing.bmp", directory);
-    if (length < 0 || (size_t)length >= sizeof(capture)) return false;
+    int output[2];
+    if (pipe(output) != 0) return false;
     pid_t child = fork();
-    if (child < 0) return false;
+    if (child < 0) {
+        close(output[0]);
+        close(output[1]);
+        return false;
+    }
     if (!child) {
+        close(output[0]);
+        if (dup2(output[1], STDOUT_FILENO) < 0) _exit(126);
+        close(output[1]);
         execl("./build/dungeoncraft_quarter_native", "dungeoncraft_quarter_native",
-              "--play", "--world-dir", directory, "--benchmark-frames", "1",
-              "--benchmark-capture", capture, (char *)NULL);
+              "--play", "--world-dir", directory, (char *)NULL);
         _exit(127);
     }
+    close(output[1]);
+    bool ready = wait_for_play_start(output[0]);
+    bool stopped = kill(child, ready ? SIGTERM : SIGKILL) == 0;
+    if (ready && stopped) {
+        char text[1024];
+        ssize_t bytes;
+        do {
+            bytes = read(output[0], text, sizeof(text));
+            if (bytes > 0) fwrite(text, 1, (size_t)bytes, stdout);
+        } while (bytes > 0 || (bytes < 0 && errno == EINTR));
+    }
+    close(output[0]);
     int status;
     pid_t finished;
     do finished = waitpid(child, &status, 0);
     while (finished < 0 && errno == EINTR);
-    return finished == child && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    bool okay = ready && stopped && finished == child && WIFEXITED(status) &&
+                WEXITSTATUS(status) == 0;
+    if (!okay) snprintf(err, sizeof(err), "Normal play launch or graceful shutdown failed");
+    return okay;
 }
 
 static bool open_world(const char *directory) {
@@ -186,6 +231,9 @@ static void test_play_loads_authored_trees_and_preserves_harvest_and_rocks(void)
     key.key.keysym.scancode = SDL_SCANCODE_E;
     ASSERT_TRUE(dc_players_event(view,&key));
     ASSERT_TRUE(dc_players_step(view,1.f/60.f,err,sizeof(err)));
+    dc_gpu_body_motion_t motion;
+    ASSERT_TRUE(dc_gpu_read_body_motion(gpu,original[0],&motion,err,sizeof(err)));
+    ASSERT_TRUE(!(motion.flags & DC_GPU_BODY_KINEMATIC));
     ASSERT_TRUE(dc_gpu_remove_body(gpu, original[1], err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_step(view, err, sizeof(err)) && dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_TRUE(close_world());

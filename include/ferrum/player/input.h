@@ -5,7 +5,7 @@
 
 #define FR_INPUT_PLAYERS 4u
 #define FR_INPUT_DEVICES 8u
-#define FR_INPUT_BINDINGS 64u
+#define FR_INPUT_BINDINGS 80u
 #define FR_INPUT_ACTIONS 32u
 
 typedef enum {

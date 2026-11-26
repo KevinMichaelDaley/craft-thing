@@ -43,7 +43,10 @@ bool fr_input_sdl_defaults(fr_input_t *i,int64_t d,bool controller) {
         {SDL_CONTROLLER_BUTTON_DPAD_DOWN,FR_INPUT_SLOT_3,1},
         {SDL_CONTROLLER_BUTTON_DPAD_LEFT,FR_INPUT_SLOT_4,1},
         {SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,FR_INPUT_PLACE,1},
-        {SDL_CONTROLLER_BUTTON_LEFTSHOULDER,FR_INPUT_BUILD,1}
+        {SDL_CONTROLLER_BUTTON_LEFTSHOULDER,FR_INPUT_BUILD,1},
+        {SDL_CONTROLLER_BUTTON_RIGHTSTICK,FR_INPUT_GRAB,1},
+        {SDL_CONTROLLER_BUTTON_BACK,FR_INPUT_DROP,1},
+        {SDL_CONTROLLER_BUTTON_LEFTSTICK,FR_INPUT_THROW,1}
     };
     unsigned count=controller?sizeof(pad)/sizeof(pad[0]):sizeof(keys)/sizeof(keys[0]);
     fr_input_t next=*i;
