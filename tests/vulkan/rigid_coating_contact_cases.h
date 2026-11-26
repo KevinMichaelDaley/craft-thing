@@ -17,8 +17,15 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     uint32_t *objects = calloc(object_cells, sizeof(*objects));
     ASSERT_TRUE(chunk && objects && context(&g, err, sizeof(err)));
+    /* Isothermal solid surroundings keep combustion and heat flux out of
+     * the mass-transfer check while still allowing rigid face contacts. */
+    const float temperature = 293.15f;
+    for (uint32_t row = y - 1u; row <= y + 1u; row++)
+        for (uint32_t column = x - 1u; column <= x + count; column++)
+            chunk->cells[row * DC_CHUNK_SIDE + column] = (dc_cell_t){
+                .material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
     for (uint32_t i = 0; i < count; i++) {
-        chunk->cells[first + i].material = DC_MATERIAL_WOOD;
+        chunk->cells[first + i] = (dc_cell_t){.material = DC_MATERIAL_WOOD};
         objects[first + i] = 1u + i;
     }
     ASSERT_TRUE(dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)) &&
@@ -27,7 +34,6 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
     uint32_t expected[3][3] = {{0}};
     double expected_heat[3] = {0.};
     for (uint32_t i = 0; i < count; i++) {
-        float temperature = 500.f + 30.f * i;
         ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD, 39322u, 0u, temperature,
                                               600300u + i, &before[i], err, sizeof(err)));
         if (destinations[i] >= 0) {
@@ -53,7 +59,7 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
             expected[i][species] -= share[species];
             expected[destinations[i]][species] += share[species];
         }
-        double heat = contact_film_heat(share, 500. + 30. * i);
+        double heat = contact_film_heat(share, temperature);
         expected_heat[i] -= heat;
         expected_heat[destinations[i]] += heat;
     }
@@ -62,7 +68,7 @@ static void check_rigid_coating_contacts(uint32_t count, const int destinations[
     ASSERT_TRUE(fr_thermal_gpu_enable(g, err, sizeof(err)) &&
                 fr_gas_gpu_enable(g, &model, .0012f, 293.15f, err, sizeof(err)) &&
                 fr_combustion_gpu_enable(g, err, sizeof(err)) &&
-                fr_combustion_gpu_step(g, 1e-7f, err, sizeof(err)));
+                fr_combustion_gpu_step(g, 1.f, err, sizeof(err)));
     uint32_t seen = 0u;
     for (uint32_t probe = 0; probe < count; probe++) {
         fr_reactive_record_t result;

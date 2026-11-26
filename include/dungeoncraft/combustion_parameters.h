@@ -28,6 +28,8 @@
 #define FR_COMBUSTION_RIGID_COATING_PUBLISH 19u
 /* Three GPU-owned dispatch dimensions following the sample contact flag. */
 #define FR_COMBUSTION_RIGID_COATING_DISPATCH_WORD 188u
+/* Sustained contact releases one quarter of the remaining film in one second. */
+#define FR_COMBUSTION_RIGID_ADHESION_RATE 0.2876820724517809
 /* Wood rot: one exposure unit per simulated month of partial immersion;
  * each spent stage converts this much fuel to inert rot residue. */
 #define FR_ROT_EXPOSURE_PER_SECOND (1.0/2628000.0)

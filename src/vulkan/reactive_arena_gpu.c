@@ -54,6 +54,7 @@ bool fr_reactive_arena_create(dc_gpu_t *g,uint32_t initial,fr_reactive_arena_gpu
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) goto fail;
     transfer_barrier(g);vkCmdFillBuffer(g->command,a.free_bits.buffer,0,a.free_bits.bytes,UINT32_MAX);
     vkCmdFillBuffer(g->command,a.thermal_scratch.buffer,0,a.thermal_scratch.bytes,0);
+    vkCmdFillBuffer(g->command,a.rigid_coating.buffer,0,a.rigid_coating.bytes,0);
     if(a.capacity%32u) {
         fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);
@@ -89,6 +90,9 @@ static bool grow_entries(dc_gpu_t *g,fr_reactive_arena_gpu_t *a,uint32_t require
     vkCmdFillBuffer(g->command,scratch.buffer,0,scratch.bytes,0);
     VkBufferCopy region={0,0,a->entries.bytes};vkCmdCopyBuffer(g->command,a->entries.buffer,entries.buffer,1,&region);
     region.size=a->free_bits.bytes;vkCmdCopyBuffer(g->command,a->free_bits.buffer,bits.buffer,1,&region);
+    region.size=a->rigid_coating.bytes;
+    vkCmdCopyBuffer(g->command,a->rigid_coating.buffer,coating.buffer,1,&region);
+    vkCmdFillBuffer(g->command,coating.buffer,region.size,coating.bytes-region.size,0);
     if(bits.bytes>a->free_bits.bytes)
         vkCmdFillBuffer(g->command,bits.buffer,a->free_bits.bytes,bits.bytes-a->free_bits.bytes,UINT32_MAX);
     if(next%32u) {
