@@ -303,6 +303,28 @@ static void test_submerged_rigid_coating_burns_from_bound_oxidizer(void) {
         ASSERT_EQ(chunk->cells[neighbors[i]].fluid_mass,DC_FLUID_FULL);
     }
     ASSERT_TRUE(products>0.);
+    const uint32_t spent = wood.coating_oil_fuel_fp - result.state.coating_oil_fuel_fp +
+                           wood.coating_jelly_fuel_fp - result.state.coating_jelly_fuel_fp +
+                           wood.coating_oxidizer_fp - result.state.coating_oxidizer_fp;
+    const uint32_t ash = result.state.inert_mass_fp - wood.inert_mass_fp;
+    ASSERT_TRUE(fabs(products * DC_FLUID_FULL - (spent - ash)) < .001);
+    ASSERT_EQ(result.state.bound_water_fp, wood.bound_water_fp);
+    fr_gas_checkpoint_chunk_t *checkpoint = malloc(sizeof(*checkpoint));
+    ASSERT_TRUE(checkpoint && fr_gas_gpu_export_checkpoint(g, 0, checkpoint, err, sizeof(err)) &&
+                fr_gas_gpu_import_checkpoint(g, 0, checkpoint, err, sizeof(err)) &&
+                fr_gas_gpu_set_pressure_policy(g, FR_GAS_PRESSURE_PRACTICAL, err, sizeof(err)) &&
+                fr_gas_gpu_step(g, .02f, err, sizeof(err)) &&
+                fr_gas_gpu_read_chunk(g, 0, gas, DC_CHUNK_CELLS, err, sizeof(err)) &&
+                dc_gpu_download_chunk(g, 0, chunk, err, sizeof(err)));
+    double transported = 0.;
+    uint64_t water = 0u;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        transported += gas[i].species[FR_GAS_EXHAUST] + gas[i].species[FR_GAS_SOOT];
+        water += chunk->cells[i].fluid_mass;
+    }
+    ASSERT_TRUE(fabs(transported - products) < 1e-6);
+    ASSERT_EQ(water, UINT64_C(4) * DC_FLUID_FULL);
+    free(checkpoint);
     free(gas);free(chunk);dc_gpu_destroy(g);PASS();
 }
 int main(void) {

@@ -2285,11 +2285,11 @@ build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl inclu
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_burn.glsl
 build/shaders/body_combustion.comp.spv build/shaders/structural.comp.spv: include/dungeoncraft/corrosion_parameters.h
 build/combustion_gpu_display_tests: build/shaders/combustion.comp.spv
-build/combustion_gpu_display_tests: $(RENDERER_SHADERS)
 build/combustion_gpu_display_tests: tests/vulkan/combustion_containment_cases.h
 build/combustion_gpu_display_tests: tests/vulkan/combustion_contact_cases.h
 build/combustion_gpu_display_tests: src/app/bonfire_scene.c
 build/combustion_gpu_display_tests: tests/vulkan/combustion_oxygen_cases.h
+build/combustion_gpu_display_tests: tests/vulkan/combustion_submerged_cases.h
 build/component_admission_tests: tests/vulkan/component_admission_tests.c tests/vulkan/body_ash_cases.h tests/vulkan/constructed_heat_cases.h $(GPU_OBJ) $(CHUNK_OBJ) $(REACTIVE_STATE_SRC) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/bonfire_mechanics_tests: tests/vulkan/bonfire_mechanics_tests.c $(THERMAL_BENCH_SRC) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
@@ -2313,6 +2313,12 @@ build/combustion_body_feedback_display_tests: tests/vulkan/combustion_body_feedb
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/combustion_body_feedback_tests: tests/vulkan/combustion_body_feedback_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests build/combustion_body_feedback_tests: build/diagnostics/body_storage_init.spv build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv $(RIGID_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_COMPONENT_SHADER) $(RENDERER_SHADERS)
+.PHONY: test_submerged_coating
+test_submerged_coating: build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests
+	./build/combustion_gpu_display_tests --greek-submerged
+	DC_GREEK_BODY_ONLY=1 ./build/combustion_body_feedback_display_tests
+test: test_submerged_coating
 build/revolute_display_tests: tests/vulkan/revolute_tests.c tests/vulkan/rigid_solver_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(SOLVER_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REVOLUTE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/authored_rigid_display_tests: tests/vulkan/authored_rigid_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS)
