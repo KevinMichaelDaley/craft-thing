@@ -1577,7 +1577,10 @@ test: build/carve_work_tests
 build/diagnostics/carve_union_probe.spv: tests/vulkan/carve_union_probe.comp shaders/sim/carve_union_links.glsl
 	@mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
-build/carve_union_tests: tests/vulkan/carve_union_tests.c tools/diagnostics/vulkan_probe.c build/diagnostics/carve_union_probe.spv
+build/diagnostics/carve_union_tile_probe.spv: tests/vulkan/carve_union_tile_probe.comp shaders/sim/carve_union.glsl shaders/sim/carve_union_links.glsl
+	@mkdir -p build/diagnostics
+	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
+build/carve_union_tests: tests/vulkan/carve_union_tests.c tools/diagnostics/vulkan_probe.c build/diagnostics/carve_union_probe.spv build/diagnostics/carve_union_tile_probe.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDLIBS)
 .PHONY: test_carve_union
 test_carve_union: build/carve_union_tests

@@ -1,0 +1,60 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+layout(local_size_x=128) in;
+struct Fixture {
+    uint labels[1024],queue[1024],counts[6],requests[32];
+    uint material[2];
+    ivec2 low[2],high[2];
+    uint size[2];
+};
+layout(set=0,binding=0,std430) buffer Probe {uint results[14];Fixture cases[2];};
+#define FIXTURE cases[gl_WorkGroupID.x]
+#define DC_STRUCTURAL_LANES 128u
+#define DC_FRAGMENT_LABEL(pixel) FIXTURE.labels[pixel]
+#define DC_FRAGMENT_QUEUE(pixel) FIXTURE.queue[pixel]
+#define DC_RUNTIME_REQUEST(i) FIXTURE.requests[i]
+#define PF_MATERIAL(i) FIXTURE.material[i]
+#define PF_LOW(i) FIXTURE.low[i]
+#define PF_HIGH(i) FIXTURE.high[i]
+#define PF_COUNT(i) FIXTURE.size[i]
+#define DC_CARVE_WORK_PROFILE 1
+#define carve_work_profile FIXTURE.counts
+const uint LEAF_RESERVATION=0x80000000u;
+const uint BODY_CAPACITY=2u;
+shared uint pc_count,pc_available;
+shared ivec2 pc_lows[DC_STRUCTURAL_LANES],pc_highs[DC_STRUCTURAL_LANES];
+struct Body {uint width,height;};
+
+uint piece_material(Body body,uint pixel) {return 1u;}
+ivec2 pixel_piece_cell(Body body,uint pixel) {
+    uint tile=pixel/256u;
+    return ivec2(tile%2u,tile/2u)*16+ivec2(pixel%16u,(pixel%256u)/16u);
+}
+uint carve_neighbor_piece(Body body,uint piece,ivec2 delta,ivec2 cell) {
+    uvec2 p=uvec2(cell);
+    return (p.x/16u+2u*(p.y/16u))*256u+p.x%16u+16u*(p.y%16u);
+}
+
+#include "../../shaders/sim/carve_union.glsl"
+
+void main() {
+    uint lane=gl_LocalInvocationIndex,scenario=gl_WorkGroupID.x;
+    if(lane==0u) {pc_available=2u;carve_work_profile[5]=0u;}
+    for(uint pixel=lane;pixel<1024u;pixel+=DC_STRUCTURAL_LANES) {
+        bool present=(pixel<256u||pixel>=768u)&&!(scenario==1u&&pixel==255u);
+        DC_FRAGMENT_LABEL(pixel)=present?0u:0xffffffffu;
+    }
+    memoryBarrierBuffer();barrier();
+    bool success=carve_union_components(Body(32u,32u),1024u);
+    if(lane==0u) {
+        uint output_base=scenario*7u;
+        results[output_base]=uint(success);
+        results[output_base+1u]=pc_count;
+        results[output_base+2u]=carve_work_profile[5];
+        results[output_base+3u]=PF_COUNT(0);
+        results[output_base+4u]=pc_count==2u?PF_COUNT(1):0u;
+        results[output_base+5u]=DC_FRAGMENT_LABEL(0u);
+        results[output_base+6u]=DC_FRAGMENT_LABEL(768u);
+    }
+}

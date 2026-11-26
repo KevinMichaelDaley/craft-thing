@@ -47,3 +47,7 @@ The still-running full suite at 1d0fc902 measured 130.949 ms against the unchang
 **2026-11-26T21:51:16Z**
 
 The 1d0fc902 make test process exited 2 after body_carve_tests reported 10 passed and two timing failures. In addition to the 130.949 ms large cut, the warm miss exceeded 3 ms while still using one GPU submission. An exact source probe with separate host recording, queue, GPU carve and GPU terrain timings compiled and is queued behind the paired thermal run. The masked work counter diagnostic is also queued.
+
+**2026-11-26T22:02:36Z**
+
+RED on native Vulkan: two 16x16 solid tiles with a single diagonal seam remain one 512-pixel component, then split into 255 and 256 when that seam is removed. The intact case traverses 1,861 union edges against a bound of one actual inter-tile edge. A colored 36,051-pixel workload counter and an exact end-to-end seam fixture are also in the regression.
