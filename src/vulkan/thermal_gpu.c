@@ -15,7 +15,10 @@
 #include "runtime_body_internal.h"
 
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds);
-enum { THERMAL_SPRITE_ADDRESS_WORD = 10, THERMAL_PUSH_WORDS = 12 };
+enum {
+    THERMAL_SPRITE_ADDRESS_WORD = 10, THERMAL_PUSH_WORDS = 12,
+    COMBUSTION_SPRITE_ADDRESS_WORD = 18, COMBUSTION_PUSH_WORDS = 20
+};
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->gas) {
         if(err&&cap) snprintf(err,cap,"Combustion requires existing thermal and gas owners");
@@ -36,8 +39,9 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
         {t->emission.buffer,0,t->emission.bytes},{t->fluxes.buffer,0,t->fluxes.bytes},{t->hud.buffer,0,t->hud.bytes},
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE},
         {t->water.buffer,0,t->water.bytes},{t->radiation_scratch.buffer,0,t->radiation_scratch.bytes}};
-    bool okay=fr_renderer_compute_init(g,&t->combustion,buffers,15,80,"build/shaders/combustion.comp.spv",err,cap)&&
-        fr_renderer_compute_init(g,&t->body_combustion,buffers,15,80,"build/shaders/body_combustion.comp.spv",err,cap)&&fr_renderer_begin(g);
+    uint32_t push_bytes=COMBUSTION_PUSH_WORDS*sizeof(uint32_t);
+    bool okay=fr_renderer_compute_init(g,&t->combustion,buffers,15,push_bytes,"build/shaders/combustion.comp.spv",err,cap)&&
+        fr_renderer_compute_init(g,&t->body_combustion,buffers,15,push_bytes,"build/shaders/body_combustion.comp.spv",err,cap)&&fr_renderer_begin(g);
     if(okay) {
         vkCmdFillBuffer(g->command,t->emission.buffer,0,t->emission.bytes,0);
         fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -110,11 +114,11 @@ bool fr_combustion_clear_emission_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint
 static void record_combustion(dc_gpu_t *g,float seconds,uint32_t mode) {
     if(!g||!g->thermal||!g->thermal->combustion.pipeline||!g->gas||(mode==0u&&seconds<=0)) return;
     struct fr_thermal_gpu *t=g->thermal;struct fr_gas_gpu *gas=g->gas;
-    uint32_t push[20]={g->width,g->height,0,gas->sparse_owners?1u:0u};memcpy(push+2,&seconds,4);
+    uint32_t push[COMBUSTION_PUSH_WORDS]={g->width,g->height,0,gas->sparse_owners?1u:0u};memcpy(push+2,&seconds,4);
     push[16]=dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS;
     push[17]=g->page_width;
     VkDeviceAddress sprites=fr_renderer_sprites_address(g);
-    memcpy(push+18,&sprites,sizeof(sprites));
+    memcpy(push+COMBUSTION_SPRITE_ADDRESS_WORD,&sprites,sizeof(sprites));
     VkDeviceAddress addresses[4]={gas->state[gas->direct_publish?1u:0u].address,
         gas->state[2].address,gas->gates.address,gas->parameters.address};
     memcpy(push+4,addresses,sizeof(addresses));

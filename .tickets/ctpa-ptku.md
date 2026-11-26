@@ -32,3 +32,7 @@ Wetting substage. RED 29c805d6 reproduced a dry owner when water touched the dis
 **2026-11-26T11:50:58Z**
 
 The combined sandbox regression passed 3/3 on the wetting revision, including the authored clearing, legacy gasless save migration, and exact heated fur and gas checkpoint reload. The strict main suite stopped at the independent split desktop capture check under ct-d7q8.
+
+**2026-11-26T12:22:12Z**
+
+Heat-transfer substage. RED 46269073 reproduced zero heat transfer to the displaced fur and a missed probe on the live walking robe. GREEN 171c4e02 samples and deposits through the same projected parcel contacts. The final Vulkan runs pass 3/3 body and 6/6 live player cases. The source debit and owner gain matched at 33.713882 with the normal pose and within 0.000001 at 32.846755 after mirroring to the hat. The robe warms at its displayed pixel while the second player retains its starting energy. The thermal display, water, sprite, and sandbox suites passed at GREEN alongside player/reactive CPU tests. The refactor build and SPIR-V validation pass. Atmospheric oxygen selection, reaction placement, and live singeing across poses remain open. The strict full run for this branch is queued behind the two previous pinned revisions.

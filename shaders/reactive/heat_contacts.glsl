@@ -1,4 +1,5 @@
-/* A rotated unit cell spans fewer than two local units on either axis. */
+/* A rotated unit cell spans fewer than two local units per axis and can
+ * therefore overlap at most a three-by-three set of texels. */
 const uint FR_HEAT_CONTACTS = 9u;
 struct HeatContacts {
     uint count;
@@ -22,13 +23,13 @@ void fr_prepare_heat_poses() {
     uint n=gl_LocalInvocationID.x;
     if(n<count) {
         ContactSprites sprites=ContactSprites(params.sprite_address);
-        uint pose=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS;
+        uint pose=fr_sprite_pose_word(n);
         uint slot=runtime_body_find(sprites.words[pose]);
         heat_pose_slots[n]=BODY_CAPACITY;
         if(slot<BODY_CAPACITY&&DC_BODY_OWNER(runtime_body_root,slot).generation==sprites.words[pose+1u]) {
             Body body=DC_BODY(slot);
             if(body.enabled!=0u&&pixel_body(body)) {
-                vec2 local_low=-vec2(ivec2(sprites.words[pose+8u],sprites.words[pose+9u]));
+                vec2 local_low=-fr_sprite_pose_crop(sprites,pose);
                 vec2 local_high=local_low+vec2(sprites.words[pose+3u],sprites.words[pose+4u]);
                 vec2 origin=vec2(body.x_fp,body.y_fp)/65536.+body.center;
                 vec2 low=vec2(1e20),high=vec2(-1e20);
@@ -86,10 +87,11 @@ void fr_posed_heat_contacts(ivec2 cell,uint n,inout HeatContacts contacts) {
     if(any(lessThan(vec2(cell),bounds.xy))||any(greaterThanEqual(vec2(cell),bounds.zw))) return;
     Body body=heat_pose_bodies[n];
     ContactSprites sprites=ContactSprites(params.sprite_address);
-    uint pose=DC_SPRITE_HEADER_WORDS+n*DC_SPRITE_POSE_WORDS;
+    uint pose=fr_sprite_pose_word(n);
     ivec2 size=ivec2(sprites.words[pose+3u],sprites.words[pose+4u]);
-    ivec2 rest_origin=ivec2(sprites.words[pose+6u],sprites.words[pose+7u]);
-    vec2 crop=vec2(ivec2(sprites.words[pose+8u],sprites.words[pose+9u]));
+    uvec2 rest_origin=uvec2(sprites.words[pose+6u],sprites.words[pose+7u]);
+    if(any(greaterThanEqual(rest_origin,uvec2(DC_SPRITE_SOURCE_SIDE)))) return;
+    vec2 crop=fr_sprite_pose_crop(sprites,pose);
     vec2 local=body_local_point(body,vec2(cell)+.5-vec2(body.x_fp,body.y_fp)/65536.)+crop;
     float extent=.5*(abs(cos(body.angle))+abs(sin(body.angle)));
     ivec2 low=clamp(ivec2(floor(local-extent)),ivec2(0),size);
@@ -101,11 +103,11 @@ void fr_posed_heat_contacts(ivec2 cell,uint n,inout HeatContacts contacts) {
         uint texel=uint(y*size.x+art_x);
         uint source=sprites.words[frame+2u*texel+1u];
         if(source==0u||source>DC_SPRITE_SOURCE_COUNT||sprites.words[inverse+source-1u]!=texel+1u) continue;
-        ivec2 rest=ivec2((source-1u)%DC_SPRITE_SOURCE_SIDE,(source-1u)/DC_SPRITE_SOURCE_SIDE)-rest_origin;
+        ivec2 rest=ivec2((source-1u)%DC_SPRITE_SOURCE_SIDE,(source-1u)/DC_SPRITE_SOURCE_SIDE)-ivec2(rest_origin);
         uint piece=pixel_piece_at(body,rest);
         if(pixel_piece_material(body,piece)==0u) continue;
         Body contact=body;
-        if(fr_body_project_contact(params.sprite_address,pose,piece,contact))
+        if(fr_body_project_texel(rest,vec2(x,y)-crop,contact))
             fr_append_heat_contact(contact,slot,piece,cell,contacts);
     }
 }
