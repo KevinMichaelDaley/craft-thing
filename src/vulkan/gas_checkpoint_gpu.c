@@ -74,7 +74,12 @@ static fr_gas_state_t unpack(const gas_packet_t *packet) {
     s.species[FR_GAS_EXHAUST]+=p[FR_GAS_EXHAUST_TAIL_WORD];
     s.species[FR_GAS_SOOT]+=p[FR_GAS_SOOT_TAIL_WORD];
     s.energy=(double)p[5]+p[11]+p[14];s.momentum[0]=p[6];s.momentum[1]=p[7];
-    for(uint32_t i=0;i<3;i++) s.pigment[i]=p[8+i];
+    double carrier=s.species[FR_GAS_EXHAUST]+s.species[FR_GAS_SOOT];
+    for(uint32_t i=0;i<3;i++) {
+        float pigment=p[8+i];
+        /* A saturated float may round above the compensated carrier. */
+        s.pigment[i]=pigment>carrier&&isfinite(pigment)&&pigment==(float)carrier?carrier:pigment;
+    }
     return s;
 }
 static bool import_thermodynamics(const fr_gas_model_t *model,const fr_gas_state_t *state,
