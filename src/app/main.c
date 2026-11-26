@@ -47,11 +47,9 @@ static bool save_level_bmp(const char *path, const uint32_t *pixels) {
 
 static bool paint_held(dc_level_view_t *view, uint16_t material,
                        char *err, uint32_t cap) {
-    int mx, my;
-    uint32_t buttons = SDL_GetMouseState(&mx, &my);
-    uint32_t x, y;
-    if (mx < 0 || my < 0 ||
-        !dc_level_view_screen_cell(view, (uint32_t)mx, (uint32_t)my, &x, &y))
+    uint32_t mx, my, buttons, x, y;
+    if (!dc_level_view_pointer(view, &mx, &my, &buttons) ||
+        !dc_level_view_screen_cell(view, mx, my, &x, &y))
         return true;
     if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT))
         return dc_level_view_paint(view, x, y, BRUSH_RADIUS, material, err, cap);
@@ -588,7 +586,7 @@ static int smoke_moving_water_long(void) {
     for (uint32_t tick = 1; tick <= TEN_SECONDS && okay; ++tick) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type != SDL_KEYDOWN) continue;
+            if (event.type != SDL_KEYDOWN || !dc_level_view_accepts_event(view, &event)) continue;
             switch (event.key.keysym.sym) {
             case SDLK_0: material = DC_MATERIAL_AIR; break;
             case SDLK_1: material = DC_MATERIAL_STONE; break;
@@ -1042,6 +1040,11 @@ static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
 
 static bool pan_held_keys(dc_level_view_t *view, double elapsed,
                           double *carry_x, double *carry_y) {
+    if (!dc_level_view_has_keyboard(view)) {
+        *carry_x = 0.;
+        *carry_y = 0.;
+        return true;
+    }
     const uint8_t *keys = SDL_GetKeyboardState(NULL);
     int32_t horizontal = (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D]) -
                          (keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_A]);
@@ -1319,6 +1322,7 @@ int main(int argc, char **argv) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             input_events++;
+            if (!dc_level_view_accepts_event(view, &event)) continue;
             if(play) {
                 dc_players_ui(view,entering_seed||paused);
                 if(dc_players_event(view,&event)) continue;
@@ -1444,12 +1448,9 @@ int main(int argc, char **argv) {
                     printf("Spring %s\n", spring_enabled ? "on" : "off");
                     break;
                 case SDLK_b: {
-                    int mx, my;
-                    SDL_GetMouseState(&mx, &my);
-                    uint32_t x = VIEW_WIDTH / 2, y = 4;
-                    if (mx >= 0 && my >= 0)
-                        dc_level_view_screen_cell(view, (uint32_t)mx,
-                                                  (uint32_t)my, &x, &y);
+                    uint32_t mx, my, x = VIEW_WIDTH / 2, y = 4;
+                    if (dc_level_view_pointer(view, &mx, &my, NULL))
+                        dc_level_view_screen_cell(view, mx, my, &x, &y);
                     if (x > VIEW_WIDTH - 4) x = VIEW_WIDTH - 4;
                     if (y > VIEW_HEIGHT - 4) y = VIEW_HEIGHT - 4;
                     if (!dc_level_view_spawn_body(view, x, y, err, sizeof(err))) {
@@ -1497,9 +1498,11 @@ int main(int argc, char **argv) {
         uint64_t prepare_done=benchmark_timings?SDL_GetPerformanceCounter():0;
         bool probing=false;
         if(heat_bench||bonfire) {
-            int mx=0,my=0;uint32_t x=0,y=0,buttons=SDL_GetMouseState(&mx,&my);
-            bool inside=mx>=0&&my>=0&&dc_level_view_screen_cell(view,(uint32_t)mx,(uint32_t)my,&x,&y);
-            probing=inside&&SDL_GetKeyboardState(NULL)[SDL_SCANCODE_H]&&(buttons&SDL_BUTTON(SDL_BUTTON_LEFT));
+            uint32_t mx,my,x=0,y=0,buttons;
+            bool inside=dc_level_view_pointer(view,&mx,&my,&buttons)&&
+                dc_level_view_screen_cell(view,mx,my,&x,&y);
+            probing=inside&&dc_level_view_has_keyboard(view)&&
+                SDL_GetKeyboardState(NULL)[SDL_SCANCODE_H]&&(buttons&SDL_BUTTON(SDL_BUTTON_LEFT));
             if(heat_setting) {x=benchmark_heat.x;y=benchmark_heat.y;inside=true;probing=true;}
             if(!dc_level_view_heat_probe(view,inside?x:0u,inside?y:0u,probing)) {failed=true;running=false;}
             if(heat_setting&&scripted_frame==0u) printf("Finite benchmark ignition probe held at %u,%u\n",x,y);

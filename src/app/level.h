@@ -13,6 +13,7 @@
 #include "ferrum/fire/gas_gpu.h"
 
 typedef struct dc_level_view dc_level_view_t;
+union SDL_Event;
 /** Whether a persisted world checkpoint was restored at view creation. */
 bool dc_level_view_restored(const dc_level_view_t *view);
 /** Enlarge the authored fire for interaction; physics/render grids stay 1:1. */
@@ -103,6 +104,13 @@ bool dc_level_view_pan_pixels(dc_level_view_t *view, int32_t dx, int32_t dy);
 bool dc_level_view_reset_camera(dc_level_view_t *view);
 bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status);
 bool dc_level_view_set_title(dc_level_view_t *view, const char *title);
+/** Accept events addressed to this window and unaddressed process or scripted events. */
+bool dc_level_view_accepts_event(const dc_level_view_t *view, const union SDL_Event *event);
+/** Whether the view owns the native keyboard focus. */
+bool dc_level_view_has_keyboard(const dc_level_view_t *view);
+/** Read the current window-local cursor and optional button mask while this view owns it. */
+bool dc_level_view_pointer(const dc_level_view_t *view, uint32_t *x, uint32_t *y,
+                           uint32_t *buttons);
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view);
 bool dc_level_view_set_zoom(dc_level_view_t *view, uint32_t zoom);
 bool dc_level_view_screen_cell(dc_level_view_t *view, uint32_t screen_x,

@@ -12,6 +12,7 @@
 #include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
+#include "../vulkan/gpu_internal.h"
 #include "bonfire.h"
 #include "level.h"
 #include "level_internal.h"
@@ -730,6 +731,42 @@ bool dc_level_view_status(dc_level_view_t *view, dc_level_view_status_t *status)
 
 bool dc_level_view_set_title(dc_level_view_t *view, const char *title) {
     return view && dc_gpu_set_window_title(view->gpu, title);
+}
+
+bool dc_level_view_accepts_event(const dc_level_view_t *view, const SDL_Event *event) {
+    if (!view || !event) return false;
+    uint32_t window_id;
+    switch (event->type) {
+    case SDL_WINDOWEVENT: window_id = event->window.windowID; break;
+    case SDL_KEYDOWN: case SDL_KEYUP: window_id = event->key.windowID; break;
+    case SDL_TEXTINPUT: window_id = event->text.windowID; break;
+    case SDL_MOUSEMOTION: window_id = event->motion.windowID; break;
+    case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
+        window_id = event->button.windowID;
+        break;
+    case SDL_MOUSEWHEEL: window_id = event->wheel.windowID; break;
+    default: return true;
+    }
+    return window_id == 0u || (view->gpu && view->gpu->window &&
+        window_id == SDL_GetWindowID(view->gpu->window));
+}
+
+bool dc_level_view_has_keyboard(const dc_level_view_t *view) {
+    return view && view->gpu && view->gpu->window &&
+        SDL_GetKeyboardFocus() == view->gpu->window;
+}
+
+bool dc_level_view_pointer(const dc_level_view_t *view, uint32_t *x, uint32_t *y,
+                           uint32_t *buttons) {
+    if (!view || !view->gpu || !view->gpu->window || !x || !y ||
+        SDL_GetMouseFocus() != view->gpu->window) return false;
+    int mx, my;
+    uint32_t held = SDL_GetMouseState(&mx, &my);
+    if (mx < 0 || my < 0) return false;
+    *x = (uint32_t)mx;
+    *y = (uint32_t)my;
+    if (buttons) *buttons = held;
+    return true;
 }
 
 bool dc_level_view_toggle_marker_overlay(dc_level_view_t *view) {

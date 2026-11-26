@@ -92,9 +92,8 @@ bool dc_player_view_aim(dc_level_view_t *view, uint32_t viewport, bool controlle
         x = stick_cell(crop.x, crop.width, input->values[FR_INPUT_AIM_X]);
         y = stick_cell(crop.y, crop.height, input->values[FR_INPUT_AIM_Y]);
     } else {
-        int mx, my;
-        SDL_GetMouseState(&mx, &my);
-        if (mx < 0 || my < 0 || !dc_presentation_pick(crop, (uint32_t)mx, (uint32_t)my, &x, &y))
+        uint32_t mx, my;
+        if (!dc_level_view_pointer(view, &mx, &my, NULL) || !dc_presentation_pick(crop, mx, my, &x, &y))
             return false;
     }
     uint32_t lx, ly;

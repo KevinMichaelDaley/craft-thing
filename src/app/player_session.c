@@ -242,7 +242,7 @@ void dc_players_frame_time(dc_level_view_t *v,double seconds) {
     v->players->pending_action_ms+=seconds*1000.;
 }
 bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
-    if(!v||!v->players||!e) return false;
+    if(!v||!v->players||!dc_level_view_accepts_event(v,e)) return false;
     struct dc_player_session *s=v->players;
     if(e->type==SDL_KEYDOWN&&e->key.keysym.scancode==SDL_SCANCODE_TAB) {
         if(!e->key.repeat) {
