@@ -288,6 +288,7 @@ static void test_play_combustion_changes_fur_and_reloads_its_gas(void) {
     fr_reactive_record_t initial, burned;
     bool found = false;
     ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, body, x, y, &initial, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(initial.state.material, FR_REACTIVE_BEAVER_FUR);
     ASSERT_EQ(initial.state.char_mass_fp, 0u);
     ASSERT_EQ(initial.state.flags & FR_REACTIVE_FLAMING, 0u);
     fr_reactive_state_t hot = initial.state;

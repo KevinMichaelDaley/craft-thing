@@ -20,12 +20,12 @@ typedef enum {
     FR_BEAVER_TAIL, FR_BEAVER_TEETH, FR_BEAVER_STAFF, FR_BEAVER_REGION_COUNT
 } fr_beaver_region_t;
 
-/** Immutable source metadata, independent of a frame's position or facing.
- * Placeholder fuel regions explicitly reuse the supported wood profile;
- * teeth reuse stone. Region identity is retained for future physical tuning. */
+/** Immutable source metadata, independent of frame position and facing.
+ * prop_material selects geometry. reactive_material selects parcel chemistry. */
 typedef struct {
     fr_beaver_region_t region;
     uint32_t prop_material;
+    uint32_t reactive_material;
 } fr_beaver_source_t;
 
 /** Cold-built standard CPRP clip plus caller-owned canonical source mapping.

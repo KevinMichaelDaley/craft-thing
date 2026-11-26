@@ -1,16 +1,20 @@
+#define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "dungeoncraft/blackbody.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/physics/authored_rigid_gpu.h"
 #include "ferrum/player/beaver.h"
 #include "ferrum/player/body_gpu.h"
 #include "ferrum/renderer/sprite_gpu.h"
+#include "ferrum/structural/gpu.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -48,6 +52,97 @@ static bool read_parcel(dc_gpu_t *g, const fr_beaver_body_t *body, uint32_t sour
     uint32_t y = (source - 1u) / FR_BEAVER_WIDTH - body->rest_origin_y;
     bool found;
     return fr_gpu_reactive_read_body(g, body->binding.body_id, x, y, parcel, &found, err, cap) && found;
+}
+
+static void test_admitted_surfaces_have_distinct_profiles_and_keep_collision_classes(void) {
+    static const char *const names[FR_BEAVER_REGION_COUNT] = {
+        [FR_BEAVER_FUR] = "beaver_fur", [FR_BEAVER_ROBE] = "beaver_textile",
+        [FR_BEAVER_HAT] = "beaver_textile", [FR_BEAVER_TAIL] = "beaver_tail",
+        [FR_BEAVER_TEETH] = "stone", [FR_BEAVER_STAFF] = "wood"
+    };
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    ASSERT_TRUE(dc_gpu_create(&g, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk && dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
+    free(chunk);
+    ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_beaver_body_t body;
+    ASSERT_TRUE(fr_beaver_body_admit(g, 41, 71, 0, (dc_chunk_coord_t){0, 0},
+        8 * DC_FLUID_FULL, 9 * DC_FLUID_FULL, &body, err, sizeof(err)));
+    dc_gpu_body_pixel_t pixels[FR_BEAVER_PIXELS];
+    uint32_t count = 0, seen = 0;
+    bool profiles_match = true;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(g, body.binding.body_id, pixels, FR_BEAVER_PIXELS,
+        &count, err, sizeof(err)));
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t source = (pixels[i].y + body.rest_origin_y) * FR_BEAVER_WIDTH +
+            pixels[i].x + body.rest_origin_x + 1u;
+        fr_beaver_source_t meta;
+        fr_reactive_record_t parcel;
+        ASSERT_TRUE(fr_beaver_source(source, &meta) && names[meta.region]);
+        ASSERT_TRUE(read_parcel(g, &body, source, &parcel, err, sizeof(err)));
+        const char *material = fr_reactive_material_name(parcel.state.material);
+        profiles_match &= material && strcmp(material, names[meta.region]) == 0;
+        ASSERT_EQ(pixels[i].material, fr_prop_body_material(meta.prop_material));
+        const fr_reactive_profile_t *profile = fr_reactive_profile(parcel.state.material);
+        ASSERT_EQ(fr_reactive_state_mass_fp(&parcel.state),
+            (uint64_t)lroundf(profile->density * DC_FLUID_FULL));
+        float temperature;
+        ASSERT_TRUE(fr_reactive_state_temperature(&parcel.state, &temperature, err, sizeof(err)));
+        ASSERT_TRUE(fabsf(temperature - 293.15f) < .001f);
+        seen |= 1u << meta.region;
+    }
+    dc_gpu_destroy(g);
+    ASSERT_TRUE(profiles_match);
+    ASSERT_EQ(seen & ((1u << FR_BEAVER_FUR) | (1u << FR_BEAVER_ROBE) |
+        (1u << FR_BEAVER_HAT) | (1u << FR_BEAVER_TAIL)),
+        (1u << FR_BEAVER_FUR) | (1u << FR_BEAVER_ROBE) | (1u << FR_BEAVER_HAT) |
+        (1u << FR_BEAVER_TAIL));
+    PASS();
+}
+
+static void test_surface_profile_and_inventory_survive_motion_and_checkpoint(void) {
+    enum { FUR = 30u * FR_BEAVER_WIDTH + 27u, HAT = 2u * FR_BEAVER_WIDTH + 32u };
+    char err[256] = {0}, path[] = "build/beaver_surface_XXXXXX";
+    dc_gpu_t *g = NULL;
+    ASSERT_TRUE(dc_gpu_create(&g, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk && dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err)));
+    free(chunk);
+    ASSERT_TRUE(dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    fr_beaver_body_t body;
+    ASSERT_TRUE(fr_beaver_body_admit(g, 41, 71, 0, (dc_chunk_coord_t){0, 0},
+        8 * DC_FLUID_FULL, 9 * DC_FLUID_FULL, &body, err, sizeof(err)));
+    const uint32_t sources[] = {FUR, HAT};
+    fr_reactive_record_t changed[2];
+    for (uint32_t i = 0; i < 2; ++i) {
+        ASSERT_TRUE(read_parcel(g, &body, sources[i], &changed[i], err, sizeof(err)));
+        ASSERT_TRUE(fr_reactive_state_add_heat(&changed[i].state, .125 + i, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_body(g, body.binding.body_id, changed[i].owner.key[2],
+            changed[i].owner.key[3], &changed[i].state, err, sizeof(err)));
+    }
+    ASSERT_TRUE(fr_gpu_pose_authored_rigid(g, body.binding.body_id, (dc_chunk_coord_t){0, 0},
+        14 * DC_FLUID_FULL, 16 * DC_FLUID_FULL, 0.f, err, sizeof(err)));
+    int file = mkstemp(path);
+    ASSERT_TRUE(file >= 0);
+    close(file);
+    ASSERT_TRUE(fr_gpu_save_structure(g, path, err, sizeof(err)));
+    dc_gpu_destroy(g);
+    g = NULL;
+    ASSERT_TRUE(dc_gpu_create(&g, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_load_structure(g, path, err, sizeof(err)));
+    remove(path);
+    for (uint32_t i = 0; i < 2; ++i) {
+        fr_reactive_record_t restored;
+        ASSERT_TRUE(read_parcel(g, &body, sources[i], &restored, err, sizeof(err)));
+        ASSERT_EQ(memcmp(&changed[i], &restored, sizeof(restored)), 0);
+    }
+    dc_gpu_destroy(g);
+    ASSERT_TRUE(changed[0].state.material >= DC_MATERIAL_COUNT &&
+        changed[1].state.material >= DC_MATERIAL_COUNT);
+    ASSERT_TRUE(changed[0].state.material != changed[1].state.material);
+    PASS();
 }
 
 static void test_wetting_follows_visible_owner_when_a_sprite_is_mirrored(void) {
@@ -259,10 +354,16 @@ static void test_visible_combustion_uses_local_oxygen_and_leaves_hidden_fuel(voi
         const fr_reactive_profile_t *profile = fr_reactive_profile(before.state.material);
         const double reserved_fp = fr_reactive_state_pending_oxygen_fp(&after.state) -
                                    fr_reactive_state_pending_oxygen_fp(&before.state);
+        double products_fp = 0.;
+        for (uint32_t cell = 0; cell < DC_CHUNK_CELLS; ++cell)
+            products_fp += (gas[cell].species[FR_GAS_EXHAUST] + gas[cell].species[FR_GAS_SOOT]) * DC_FLUID_FULL;
+        double inventory_error = (double)fr_reactive_state_mass_fp(&after.state) + products_fp -
+            (double)fr_reactive_state_mass_fp(&before.state) - (used_fp - reserved_fp);
         printf("Posed reaction %u reacted %u fuel, used %.6f oxygen, emitted %.6f power\n",
                flip, reacted, used_fp, emission[OXYGEN_CELL].power);
         ASSERT_TRUE(reacted > 0u && after.state.char_mass_fp > before.state.char_mass_fp);
         ASSERT_TRUE(fabs(used_fp - reacted * profile->oxygen_per_fuel - reserved_fp) < .001);
+        ASSERT_TRUE(fabs(inventory_error) < .001);
         ASSERT_TRUE(emission[OXYGEN_CELL].power > 0.f &&
                     (emission[OXYGEN_CELL].sources & FR_FIRE_EMISSION_SURFACE) != 0u);
         ASSERT_EQ(before.state.parcel_id_low, after.state.parcel_id_low);
@@ -292,6 +393,8 @@ static void test_visible_combustion_uses_local_oxygen_and_leaves_hidden_fuel(voi
 
 int main(void) {
     RUN(test_canonical_body_admits_hidden_owners_once);
+    RUN(test_admitted_surfaces_have_distinct_profiles_and_keep_collision_classes);
+    RUN(test_surface_profile_and_inventory_survive_motion_and_checkpoint);
     RUN(test_wetting_follows_visible_owner_when_a_sprite_is_mirrored);
     RUN(test_terrain_heat_reaches_visible_owner_and_balances_source);
     RUN(test_visible_combustion_uses_local_oxygen_and_leaves_hidden_fuel);

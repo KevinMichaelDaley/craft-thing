@@ -106,8 +106,7 @@ static bool body_binding(const fr_reactive_record_t *record,const identity_t *id
     uint64_t word=(uint64_t)offset+1u+cell/8u;
     if(!offset||word>=shape[0]) return false;
     uint32_t nibble=(shape[word]>>((cell%8u)*4u))&15u;
-    const fr_reactive_profile_t *profile=fr_reactive_profile_for_body(nibble);
-    if(!profile||profile->material!=record->state.material) return false;
+    if(!fr_reactive_profile_matches_body(record->state.material,nibble)) return false;
     *out=(binding_t){FR_REACTIVE_OWNER_BODY,source+(uint32_t)word,cell%8u};return true;
 }
 typedef struct {double mass,x,y,moment;} checkpoint_mass_t;

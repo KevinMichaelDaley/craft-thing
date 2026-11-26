@@ -17,4 +17,9 @@ bool fr_gpu_reactive_reserve_shapes(dc_gpu_t *gpu,uint32_t words,char *err,uint3
 /** Retire the old CELL/PARTICLE state before a validated cold physical upload.
  * Resource failure leaves both physical and reactive source data unchanged. */
 bool fr_gpu_reactive_clear_chunk(dc_gpu_t *gpu,uint32_t slot,char *err,uint32_t cap);
+/** Cold birth of a complete authored pixel body's reactive parcels. Records
+ * have fresh consecutive IDs, in increasing body rest-cell order. Revalidate
+ * shape and ownership before publishing the entire arena batch. */
+bool fr_gpu_reactive_attach_authored_body(dc_gpu_t *gpu,uint32_t slot,
+    const fr_reactive_record_t *records,uint32_t count,char *err,uint32_t cap);
 #endif

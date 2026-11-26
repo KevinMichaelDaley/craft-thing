@@ -72,9 +72,18 @@ bool fr_beaver_asset_size(fr_player_action_t action,size_t *bytes,uint32_t *entr
 }
 
 bool fr_beaver_source(uint32_t source,fr_beaver_source_t *out) {
+    static const uint32_t reactive[FR_BEAVER_REGION_COUNT]={
+        [FR_BEAVER_FUR]=FR_REACTIVE_BEAVER_FUR,
+        [FR_BEAVER_ROBE]=FR_REACTIVE_BEAVER_TEXTILE,
+        [FR_BEAVER_HAT]=FR_REACTIVE_BEAVER_TEXTILE,
+        [FR_BEAVER_TAIL]=FR_REACTIVE_BEAVER_TAIL,
+        [FR_BEAVER_TEETH]=DC_MATERIAL_STONE,
+        [FR_BEAVER_STAFF]=DC_MATERIAL_WOOD
+    };
     beaver_art_pixel_t art;
     if (!out || !beaver_art_source(source,&art)) return false;
-    *out=(fr_beaver_source_t){art.region,beaver_prop_material(art.region)};
+    *out=(fr_beaver_source_t){.region=art.region,.prop_material=beaver_prop_material(art.region),
+        .reactive_material=reactive[art.region]};
     return true;
 }
 

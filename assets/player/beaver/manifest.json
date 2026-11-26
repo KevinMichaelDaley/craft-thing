@@ -84,40 +84,46 @@
       "id": 1,
       "prop_material": 2,
       "terrain_material": 7,
-      "body_material": 2
+      "body_material": 2,
+      "reactive_material": 20
     },
     "robe": {
       "id": 2,
       "prop_material": 2,
       "terrain_material": 7,
-      "body_material": 2
+      "body_material": 2,
+      "reactive_material": 21
     },
     "hat": {
       "id": 3,
       "prop_material": 2,
       "terrain_material": 7,
-      "body_material": 2
+      "body_material": 2,
+      "reactive_material": 21
     },
     "tail": {
       "id": 4,
       "prop_material": 2,
       "terrain_material": 7,
-      "body_material": 2
+      "body_material": 2,
+      "reactive_material": 22
     },
     "teeth": {
       "id": 5,
       "prop_material": 1,
       "terrain_material": 1,
-      "body_material": 1
+      "body_material": 1,
+      "reactive_material": 1
     },
     "staff": {
       "id": 6,
       "prop_material": 2,
       "terrain_material": 7,
-      "body_material": 2
+      "body_material": 2,
+      "reactive_material": 7
     }
   },
-  "physical_tuning": "Provisional: fur, robe, hat and tail alias the existing wettable combustible wood profile; teeth alias stone. These are explicit placeholder coefficients, not claims of measured cloth or fur properties. All 15 packed body material IDs are currently assigned; no ID is truncated or reused for a new physical substance.",
+  "physical_tuning": "Fur, cloth and tail chemistry uses body-only profiles in assets/fixtures/fire_smoke_v1.json. Robe and hat share the cloth profile. Contact geometry and reference dry mass use the existing packed collision classes. The reaction coefficients are gameplay tuning. Existing saved parcels retain their recorded profile and quantities.",
   "appearance": "Linear RGB in compiled records; independent from physical material. Alpha zero is transparent. Surface defaults remain renderer-owned (surface_mask zero).",
   "canonical_mapping": "Each frame has a parallel row-major u32 plane: zero means transparent, otherwise canonical source row*40+column+1. Exported .source.u32 files are little-endian. Frame occlusion may hide a source texel; hidden canonical parcels must remain owned, not be erased or recreated.",
   "animation_policy": "CPRP state_variants explicitly records changing silhouettes. Do not place each variant into the world as new matter. Runtime deformation/rendering must reference existing canonical material parcels through source mapping.",

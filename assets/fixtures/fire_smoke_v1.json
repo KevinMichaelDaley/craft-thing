@@ -39,6 +39,7 @@
     "heat_accounting": "primary heat plus char yield times char chemical energy cannot exceed source chemical energy",
     "status": "synthetic locked reference parameters, not measured SI material data"
   },
+  "solid_combustion": ["wood", "dense_wood", "leaves", "coal", "char", "beaver_fur", "beaver_textile", "beaver_tail"],
   "materials": [
     {"id":0,"name":"air","density":0.0012,"heat_capacity":1,"conductivity":0.02,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
     {"id":1,"name":"stone","density":2.7,"heat_capacity":0.8,"conductivity":1.5,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
@@ -59,7 +60,10 @@
     {"id":16,"name":"greek_fire","density":1.2,"heat_capacity":2,"conductivity":0.18,"fuel_fraction":0.7,"ignition_K":480,"hazard_per_second":5,"surface_burn_per_second":0.012,"chemical_energy":11714.285714285714,"primary_heat":11714.285714285714,"oxygen_per_fuel":0.4,"bound_oxidizer_fraction":0.3,"water_dousing_cancels_reaction":false,"fuel_yields":[0,0.08,0.12,0.8]},
     {"id":17,"name":"corrosion_residue","density":2.4,"heat_capacity":0.8,"conductivity":0.3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"fuel_yields":[0,0,0,1]},
     {"id":18,"name":"gold","density":19.3,"heat_capacity":0.13,"conductivity":3,"fuel_fraction":0,"ignition_K":0,"hazard_per_second":0,"surface_burn_per_second":0,"chemical_energy":0,"primary_heat":0,"oxygen_per_fuel":0,"greek_corrosion_product":"corrosion_residue","fuel_yields":[0,0,0,1]},
-    {"id":19,"name":"magic_ingredient","density":0.7,"heat_capacity":1.2,"conductivity":0.1,"fuel_fraction":0.5,"ignition_K":650,"hazard_per_second":0.5,"surface_burn_per_second":0.003,"chemical_energy":6000,"primary_heat":6000,"oxygen_per_fuel":1,"greek_corrosion_product":"ash","fuel_yields":[0,0.4,0.1,0.5]}
+    {"id":19,"name":"magic_ingredient","density":0.7,"heat_capacity":1.2,"conductivity":0.1,"fuel_fraction":0.5,"ignition_K":650,"hazard_per_second":0.5,"surface_burn_per_second":0.003,"chemical_energy":6000,"primary_heat":6000,"oxygen_per_fuel":1,"greek_corrosion_product":"ash","fuel_yields":[0,0.4,0.1,0.5]},
+    {"id":20,"name":"beaver_fur","body_surface_for":"wood","density":0.6,"heat_capacity":1.4,"conductivity":0.09,"fuel_fraction":0.85,"ignition_K":590,"hazard_per_second":1.35,"surface_burn_per_second":0.0025,"chemical_energy":15000,"primary_heat":10500,"oxygen_per_fuel":1.1,"fuel_yields":[0.15,0.07,0.1,0.68]},
+    {"id":21,"name":"beaver_textile","body_surface_for":"wood","density":0.6,"heat_capacity":1.35,"conductivity":0.06,"fuel_fraction":0.95,"ignition_K":555,"hazard_per_second":2,"surface_burn_per_second":0.0045,"chemical_energy":16000,"primary_heat":8600,"oxygen_per_fuel":1.2,"fuel_yields":[0.26,0.06,0.07,0.61]},
+    {"id":22,"name":"beaver_tail","body_surface_for":"wood","density":0.6,"heat_capacity":2.2,"conductivity":0.18,"fuel_fraction":0.65,"ignition_K":660,"hazard_per_second":0.7,"surface_burn_per_second":0.0017,"chemical_energy":11000,"primary_heat":8000,"oxygen_per_fuel":1.1,"fuel_yields":[0.1,0.08,0.08,0.74]}
   ],
   "material_modifiers": {
     "fields":["electrical_conductivity","bound_water_capacity_per_mass","oxidized_hazard_scale","greek_corrosion_susceptibility"],
@@ -82,7 +86,10 @@
     "greek_fire":[0.03,0,1,0],
     "corrosion_residue":[0.001,0.05,1,0],
     "gold":[10,0,1,1],
-    "magic_ingredient":[0.05,0.2,0.5,1]
+    "magic_ingredient":[0.05,0.2,0.5,1],
+    "beaver_fur":[0.00001,0.25,1,0.25],
+    "beaver_textile":[0.00001,0.75,1,0.35],
+    "beaver_tail":[0.0001,0.1,1,0.1]
   },
   "reaction_controls": {
     "wet_capacity_per_mass":0.5,

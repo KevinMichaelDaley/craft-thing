@@ -96,7 +96,8 @@ bool fr_reactive_state_default(uint32_t material,uint32_t mass,uint32_t water,
 }
 bool fr_reactive_state_from_particle(const dc_mpm_particle_t *p,float t,uint64_t id,
                                       fr_reactive_state_t *out,char *err,uint32_t cap) {
-    const fr_reactive_profile_t *profile=p?fr_reactive_profile(p->material):NULL;
+    const fr_reactive_profile_t *profile=p&&p->material<DC_MATERIAL_COUNT?
+        fr_reactive_profile(p->material):NULL;
     if(!p||!profile||!out||p->mass_fp==0||p->mass_fp==UINT32_MAX||
        profile->phase!=FR_REACTIVE_GRANULAR||(p->id_lo==0&&p->id_hi==0))
         return error(err,cap,"Invalid granular reactive parcel");
@@ -286,6 +287,14 @@ bool fr_reactive_owner_valid(const fr_reactive_owner_t *o,char *err,uint32_t cap
         return ((o->key[0]!=0||o->key[1]!=0)&&o->key[4]==0)||
             error(err,cap,"Invalid reactive particle identity");
     return error(err,cap,"Unknown reactive owner kind");
+}
+bool fr_reactive_record_valid(const fr_reactive_record_t *record,char *err,uint32_t cap) {
+    if(!record) return error(err,cap,"Missing reactive record");
+    if(!fr_reactive_owner_valid(&record->owner,err,cap)||
+       !fr_reactive_state_valid(&record->state,err,cap)) return false;
+    if(record->state.material>=DC_MATERIAL_COUNT&&record->owner.kind!=FR_REACTIVE_OWNER_BODY)
+        return error(err,cap,"A body-surface parcel needs a body owner");
+    return true;
 }
 bool fr_reactive_expose_shock(const fr_reactive_profile_t *profile,
     const fr_reactive_state_t *state, double declared_energy,

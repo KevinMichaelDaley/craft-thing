@@ -2317,7 +2317,7 @@ build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reac
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_mass.glsl include/dungeoncraft/coating_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_burn.glsl
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/gas/types.glsl include/dungeoncraft/gas_layout.h
-build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv build/shaders/thermal.comp.spv: include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_arena_layout.h
+build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv build/shaders/thermal.comp.spv: include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_profile_layout.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/coating_contact.glsl include/dungeoncraft/combustion_parameters.h
 build/shaders/body_combustion.comp.spv: shaders/reactive/rigid_coating_contact.glsl include/dungeoncraft/reactive_arena_layout.h
 build/shaders/body_combustion.comp.spv build/shaders/structural.comp.spv: include/dungeoncraft/corrosion_parameters.h

@@ -9,11 +9,11 @@ uint reactive_material_word(uint material,uint field) {return words[16u+material
 void main() {
     uint i=gl_GlobalInvocationID.x;
     if(i>=words[0]) return;
-    uint source=656u+i*10u,material=words[source],coating=words[source+1u];
+    uint source=words[3]+i*10u,material=words[source],coating=words[source+1u];
     float e[8];for(uint field=0u;field<8u;field++) e[field]=uintBitsToFloat(words[source+2u+field]);
     vec2 rates=reactive_ignition_rates(material,coating,e[0],e[1],e[2],e[3],e[4],
         e[5],e[6],e[7],uintBitsToFloat(words[2]));
-    uint target=3216u+i*5u;
+    uint target=words[4]+i*5u;
     words[target]=reactive_material_word(material,FR_PROFILE_DENSITY_WORD);
     words[target+1u]=reactive_material_word(material,FR_PROFILE_PRIMARY_HEAT_WORD);
     words[target+2u]=reactive_material_word(material,FR_PROFILE_FLAGS_WORD);

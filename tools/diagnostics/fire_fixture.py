@@ -16,6 +16,10 @@ from fractions import Fraction
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "assets/fixtures/fire_smoke_v1.json"
+TERRAIN_MATERIAL_COUNT = 20
+BODY_MATERIALS = {"stone":1,"wood":2,"mortar_debris":3,"dense_wood":4,"leaves":5,
+                  "sand":6,"dirt":7,"gravel":8,"leaf_debris":9,"coal":10,"char":11,
+                  "gold":12,"magic_ingredient":13,"corrosion_residue":14,"ash":15}
 
 
 def scene_data(data, name, seen=()):
@@ -41,6 +45,7 @@ def validate(data):
         raise ValueError("Invalid ambient oxygen normalization")
     profiles = data["materials"]
     named={p["name"]:p for p in profiles}
+    terrain={p["name"]:p for p in profiles if p["id"] < TERRAIN_MATERIAL_COUNT}
     mix=controls["oil_jelly_mix_mass_fractions"]
     if len(mix)!=2 or any(v<0 for v in mix) or abs(sum(mix)-1)>1e-8:
         raise ValueError("Invalid oil/jelly recipe proportions")
@@ -57,13 +62,25 @@ def validate(data):
     names = {p["name"] for p in profiles}
     if len(ids) != len(profiles) or len(names) != len(profiles):
         raise ValueError("Duplicate material identity")
-    if ids != set(range(len(profiles))) or len(profiles) != 20:
+    if len(profiles) < TERRAIN_MATERIAL_COUNT or [p["id"] for p in profiles] != list(range(len(profiles))):
         raise ValueError("Material identity mapping is incomplete")
+    solid_fuels = data["solid_combustion"]
+    if len(solid_fuels) != len(set(solid_fuels)) or any(name not in named or
+            named[name]["fuel_fraction"] <= 0 or name in {"oil","red_slime_jelly","greek_fire"}
+            for name in solid_fuels):
+        raise ValueError("Invalid solid combustion profile")
     char_energy = next(p["chemical_energy"] for p in profiles if p["name"] == "char")
     positive = ("density", "heat_capacity")
     nonnegative = ("conductivity", "fuel_fraction", "ignition_K", "hazard_per_second",
                    "surface_burn_per_second", "chemical_energy", "primary_heat", "oxygen_per_fuel")
     for p in profiles:
+        surface = p.get("body_surface_for")
+        if p["id"] >= TERRAIN_MATERIAL_COUNT:
+            host = terrain.get(surface)
+            if surface not in BODY_MATERIALS or not host or p["density"] != host["density"]:
+                raise ValueError("A body surface needs a collision class with matching reference density")
+        elif surface is not None:
+            raise ValueError("Terrain material cannot declare a body-only surface")
         if any(not math.isfinite(p[k]) or p[k] <= 0 for k in positive):
             raise ValueError("Nonpositive physical profile")
         if any(not math.isfinite(p[k]) or p[k] < 0 for k in nonnegative):
@@ -92,7 +109,7 @@ def validate(data):
         for variant in scene.get("phase_source_variants",{}).values():
             sources+=variant
         for source in sources:
-            profile=next((p for p in profiles if p["name"]==source["material"]),None)
+            profile=terrain.get(source["material"])
             if not profile or source["host_object"] not in objects or source["total_mass"]<=0:
                 raise ValueError("Invalid phase source material, carrier or mass")
             if abs(source["fuel_mass"]-profile["fuel_fraction"]*source["total_mass"])>1e-6:
@@ -102,7 +119,7 @@ def validate(data):
         for variant in scene.get("variants", {}).values():
             shapes += variant
         for shape in shapes:
-            if shape["material"] not in names or shape["role"] not in range(5):
+            if shape["material"] not in terrain or shape["role"] not in range(5):
                 raise ValueError("Unknown material/ownership role")
             if not 0 <= shape.get("wetness", 0) <= 1:
                 raise ValueError("Invalid wetness saturation")
@@ -180,9 +197,6 @@ def export_maps(data, output):
 
 def material_c(data):
     """Generate only physical/chemical coefficients; pigment is a separate channel."""
-    legacy={"stone":1,"wood":2,"mortar_debris":3,"dense_wood":4,"leaves":5,
-            "sand":6,"dirt":7,"gravel":8,"leaf_debris":9,"coal":10,"char":11,
-            "gold":12,"magic_ingredient":13,"corrosion_residue":14,"ash":15}
     granular={"sand","dirt","gravel","mortar_debris","leaf_debris","ash","corrosion_residue"}
     liquid={"water","oil","red_slime_jelly","greek_fire"}
     controls=data["reaction_controls"]
@@ -195,7 +209,9 @@ def material_c(data):
         name=p["name"]
         phase="FR_REACTIVE_GAS" if name=="air" else "FR_REACTIVE_GRANULAR" if name in granular else "FR_REACTIVE_LIQUID" if name in liquid else "FR_REACTIVE_SOLID"
         flags=(1 if p["fuel_fraction"]>0 else 0)|(2 if p["fuel_fraction"]>0 and name!="greek_fire" else 0)|(4 if p.get("bound_oxidizer_fraction",0)>0 else 0)
-        if phase=="FR_REACTIVE_SOLID" or name in legacy:flags|=8
+        body_material=BODY_MATERIALS.get(p.get("body_surface_for",name),0)
+        if phase=="FR_REACTIVE_SOLID" or body_material:flags|=8
+        if name in data["solid_combustion"]:flags|=16
         fields={key:p[key] for key in ("density","heat_capacity","conductivity","ignition_K","hazard_per_second","fuel_fraction","chemical_energy","primary_heat","oxygen_per_fuel","surface_burn_per_second")}
         fields["bound_oxidizer_fraction"]=p.get("bound_oxidizer_fraction",0)
         for key,value in zip(("electrical_conductivity","moisture_capacity","oxidized_hazard_scale","greek_corrosion_susceptibility"),data["material_modifiers"][name]):fields[key]=value
@@ -210,7 +226,7 @@ def material_c(data):
             fields["hot_yield_multiplier"]=controls["hot_yield_stress_multiplier"]
             fields["cold_adhesion"]=controls["cold_film_adhesion_energy_per_mass"]
             fields["hot_adhesion"]=controls["hot_film_adhesion_energy_per_mass"]
-        lines.append("    {.material=%uu,.legacy_body_material=%uu,.phase=%s,.flags=%uu,"%(p["id"],legacy.get(name,0),phase,flags))
+        lines.append("    {.material=%uu,.legacy_body_material=%uu,.phase=%s,.flags=%uu,"%(p["id"],body_material,phase,flags))
         items=[".%s=%s"%(key,number(value)) for key,value in fields.items()]
         for offset in range(0,len(items),4):lines.append("     "+",".join(items[offset:offset+4])+",")
         lines.append("     .fuel_yields={"+",".join(number(v) for v in p["fuel_yields"])+"}},")

@@ -124,6 +124,9 @@ fr_reactive_owner_t fr_reactive_cell_owner(dc_chunk_coord_t chunk, uint32_t loca
 /** Validate a persistent owner key. */
 bool fr_reactive_owner_valid(const fr_reactive_owner_t *owner,
                               char *err_buf, uint32_t err_cap);
+/** Validate a logical record, including the body-only material namespace. */
+bool fr_reactive_record_valid(const fr_reactive_record_t *record,
+                               char *err_buf, uint32_t err_cap);
 /** Atomically replace a cold snapshot after validating/sorting unique owner and
  * parcel identities. This serialization is never used as per-frame physics. */
 bool fr_reactive_snapshot_write(const char *path, const fr_reactive_record_t *records,

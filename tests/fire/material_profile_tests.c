@@ -19,7 +19,7 @@ static fr_reactive_exposure_t hot(void) {
 }
 static void test_registered_profiles_keep_old_ids_and_density_defaults(void) {
     ASSERT_EQ(DC_MATERIAL_WOOD,7u);ASSERT_EQ(DC_MATERIAL_LEAF_DEBRIS,10u);
-    ASSERT_EQ(fr_reactive_profile_count(),DC_MATERIAL_COUNT);
+    ASSERT_TRUE(fr_reactive_profile_count()>=DC_MATERIAL_COUNT);
     char err[128];
     for(uint32_t id=0;id<DC_MATERIAL_COUNT;id++) {
         const fr_reactive_profile_t *p=fr_reactive_profile(id);
@@ -31,6 +31,38 @@ static void test_registered_profiles_keep_old_ids_and_density_defaults(void) {
     ASSERT_EQ(fr_reactive_profile(DC_MATERIAL_WOOD)->density,(float)DC_DENSITY_WOOD);
     ASSERT_EQ(fr_reactive_profile(DC_MATERIAL_LEAVES)->density,(float)DC_DENSITY_LEAVES);
     ASSERT_TRUE(!fr_reactive_profile(UINT32_MAX));PASS();
+}
+static void test_fur_and_textile_have_distinct_heat_and_moisture_response(void) {
+    const fr_reactive_profile_t *fur=NULL,*textile=NULL,*tail=NULL;
+    for(uint32_t id=DC_MATERIAL_COUNT;id<fr_reactive_profile_count();id++) {
+        const char *name=fr_reactive_material_name(id);
+        ASSERT_TRUE(name);
+        if(strcmp(name,"beaver_fur")==0) fur=fr_reactive_profile(id);
+        if(strcmp(name,"beaver_textile")==0) textile=fr_reactive_profile(id);
+        if(strcmp(name,"beaver_tail")==0) tail=fr_reactive_profile(id);
+    }
+    ASSERT_TRUE(fur&&textile&&tail);
+    char err[128];
+    ASSERT_TRUE(fr_reactive_profile_valid(fur,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_profile_valid(textile,err,sizeof(err)));
+    ASSERT_TRUE(fr_reactive_profile_valid(tail,err,sizeof(err)));
+    ASSERT_EQ(fr_reactive_profile_for_body(2u)->material,DC_MATERIAL_WOOD);
+    ASSERT_TRUE(fr_reactive_profile_matches_body(DC_MATERIAL_WOOD,2u));
+    ASSERT_TRUE(fr_reactive_profile_matches_body(fur->material,2u));
+    ASSERT_TRUE(!fr_reactive_profile_matches_body(fur->material,1u));
+    ASSERT_TRUE(!fr_reactive_profile_matches_body(DC_MATERIAL_OIL,0u));
+    ASSERT_TRUE(textile->moisture_capacity>fur->moisture_capacity &&
+        fur->moisture_capacity>tail->moisture_capacity);
+    ASSERT_TRUE(fur->heat_capacity!=textile->heat_capacity&&fur->heat_capacity!=tail->heat_capacity);
+    fr_reactive_exposure_t exposure=hot();
+    fr_reactive_ignition_rates_t fur_rate,textile_rate;
+    ASSERT_TRUE(fr_reactive_ignition_rates(fur,NULL,&exposure,&fur_rate,err,sizeof(err))&&
+        fr_reactive_ignition_rates(textile,NULL,&exposure,&textile_rate,err,sizeof(err)));
+    ASSERT_TRUE(fur_rate.substrate>0.f&&textile_rate.substrate>fur_rate.substrate);
+    exposure.saturation=1.f;
+    ASSERT_TRUE(fr_reactive_ignition_rates(textile,NULL,&exposure,&textile_rate,err,sizeof(err)));
+    ASSERT_TRUE(textile_rate.substrate<fur_rate.substrate*.01f);
+    PASS();
 }
 static void test_body_namespace_is_mapped_without_numeric_reinterpretation(void) {
     const fr_reactive_profile_t *wood=fr_reactive_profile_for_body(2u);
@@ -161,6 +193,7 @@ int main(void) {
     _Static_assert(sizeof(fr_reactive_profile_t)==128,"GPU profile stride changed");
     _Static_assert(offsetof(fr_reactive_profile_t,fuel_yields)==56,"GPU yield offset changed");
     RUN(test_registered_profiles_keep_old_ids_and_density_defaults);
+    RUN(test_fur_and_textile_have_distinct_heat_and_moisture_response);
     RUN(test_body_namespace_is_mapped_without_numeric_reinterpretation);
     RUN(test_ash_and_sludge_have_distinct_phase_and_fuel_properties);
     RUN(test_wetness_and_oxidation_modify_substrate_ignition);

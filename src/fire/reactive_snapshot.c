@@ -69,8 +69,7 @@ static bool records_valid(fr_reactive_record_t *records,uint32_t count,uint64_t 
                            char *err,uint32_t cap) {
     if(next==0) return error(err,cap,"Reactive identity counter cannot wrap");
     for(uint32_t i=0;i<count;i++)
-        if(!fr_reactive_owner_valid(&records[i].owner,err,cap)||
-           !fr_reactive_state_valid(&records[i].state,err,cap)||parcel_id(&records[i])>=next||
+        if(!fr_reactive_record_valid(&records[i],err,cap)||parcel_id(&records[i])>=next||
            ((uint64_t)records[i].state.origin_id_low|((uint64_t)records[i].state.origin_id_high<<32))>=next)
             return error(err,cap,"Invalid reactive snapshot identity/state/counter");
     if(count>1) qsort(records,count,sizeof(*records),parcel_order);

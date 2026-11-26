@@ -146,6 +146,15 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_IDLE);ASSERT_EQ(p.intent.move_x,0);
     e.window.event=SDL_WINDOWEVENT_FOCUS_GAINED;dc_players_event(v,&e);
+    dc_gpu_world_body_t caster;
+    ASSERT_TRUE(dc_level_view_body_state(v,binding.binding.body_id,&caster,&motion,err,sizeof(err)));
+    dc_chunk_coord_t aim_offset;
+    uint32_t aim_x, aim_y;
+    dc_cell_address(caster.body.x_fp/(int32_t)DC_FLUID_FULL-48,
+        caster.body.y_fp/(int32_t)DC_FLUID_FULL+caster.body.height/2u, &aim_offset, &aim_x, &aim_y);
+    fr_player_point_t aim = {{caster.chunk.x+aim_offset.x,caster.chunk.y+aim_offset.y},
+        (float)aim_x,(float)aim_y};
+    ASSERT_TRUE(dc_players_aim_override(v,0,&aim,err,sizeof(err)));
     uint32_t projectile_id=dc_gpu_next_body_id(dc_level_view_gpu(v));
     e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));
     for(unsigned n=0;n<24;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
@@ -275,6 +284,7 @@ static void test_wet_robe_darkening_follows_the_owner_across_walk_poses(void) {
     uint32_t rest_x = ROBE_X - body.rest_origin_x, rest_y = ROBE_Y - body.rest_origin_y;
     ASSERT_TRUE(fr_gpu_reactive_read_body(dc_level_view_gpu(v), body.binding.body_id, rest_x,
                                           rest_y, &wet, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(wet.state.material, FR_REACTIVE_BEAVER_TEXTILE);
     ASSERT_TRUE(wet.state.bound_water_fp > 0);
     move.type = SDL_KEYUP;
     ASSERT_TRUE(dc_players_event(v, &move));
@@ -292,6 +302,7 @@ static void test_wet_robe_darkening_follows_the_owner_across_walk_poses(void) {
                                           rest_y, &turned, &found, err, sizeof(err)) && found);
     ASSERT_EQ(turned.state.parcel_id_low, wet.state.parcel_id_low);
     ASSERT_EQ(turned.state.parcel_id_high, wet.state.parcel_id_high);
+    ASSERT_EQ(turned.state.material, wet.state.material);
     ASSERT_EQ(turned.state.bound_water_fp, wet.state.bound_water_fp);
     ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
     PASS();
