@@ -36,3 +36,7 @@ Authoritative c6579509 checkpoint sweep completed 150 normal seconds and 12 addi
 **2026-11-26T17:29:30Z**
 
 The completed phase probe based on 56c48c9d captured 900 ticks at normal 60 Hz through seconds 131–145 and exited 0. The coating, fluid and thermal tick balanced to exactly 0 Q16 in each second, while the gas step added 1.190847397 Q16 in total. The staged replay crossed the four-unit gate at second 144 and ended at +4.123509407 Q16. A follow-up diagnostic reads the gas owners immediately after the geometry commit dispatch to distinguish geometry remapping and bubble displacement from later gas transport and publication.
+
+**2026-11-26T17:30:52Z**
+
+The geometry-boundary probe passed its 60-tick preflight. Its +0.000722803 Q16 ledger total matched the prior staged and native first second. The measured split was +0.000006199 from physical preparation, +0.000842408 through gas geometry commit and -0.000125804 afterward. The long probe is running through the prior failure interval for attribution at established pool conditions.

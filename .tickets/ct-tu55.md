@@ -221,3 +221,7 @@ Normal material-placement application (not the query profiler), DC_FRAME_TIMINGS
 **2026-10-24T07:45:52Z**
 
 Inline checkpoint: ordinary real-time Wayland saved-scene500-frame mean32.414ms /worst38.887ms after exact solver address-domain changes. Optional combined MPM/grain/zero-reduction paths31.587ms mean /43.411ms worst, still fail strict30ms. No resolution/iteration/geometry reduction. Full headless run reports628 passes, two known authored-stage failures (ctr-ojvy), and one missed-brush latency outlier5.684ms vs3ms; isolated miss recheck2.577ms passes with one submission. Native UI and quarter suites ongoing; frame target remains unfinished.
+
+**2026-11-26T17:30:52Z**
+
+The hidden-window recreation test hit its unchanged 15-second watchdog on the split-readback candidate 41078659 and on directly built predecessor afd4460a using the same nested X11 display and Vulkan cache with other validation work active. Completed cycles kept finite acquisition, 90 brush-fence waits, zero queue-idle waits and safe presentation image dependencies. This comparison does not establish isolated timing. The overlapping-window split regression passed separately, including explicit synchronization validation.
