@@ -537,9 +537,9 @@ bool dc_gpu_presentation_view(const dc_gpu_t *gpu, uint32_t viewport,
         return true;
     }
     return viewport == 0u &&
-        dc_presentation_layout(gpu->view_width, gpu->view_height, gpu->swap_extent.width,
-                               gpu->swap_extent.height, gpu->display_zoom,
-                               gpu->presentation_focus, out);
+        dc_presentation_fit_layout(gpu->view_width, gpu->view_height, gpu->swap_extent.width,
+                                   gpu->swap_extent.height, gpu->display_zoom,
+                                   gpu->presentation_focus, out);
 }
 
 bool dc_gpu_screen_cell(dc_gpu_t *gpu, uint32_t screen_x, uint32_t screen_y,

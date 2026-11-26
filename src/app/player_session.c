@@ -209,7 +209,10 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
         bool backend_failed;
         char detail[sizeof(s->failure)]={0};
         if(dc_player_session_join_controller(v,e->cbutton.which,&backend_failed,detail,sizeof(detail))) {
-            if(s->count!=previous_count) dc_players_split_screen(v,s->count,s->failure,sizeof(s->failure));
+            if(s->count!=previous_count) {
+                s->split_requested=s->count;
+                dc_players_present(v,NULL,0);
+            }
         } else if(backend_failed) {
             players_error(s->failure,sizeof(s->failure),detail[0]?detail:"Cannot admit player body");
         }
@@ -239,7 +242,7 @@ static void players_view_ids(const struct dc_player_session *s, uint32_t count,
 }
 
 static void players_follow_camera(dc_level_view_t *v) {
-    if (!v->players->follow_camera || v->players->split_count || !dc_players_gameplay(v)) return;
+    if (!v->players->follow_camera || v->players->split_requested || !dc_players_gameplay(v)) return;
     uint32_t id = v->players->bodies[0].binding.body_id;
     dc_player_view_follow(v, &id, 1u);
 }
@@ -247,10 +250,10 @@ static void players_follow_camera(dc_level_view_t *v) {
 void dc_players_prepare_view(dc_level_view_t *v) {
     if (!v) return;
     struct dc_player_session *s = v->players;
-    if (!s || !s->split_count || !s->follow_camera || !dc_players_gameplay(v)) return;
+    if (!s || !s->split_requested || !s->follow_camera || !dc_players_gameplay(v)) return;
     uint32_t ids[FR_INPUT_PLAYERS];
-    players_view_ids(s, s->split_count, ids);
-    dc_player_view_follow(v, ids, s->split_count);
+    players_view_ids(s, s->split_requested, ids);
+    dc_player_view_follow(v, ids, s->split_requested);
 }
 
 static bool players_input_active(const struct dc_player_session *s,uint32_t seat) {
@@ -265,7 +268,7 @@ static bool players_target(dc_level_view_t *v, uint32_t n, const fr_input_state_
         *target = s->aim_point[n];
         return true;
     }
-    return dc_player_view_aim(v, s->split_count ? n : 0u, n != 0u, input, target);
+    return dc_player_view_aim(v, s->split_active ? n : 0u, n != 0u, input, target);
 }
 
 static fr_player_hotbar_item_t players_select_item(fr_player_hotbar_t *bar,
@@ -425,15 +428,24 @@ bool dc_players_inventory(dc_level_view_t *v,uint32_t n,
 static bool split_refresh(dc_level_view_t *v, uint32_t count, char *err, uint32_t cap) {
     uint32_t ids[FR_INPUT_PLAYERS];
     players_view_ids(v->players, count, ids);
-    return dc_player_view_split(v, ids, count, err, cap);
+    if (!dc_player_view_split(v, ids, count, err, cap)) return false;
+    v->players->split_active = true;
+    return true;
+}
+
+static bool split_disable(dc_level_view_t *v, char *err, uint32_t cap) {
+    if (!dc_gpu_set_split_presentation(v->gpu, 0u, NULL))
+        return players_error(err, cap, "Cannot restore the single gameplay view");
+    v->players->split_active = false;
+    return true;
 }
 
 bool dc_players_present(dc_level_view_t *v, char *err, uint32_t cap) {
-    if (!v || !v->players || !v->players->split_count) return true;
-    if (!dc_players_gameplay(v)) return dc_gpu_set_split_presentation(v->gpu,0u,NULL);
+    if (!v || !v->players || !v->players->split_requested) return true;
     struct dc_player_session *s = v->players;
-    if (!split_refresh(v,s->split_count,err,cap)) return false;
-    for (uint32_t n = 0; n < s->split_count; ++n) {
+    if (!dc_players_gameplay(v) || !split_refresh(v, s->split_requested, NULL, 0))
+        return split_disable(v, err, cap);
+    for (uint32_t n = 0; n < s->split_requested; ++n) {
         fr_player_point_t target;
         bool aiming = players_target(v, n, &s->input.players[n].state, &target);
         dc_player_view_reticle(v, n, aiming ? &target : NULL);
@@ -446,7 +458,7 @@ bool dc_players_split_screen(dc_level_view_t *v,uint32_t count,char *err,uint32_
         return players_error(err,cap,"Split screen needs two to four joined players");
     bool okay = count && dc_players_gameplay(v)
         ? split_refresh(v,count,err,cap)
-        : dc_gpu_set_split_presentation(v->gpu,0u,NULL);
-    if (okay) v->players->split_count=count;
+        : split_disable(v,err,cap);
+    if (okay) v->players->split_requested=count;
     return okay;
 }

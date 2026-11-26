@@ -37,7 +37,8 @@ struct dc_player_session {
     fr_player_hotbar_t hotbar[FR_INPUT_PLAYERS];
     fr_player_carry_t carry[FR_INPUT_PLAYERS];
     fr_player_manipulation_t manipulation[FR_INPUT_PLAYERS];
-    uint32_t split_count;
+    uint32_t split_requested;
+    bool split_active;
     fr_player_inventory_t inventory[FR_INPUT_PLAYERS];
     fr_player_chew_t chew_work[FR_INPUT_PLAYERS];
     bool aim_override[FR_INPUT_PLAYERS];

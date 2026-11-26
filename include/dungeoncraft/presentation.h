@@ -19,6 +19,24 @@ static inline bool dc_presentation_layout(uint32_t width,uint32_t height,uint32_
     if(!r.scale||(uint64_t)r.width*r.scale>window_width||(uint64_t)r.height*r.scale>window_height) return false;
     r.left=(window_width-r.width*r.scale)/2;r.top=(window_height-r.height*r.scale)/2;*out=r;return true;
 }
+/** Keep a single view usable with integer scaling on a smaller drawable. */
+static inline bool dc_presentation_fit_layout(uint32_t width, uint32_t height,
+    uint32_t window_width, uint32_t window_height, uint32_t zoom,
+    dc_presentation_focus_t focus, dc_presentation_layout_t *out) {
+    if (dc_presentation_layout(width, height, window_width, window_height, zoom, focus, out))
+        return true;
+    if (!width || !height || !window_width || !window_height) return false;
+    if (!focus.width) focus = (dc_presentation_focus_t){0, 0, width, height};
+    if (!focus.height || focus.x >= width || focus.y >= height ||
+        focus.width > width - focus.x || focus.height > height - focus.y) return false;
+    uint32_t crop_width = focus.width < window_width ? focus.width : window_width;
+    uint32_t crop_height = focus.height < window_height ? focus.height : window_height;
+    focus.x += (focus.width - crop_width) / 2u;
+    focus.y += (focus.height - crop_height) / 2u;
+    focus.width = crop_width;
+    focus.height = crop_height;
+    return dc_presentation_layout(width, height, window_width, window_height, zoom, focus, out);
+}
 /** Map a presented point back into the original full-resolution visible grid. */
 static inline bool dc_presentation_pick(dc_presentation_layout_t layout,uint32_t sx,uint32_t sy,uint32_t *x,uint32_t *y) {
     if(!x||!y||!layout.scale||sx<layout.left||sy<layout.top||
