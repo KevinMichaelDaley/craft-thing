@@ -109,6 +109,21 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(after.chunk.x>before.chunk.x||after.body.x_fp>before.body.x_fp);
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-walk.bmp",err,sizeof(err)));
     ASSERT_TRUE(runtime_visual_check(v,0u,err,sizeof(err)));
+    uint32_t frame;
+    ASSERT_TRUE(fr_player_frame(&p, &frame));
+    uint32_t displayed_walk_frames = 1u << frame;
+    for (unsigned n = 0; n < 36 && displayed_walk_frames != 0x3fu; n++) {
+        ASSERT_TRUE(dc_level_view_step(v, err, sizeof(err)) &&
+                    dc_level_view_tick(v, err, sizeof(err)));
+        ASSERT_TRUE(dc_players_status(v, 0, &p, &binding));
+        ASSERT_EQ(p.action, FR_PLAYER_WALK);
+        ASSERT_TRUE(fr_player_frame(&p, &frame));
+        if (!(displayed_walk_frames & (1u << frame))) {
+            ASSERT_TRUE(runtime_visual_check(v, 0u, err, sizeof(err)));
+            displayed_walk_frames |= 1u << frame;
+        }
+    }
+    ASSERT_EQ(displayed_walk_frames, 0x3fu);
     e.type=SDL_KEYUP;e.key.keysym.scancode=SDL_SCANCODE_D;ASSERT_TRUE(dc_players_event(v,&e));
     e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_A;ASSERT_TRUE(dc_players_event(v,&e));
     for(unsigned n=0;n<7;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
@@ -124,7 +139,7 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));
     for(unsigned n=0;n<24;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
     ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_CAST);
-    uint32_t frame;ASSERT_TRUE(fr_player_frame(&p,&frame));ASSERT_EQ(frame,5);
+    ASSERT_TRUE(fr_player_frame(&p,&frame));ASSERT_EQ(frame,5);
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-cast.bmp",err,sizeof(err)));
     dc_gpu_world_body_t projectile;
     ASSERT_TRUE(projectile_id&&dc_level_view_body_state(v,projectile_id,&projectile,&motion,err,sizeof(err)));
