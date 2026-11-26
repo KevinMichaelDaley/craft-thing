@@ -43,13 +43,19 @@ for second in range(limit + 1):
     ticks = 60 * second
     if fault == "partial_tick" and second == 2:
         ticks -= 1
+    elapsed = second - 0.05 if fault == "short_clock" and second == 2 else float(second)
     if fault == "gap" and second == 2:
         continue
     outside = int(fault == "escaped" and second == 2)
     mobile = int(fault == "dripped" and second == 2)
-    print("POOL_SAMPLE", second, ticks, float(second), fuel, water, wet, 36,
-          outside, mobile)
-print("POOL_END", limit)
+    chemical_stock = 8000000 + fuel
+    products = 327680 - fuel
+    if fault == "lost_product" and second == 2:
+        products -= 5
+    print("POOL_SAMPLE", second, ticks, elapsed, fuel, water, wet, 36,
+          outside, mobile, chemical_stock, products)
+if fault != "missing_end":
+    print("POOL_END", limit)
 """
 
 
@@ -86,9 +92,12 @@ class GreekDepletionFixtureTests(unittest.TestCase):
             "mismatched_soak": "matched post-soak water",
             "dry_face": "submerged",
             "partial_tick": "simulation interval",
+            "short_clock": "simulation interval",
             "gap": "simulation interval",
+            "missing_end": "terminal",
             "escaped": "escaped fuel",
             "dripped": "escaped fuel",
+            "lost_product": "chemical inventory",
             "process_error": "exit status 1",
         }
         for fault, expected in failures.items():
