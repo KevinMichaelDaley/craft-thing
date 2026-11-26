@@ -2,7 +2,7 @@
 id: ct-yctv
 status: closed
 deps: []
-links: [ct-hk3v, ct-vkik, ctisf-f0wy]
+links: [ct-hk3v, ct-vkik, ctisf-f0wy, ctsdb-yps2]
 created: 2026-11-26T05:35:44Z
 type: bug
 priority: 1

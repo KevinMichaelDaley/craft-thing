@@ -1929,7 +1929,7 @@ test_chew_inventory: build/chew_inventory_tests
 	./build/chew_inventory_tests
 test: test_chew_inventory
 build/ability_cast_tests: tests/player/ability_cast_tests.c include/ferrum/player/abilities.h src/player/abilities.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/ability_cast_tests.c src/player/abilities.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/player/ability_cast_tests.c src/player/abilities.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkQueueSubmit -Wl,--wrap=vkQueueWaitIdle
 .PHONY: test_ability_cast
 test_ability_cast: build/ability_cast_tests
 	./build/ability_cast_tests

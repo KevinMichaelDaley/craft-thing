@@ -2,7 +2,7 @@
 id: ctisf-f0wy
 status: in_progress
 deps: []
-links: [ct-vkik, ct-yctv]
+links: [ct-vkik, ct-yctv, ctsdb-yps2]
 created: 2026-11-26T22:10:37Z
 type: bug
 priority: 1

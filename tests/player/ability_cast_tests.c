@@ -12,6 +12,23 @@
 #include "ferrum/player/abilities.h"
 
 static int g_pass, g_fail;
+static bool count_storm_submissions;
+static unsigned storm_submissions, storm_idle_waits;
+
+VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueSubmit(VkQueue queue, uint32_t count,
+    const VkSubmitInfo *submits, VkFence fence);
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueSubmit(VkQueue queue, uint32_t count,
+    const VkSubmitInfo *submits, VkFence fence) {
+    if (count_storm_submissions) ++storm_submissions;
+    return __real_vkQueueSubmit(queue, count, submits, fence);
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL __real_vkQueueWaitIdle(VkQueue queue);
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkQueueWaitIdle(VkQueue queue) {
+    if (count_storm_submissions) ++storm_idle_waits;
+    return __real_vkQueueWaitIdle(queue);
+}
+
 static void teardown(void);
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();teardown();} while (0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s [%s]\n",__LINE__,#e,err);g_fail++;return;}} while (0)
@@ -310,6 +327,7 @@ static void test_ice_storm_chills_cells_within_radius(void) {
                                           0x71000000u, &sand_hot, err, sizeof(err)));
     ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_SAND, 3000u, 0u, 900.f,
                                           0x71000001u, &sand_far, err, sizeof(err)));
+    ASSERT_TRUE(fr_reactive_state_add_heat(&sand_hot, 0.00000037, err, sizeof(err)));
     uint32_t local = 32u + 10u * 64u;
     uint32_t far_local = 63u + 63u * 64u;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(gpu, 11u, local, &sand_hot, err,
@@ -317,7 +335,11 @@ static void test_ice_storm_chills_cells_within_radius(void) {
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(gpu, 11u, far_local, &sand_far,
                                           err, sizeof(err)));
     fr_player_point_t target = point_at(224.f, 202.f);
-    ASSERT_TRUE(fr_player_cast_ice_storm(gpu, &target, 6u, err, sizeof(err)));
+    storm_submissions = storm_idle_waits = 0u;
+    count_storm_submissions = true;
+    bool applied = fr_player_cast_ice_storm(gpu, &target, 6u, err, sizeof(err));
+    count_storm_submissions = false;
+    ASSERT_TRUE(applied);
     fr_reactive_record_t chilled, control;
     bool found = false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 11u, local, &chilled, &found,
@@ -328,11 +350,18 @@ static void test_ice_storm_chills_cells_within_radius(void) {
                 found);
     double before = fr_reactive_state_energy(&sand_hot);
     double after = fr_reactive_state_energy(&chilled.state);
-    printf("storm chill %.4g -> %.4g control %.4g\n", before, after,
-           fr_reactive_state_energy(&control.state));
-    /* The target pocket lost most of its heat; the far pocket is untouched. */
-    ASSERT_TRUE(after < before * 0.4);
-    ASSERT_TRUE(fabs(fr_reactive_state_energy(&control.state) - before) < 1.);
+    printf("storm chill %.10g -> %.10g, %u submissions and %u idle waits\n",
+           before, after, storm_submissions, storm_idle_waits);
+    ASSERT_EQ(storm_submissions, 1u);
+    ASSERT_TRUE(storm_idle_waits <= 1u);
+    ASSERT_TRUE(fabs(after - before * 0.3) < before * 1e-10);
+    ASSERT_EQ(memcmp(&sand_far, &control.state, sizeof(sand_far)), 0);
+    fr_reactive_owner_t owner = fr_reactive_cell_owner(target.chunk, local);
+    ASSERT_EQ(memcmp(&owner, &chilled.owner, sizeof(owner)), 0);
+    chilled.state.thermal_energy = sand_hot.thermal_energy;
+    chilled.state.thermal_energy_residual = sand_hot.thermal_energy_residual;
+    chilled.state.thermal_energy_correction = sand_hot.thermal_energy_correction;
+    ASSERT_EQ(memcmp(&sand_hot, &chilled.state, sizeof(sand_hot)), 0);
     PASS();
 }
 static void test_ice_storm_bounds_its_area(void) {
@@ -464,6 +493,12 @@ int main(int argc, char **argv) {
     printf("=== Player Ability Cast Tests ===\n\n");
     if (argc == 2 && strcmp(argv[1], "--storm-mapping") == 0) {
         RUN(test_ice_storm_rejects_an_unrelated_chunk_in_the_footprint);
+        RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
+        printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
+        return g_fail > 0 ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--storm-brush") == 0) {
+        RUN(test_ice_storm_chills_cells_within_radius);
         RUN(test_ice_storm_tracks_streamed_pages_across_a_seam);
         printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
         return g_fail > 0 ? 1 : 0;
