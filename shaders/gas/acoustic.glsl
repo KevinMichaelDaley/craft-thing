@@ -37,6 +37,9 @@ bool gas_advected(uint index) {
     uint tile=(index/params.width/8u)*((params.width+7u)/8u)+(index%params.width/8u);
     return (activity[gas_tile_count()+tile]&1u)!=0u;
 }
+bool gas_advected_point(ivec2 p) {
+    return gas_advected(uint(p.y)*params.width+uint(p.x));
+}
 Primitive gas_pressure_stage(ivec2 p,uint index) {
     if(gas_advected(index)) return gas_cache_candidate(index);
     Primitive own=gas_cached(p);vec2 stage=gas_large_pressure_state(gas_source(p),own.hydro.w);
