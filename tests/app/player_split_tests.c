@@ -1,10 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass,g_fail;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fflush(stdout);fn();teardown();} while(0)
@@ -14,6 +16,7 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 static char err[256];
 static dc_level_view_t *v=NULL;
+static SDL_Window *cover_window;
 
 static bool setup_at(int32_t pages_west, bool follow) {
     char directory[]="build/player_split_XXXXXX";
@@ -28,6 +31,8 @@ static bool setup_at(int32_t pages_west, bool follow) {
            dc_players_enable_at(v,64,40,follow,err,sizeof(err));
 }
 static void teardown(void) {
+    if (cover_window) SDL_DestroyWindow(cover_window);
+    cover_window = NULL;
     if (v && !dc_level_view_destroy(v,err,sizeof(err))) {
         printf("FAIL closing split-screen fixture: %s\n", err);
         g_fail++;
@@ -257,21 +262,35 @@ static bool pixel_is_white(int x, int y) {
         rgb[0]>=250&&rgb[1]>=250&&rgb[2]>=250;
 }
 
+static bool cover_player_window(SDL_Window *window) {
+    int x, y, width, height;
+    SDL_GetWindowPosition(window, &x, &y);
+    SDL_GetWindowSize(window, &width, &height);
+    cover_window = SDL_CreateWindow("Split-screen overlap fixture", x, y, width, height,
+        SDL_WINDOW_BORDERLESS | SDL_WINDOW_SHOWN | SDL_WINDOW_ALWAYS_ON_TOP);
+    if (!cover_window) return false;
+    SDL_Surface *surface = SDL_GetWindowSurface(cover_window);
+    if (!surface || SDL_FillRect(surface, NULL, SDL_MapRGB(surface->format, 0, 0, 0)) < 0 ||
+        SDL_UpdateWindowSurface(cover_window) < 0) return false;
+    SDL_RaiseWindow(cover_window);
+    return true;
+}
+
 static void test_aim_reticle_is_drawn_only_in_its_own_window_band(void) {
     ASSERT_TRUE(setup_at(0,false));
     ASSERT_TRUE(dc_players_join(v,42,err,sizeof(err)));
     ASSERT_TRUE(dc_players_split_screen(v,2,err,sizeof(err)));
-    SDL_Window *window=SDL_GetKeyboardFocus();
-    ASSERT_TRUE(window);
     dc_presentation_layout_t keyboard, controller;
     dc_gpu_t *gpu=dc_level_view_gpu(v);
+    SDL_Window *window = gpu->window;
+    ASSERT_TRUE(window && cover_player_window(window));
     ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&keyboard));
     ASSERT_TRUE(dc_gpu_presentation_view(gpu,1,&controller));
     uint32_t aim_x=controller.x+controller.width/2u;
     uint32_t aim_y=controller.y+controller.height/2u;
     int marker_x=(int)(controller.left+controller.width/2u*controller.scale+controller.scale/2u);
     int marker_y=(int)(controller.top+controller.height/2u*controller.scale+controller.scale/2u);
-    SDL_WarpMouseInWindow(window,marker_x,marker_y);
+    SDL_WarpMouseInWindow(cover_window,marker_x,marker_y);
     SDL_PumpEvents();
     ASSERT_TRUE(world_step());
     fr_player_t player;
@@ -320,8 +339,13 @@ static void test_four_way_split_clamps_stick_to_its_own_crop(void) {
     ASSERT_EQ(viewport_x,crop.x+crop.width-1u);
     PASS();
 }
-int main(void) {
+int main(int argc, char **argv) {
     printf("=== Player Split Screen Tests ===\n\n");
+    if (argc == 2 && strcmp(argv[1], "--reticle") == 0) {
+        RUN(test_aim_reticle_is_drawn_only_in_its_own_window_band);
+        printf("\nResults: %d passed, %d failed\n",g_pass,g_fail);
+        return g_fail ? 1 : 0;
+    }
     RUN(test_second_seat_joins_with_its_own_beaver);
     RUN(test_split_screen_routes_bands_to_their_players);
     RUN(test_split_screen_needs_two_seats);
