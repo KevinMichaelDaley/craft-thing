@@ -47,5 +47,7 @@ void fr_renderer_rebind_colors(dc_gpu_t *gpu);
 void fr_renderer_bind_sprites(dc_gpu_t *gpu,const VkDescriptorBufferInfo *buffer);
 /** Release the sprite channel after the queue is idle. */
 void fr_renderer_sprites_destroy(dc_gpu_t *gpu);
+/** Address of the published sprite and contact maps, or zero without an atlas. */
+VkDeviceAddress fr_renderer_sprites_address(const dc_gpu_t *gpu);
 
 #endif

@@ -23,7 +23,10 @@ layout(set=0,binding=7,std430) coherent buffer WaterEnergy {uint water_heat_word
 layout(set=0,binding=10,std430) coherent buffer BulkPhase {uint bulk_phase_words[];};
 float water_energy_at(uint at) {return uintBitsToFloat(water_heat_words[at]);}
 void water_energy_set(uint at,float energy) {water_heat_words[at]=floatBitsToUint(energy);}
-layout(push_constant) uniform Params {uint width,height,phase,seconds,pool_word,unused_view,mode,profile_count,page_width;} params;
+layout(push_constant) uniform Params {
+    uint width,height,phase,seconds,pool_word,unused_view,mode,profile_count,page_width;
+    uvec2 sprite_address;
+} params;
 uint active_phase() {return SPECIALIZED_PHASE==0xffffffffu?params.phase:SPECIALIZED_PHASE;}
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
@@ -31,6 +34,7 @@ layout(buffer_reference,std430,buffer_reference_align=16) buffer ParcelSamples {
 float coefficient(uint material,uint field) {return uintBitsToFloat(profiles[material*FR_PROFILE_WORDS+field]);}
 #include "coating_mass.glsl"
 #include "world_body.glsl"
+#include "pose_contact.glsl"
 uint atlas_at(uint index) {
     uint x=index%params.width,y=index/params.width,page=pages[(y/64u)*params.page_width+x/64u];
     return page==0u?0xffffffffu:(page-1u)*4096u+(y%64u)*64u+x%64u;
@@ -174,11 +178,14 @@ void main() {
             return;
         }
         body=body_thermal_grid(body);
+        uint contact_pose=active_phase()==20u?fr_body_contact_pose(params.sprite_address,slot,body):0u;
         for(uint piece=gl_LocalInvocationID.x;piece<body_pieces(body);piece+=64u) {
             if(pixel_piece_material(body,piece)==0u) continue;
             uvec2 h=fr_body_reactive_handle(body,slot,piece);if(h.y!=0u) {
                 if(active_phase()==20u) {
-                    body_wet_parcel(body,piece,h);
+                    Body contact=body;
+                    if(fr_body_project_contact(params.sprite_address,contact_pose,piece,contact))
+                        body_wet_parcel(contact,piece,h);
                     if((params.mode&2u)!=0u) {
                         body_phase_coat_parcel(body,piece,h,1u);
                         body_phase_coat_parcel(body,piece,h,2u);

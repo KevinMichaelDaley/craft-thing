@@ -20,11 +20,16 @@ void fr_renderer_sprites_destroy(dc_gpu_t *g) {
     dc_gpu_address_buffer_destroy(g,&g->sprites->channel);free(g->sprites);g->sprites=NULL;
 }
 
+VkDeviceAddress fr_renderer_sprites_address(const dc_gpu_t *g) {
+    return g->sprites ? g->sprites->channel.address : 0;
+}
+
 bool fr_renderer_sprite_atlas(dc_gpu_t *g,const fr_renderer_sprite_pixel_t *p,
     uint32_t n,char *err,uint32_t cap) {
-    if(!g||!p||!n||n>(UINT32_MAX-DC_SPRITE_ATLAS_WORD)/2u)
+    if(!g||!p||!n||n>(UINT32_MAX-DC_SPRITE_ATLAS_WORD-DC_SPRITE_CONTACT_WORDS)/2u)
         return sprite_error(err,cap,"Invalid sprite atlas");
-    VkDeviceSize bytes=((VkDeviceSize)DC_SPRITE_ATLAS_WORD+2u*n)*4u;
+    uint32_t contact=DC_SPRITE_ATLAS_WORD+2u*n;
+    VkDeviceSize bytes=((VkDeviceSize)contact+DC_SPRITE_CONTACT_WORDS)*4u;
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
     if(bytes>properties.limits.maxStorageBufferRange)
         return sprite_error(err,cap,"Sprite atlas exceeds device buffer range");
@@ -33,7 +38,7 @@ bool fr_renderer_sprite_atlas(dc_gpu_t *g,const fr_renderer_sprite_pixel_t *p,
     if(!next) return sprite_error(err,cap,"Cannot allocate sprite atlas owner");
     if(!dc_gpu_address_buffer_create(g,bytes,true,&next->channel,err,cap)) {free(next);return false;}
     next->pixels=n;uint32_t *w=next->channel.mapped;
-    memset(w,0,DC_SPRITE_ATLAS_WORD*4);w[0]=DC_SPRITE_MAGIC;
+    memset(w,0,(size_t)bytes);w[0]=DC_SPRITE_MAGIC;
     memcpy(w+DC_SPRITE_ATLAS_WORD,p,(size_t)n*sizeof(*p));
     VkDescriptorBufferInfo binding={next->channel.buffer,0,bytes};
     fr_renderer_bind_sprites(g,&binding);
@@ -53,10 +58,24 @@ bool fr_renderer_sprite_poses(dc_gpu_t *g,const fr_renderer_sprite_t *p,
             return sprite_error(err,cap,"Duplicate sprite body");
     }
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return sprite_error(err,cap,"Cannot reach sprite publication boundary");
-    uint32_t *w=g->sprites->channel.mapped;w[1]=n;
+    uint32_t *w=g->sprites->channel.mapped;
+    const uint32_t contact=DC_SPRITE_ATLAS_WORD+2u*g->sprites->pixels;
     for(uint32_t i=0;i<n;i++) {
         uint32_t *pose=w+DC_SPRITE_HEADER_WORDS+i*DC_SPRITE_POSE_WORDS;
+        uint32_t reverse_at=contact+i*DC_SPRITE_SOURCE_COUNT;
+        if(pose[2]!=p[i].offset||pose[3]!=p[i].width||pose[4]!=p[i].height) {
+            uint32_t *reverse=w+reverse_at;
+            memset(reverse,0,DC_SPRITE_SOURCE_COUNT*sizeof(*reverse));
+            const uint32_t *frame=w+DC_SPRITE_ATLAS_WORD+2u*p[i].offset;
+            for(uint32_t texel=0;texel<p[i].width*p[i].height;texel++) {
+                uint32_t source=frame[2u*texel+1u];
+                if(source&&source<=DC_SPRITE_SOURCE_COUNT&&(frame[2u*texel]>>24u)&&!reverse[source-1u])
+                    reverse[source-1u]=texel+1u;
+            }
+        }
         memcpy(pose,&p[i],sizeof(*p));
+        pose[DC_SPRITE_CONTACT_WORD]=reverse_at;
     }
+    w[1]=n;
     return true;
 }

@@ -7,6 +7,7 @@
 #include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "reactive_storage_gpu.h"
+#include "renderer_internal.h"
 #include "thermal_feedback_gpu.h"
 #include "thermal_gpu_internal.h"
 #include "thermal_gpu_state.h"
@@ -14,6 +15,7 @@
 #include "runtime_body_internal.h"
 
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds);
+enum { THERMAL_PUSH_WORDS = 12 };
 bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->gas) {
         if(err&&cap) snprintf(err,cap,"Combustion requires existing thermal and gas owners");
@@ -226,7 +228,7 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE},
         {g->bulk_phase_buffer,0,VK_WHOLE_SIZE}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,40,"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,THERMAL_PUSH_WORDS*sizeof(uint32_t),"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
     if(!specialize_phases(g,t,err,cap)) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
@@ -269,8 +271,12 @@ bool fr_thermal_gpu_is_bonfire_world(const dc_gpu_t *g) {
 }
 static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     struct fr_thermal_gpu *t=g->thermal;uint32_t bits=0;memcpy(&bits,&seconds,sizeof(bits));
-    uint32_t push[10]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,t->combustion.pipeline?1u:0u,
-        (t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u)|(g->bulk_phase_work_possible?2u:0u),t->profile_count,g->page_width,0u};
+    uint32_t push[THERMAL_PUSH_WORDS]={g->width,g->height,mode,bits,dc_gpu_pixel_pool_word_offset(g)+DC_GPU_PIXEL_POOL_HEADER_WORDS,t->combustion.pipeline?1u:0u,
+        (t->purpose==FR_THERMAL_WORLD_BONFIRE?1u:0u)|(g->bulk_phase_work_possible?2u:0u),t->profile_count,g->page_width};
+    if(mode==20u) {
+        VkDeviceAddress sprites=fr_renderer_sprites_address(g);
+        memcpy(push+10,&sprites,sizeof(sprites));
+    }
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
