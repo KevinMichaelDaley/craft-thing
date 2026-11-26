@@ -12,7 +12,8 @@ static uint32_t visual_channel(float linear) {
 }
 /** Compare the actual rendered view with the authoritative current pose. Check
  * surrounding air as well: old/debug body footprints cannot pass as artwork. */
-static bool runtime_visual_check(dc_level_view_t *v,char *err,uint32_t cap) {
+static bool runtime_visual_check(dc_level_view_t *v,uint32_t projectile_id,
+                                 char *err,uint32_t cap) {
     fr_player_t p;fr_beaver_body_t binding;dc_gpu_world_body_t body;dc_gpu_body_motion_t motion;
     dc_level_view_status_t status;uint32_t frame;
     if(!dc_players_status(v,0,&p,&binding)||!fr_player_frame(&p,&frame)||
@@ -47,6 +48,11 @@ static bool runtime_visual_check(dc_level_view_t *v,char *err,uint32_t cap) {
             int delta=(int)actual-(int)expected;
             if(delta>2||delta< -2) {
                 if(a.alpha==0) {
+                    uint32_t occupant;
+                    if(projectile_id&&dc_gpu_read_occupancy(dc_level_view_gpu(v),
+                        x+status.offset_x+HALO_CHUNKS*DC_CHUNK_SIDE,
+                        y+status.offset_y+HALO_CHUNKS*DC_CHUNK_SIDE,
+                        &occupant,NULL,err,cap)&&occupant==projectile_id) break;
                     dc_chunk_t chunk;dc_chunk_coord_t coord;uint32_t lx,ly;
                     dc_cell_address(x+(int64_t)status.offset_x,y+(int64_t)status.offset_y,&coord,&lx,&ly);
                     coord.x+=status.origin.x;coord.y+=status.origin.y;

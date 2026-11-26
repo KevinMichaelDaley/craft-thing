@@ -97,101 +97,52 @@ static void test_fire_bolt_spawns_burning_body_toward_target(void) {
     ASSERT_TRUE(coal.mass > 0.f);
     fr_reactive_record_t record;
     bool found = false;
-    uint32_t slot = 0u;
     for (uint32_t py = 0u; py < 3u && !found; py++)
         for (uint32_t pxx = 0u; pxx < 3u && !found; pxx++)
             ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, body, pxx, py, &record,
                                                   &found, err,
                                                   sizeof(err)));
     ASSERT_TRUE(found);
-    (void)slot;
     /* The bolt carries burning coal fuel into the world. */
     ASSERT_EQ(record.state.material, DC_MATERIAL_COAL);
     ASSERT_TRUE(record.state.fuel_mass_fp > 0u);
     ASSERT_TRUE((record.state.flags & FR_REACTIVE_FLAMING) != 0u);
     PASS();
 }
-static void test_fire_bolt_ignites_wood_on_impact(void) {
+static void test_fire_bolt_heats_wood_on_impact(void) {
     ASSERT_TRUE(setup_world());
-    /* Drop the bolt straight down into the wood wall at row 30. */
+    enum { WALL_SLOT = 11, WALL_ROW = 30, IMPACT_COLUMN = 28, SETTLE_TICKS = 51 };
+    fr_reactive_record_t wood;
+    bool found;
+    ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, WALL_SLOT,
+        WALL_ROW * DC_CHUNK_SIDE + IMPACT_COLUMN, &wood, &found, err, sizeof(err)));
+    ASSERT_TRUE(found);
+    double ambient = fr_reactive_state_energy(&wood.state);
+
     fr_player_point_t origin = point_at(220.f, 204.f);
     fr_player_point_t target = point_at(220.f, 224.f);
     uint32_t bolt = 0u;
     ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 7u, &origin,
                                          &target, &bolt, err, sizeof(err)));
     ASSERT_TRUE(bolt != 0u);
-    /* Follow the bolt while it flies and report where it ends up. */
     dc_gpu_world_body_t initial, flight;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &initial, err, sizeof(err)));
-    dc_gpu_body_record_t *rec = dc_gpu_find_body_record(gpu, bolt);
-    if (rec)
-        printf("bolt record visible %u enabled %u awake_word %u vx %d rest %u motion_ready %u\n",
-               rec->visible, rec->body.active, rec->visible,
-               rec->body.vx_fp, rec->rest_ticks, rec->motion_ready);
-    for (uint32_t tick = 0u; tick < 12u; tick++) {
+    ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &flight, err, sizeof(err)));
+    ASSERT_EQ(flight.chunk.y, initial.chunk.y);
+    ASSERT_TRUE(flight.body.y_fp > initial.body.y_fp);
+    for (uint32_t tick = 0u; tick < SETTLE_TICKS; ++tick)
         ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
-        if (tick == 0u) {
-            ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &flight, err, sizeof(err)));
-            ASSERT_EQ(flight.chunk.y, initial.chunk.y);
-            ASSERT_TRUE(flight.body.y_fp > initial.body.y_fp);
-        }
-        if (dc_gpu_read_world_body(gpu, bolt, &flight, err, sizeof(err)))
-            printf("bolt tick %u at %.1f,%.1f v %.2f,%.2f\n", tick,
-                   (float)flight.chunk.x * 64.f +
-                       flight.body.x_fp / 65536.f,
-                   (float)flight.chunk.y * 64.f +
-                       flight.body.y_fp / 65536.f,
-                   (float)flight.body.vx_fp / 65536.f,
-                   (float)flight.body.vy_fp / 65536.f);
-    }
-    uint32_t hit_slot = UINT32_MAX;
-    for (uint32_t tick = 0u; tick < 40u; tick++) {
-        ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
-        double hottest = 0.;
-        uint32_t hottest_cell = 0u;
-        uint32_t branded = 0u;
-        for (uint32_t x = 24u; x < 33u; x++) {
-            fr_reactive_record_t touch;
-            bool touch_found = false;
-            if (!fr_gpu_reactive_read_cell(gpu, 11u, 30u * 64u + x, &touch,
-                                           &touch_found, err, sizeof(err)) ||
-                !touch_found)
-                continue;
-            double energy = fr_reactive_state_energy(&touch.state);
-            if (energy > hottest) {
-                hottest = energy;
-                hottest_cell = x;
-            }
-            if (touch.state.coating_oil_fuel_fp > 0u) branded++;
-        }
-        if (tick % 8u == 0u || branded)
-            printf("wall tick %u hottest cell %u at %.3g branded %u\n", tick,
-                   hottest_cell, hottest, branded);
-        if (branded) break;
-    }
-    (void)hit_slot;
-    fr_reactive_record_t bolt_cell;
-    bool bolt_found = false;
-    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bolt, 1u, 1u, &bolt_cell,
-                                          &bolt_found, err, sizeof(err)));
-    if (bolt_found)
-        printf("bolt center flags %u fuel %u heat %.4g\n",
-               bolt_cell.state.flags, bolt_cell.state.fuel_mass_fp,
-               fr_reactive_state_energy(&bolt_cell.state));
-    /* The struck wood warmed far above ambient from the burning charge:
-     * conductive and brand heating at the contact strip is the ignition
-     * deposit, and sustained flame follows through ordinary combustion. */
+
     double hottest = 0.;
-    for (uint32_t x = 24u; x < 33u; x++) {
-        fr_reactive_record_t wood;
-        bool found = false;
-        ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, 11u, 30u * 64u + x, &wood,
-                                              &found, err, sizeof(err)));
+    for (uint32_t x = IMPACT_COLUMN - 4u; x <= IMPACT_COLUMN + 4u; ++x) {
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(gpu, WALL_SLOT, WALL_ROW * DC_CHUNK_SIDE + x,
+                                              &wood, &found, err, sizeof(err)));
         if (found && fr_reactive_state_energy(&wood.state) > hottest)
             hottest = fr_reactive_state_energy(&wood.state);
     }
-    printf("wall hottest %.4g over ambient %.4g\n", hottest, 264.);
-    ASSERT_TRUE(hottest > 264. * 1.4);
+    printf("wall hottest %.4g over ambient %.4g\n", hottest, ambient);
+    ASSERT_TRUE(hottest > ambient * 1.4);
     PASS();
 }
 
@@ -263,6 +214,14 @@ static void test_fire_bolt_owns_every_burning_texel_across_a_streamed_seam(void)
     }
     ASSERT_EQ(terrain_at(12u, 63u, 16u), DC_MATERIAL_AIR);
     ASSERT_EQ(terrain_at(13u, 0u, 16u), DC_MATERIAL_AIR);
+
+    const fr_player_point_t grazing_origin = {left, 57.f, 24.f};
+    const fr_player_point_t grazing_target = {right, 20.f, 24.f + 0x1p-10f};
+    ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 7u, &grazing_origin, &grazing_target,
+                                         &bolt, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_read_world_body(gpu, bolt, &body, err, sizeof(err)));
+    ASSERT_EQ(body.chunk.x, left.x);
+    ASSERT_EQ(body.body.x_fp, 63 * DC_FLUID_FULL);
     PASS();
 }
 
@@ -276,16 +235,23 @@ static void test_repeated_bolts_leave_unrelated_bodies_and_terrain_alone(void) {
                                      err, sizeof(err)));
     const fr_player_point_t origins[] = {point_at(200.f, 210.f), point_at(200.f, 217.f)};
     const fr_player_point_t targets[] = {point_at(232.f, 210.f), point_at(232.f, 217.f)};
-    uint32_t first, second;
+    uint32_t first, second, blocked;
     dc_gpu_extraction_stats_t before, after;
+    fr_gpu_reactive_stats_t parcels_before, parcels_after;
     ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &before));
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(gpu, &parcels_before, err, sizeof(err)));
     ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 7u, &origins[0], &targets[0],
                                          &first, err, sizeof(err)));
+    ASSERT_TRUE(!fr_player_cast_fire_bolt(gpu, 7u, &origins[0], &targets[0],
+                                          &blocked, err, sizeof(err)));
+    ASSERT_EQ(blocked, 0u);
     ASSERT_TRUE(fr_player_cast_fire_bolt(gpu, 8u, &origins[1], &targets[1],
                                          &second, err, sizeof(err)));
     ASSERT_TRUE(first && second && first != second && first != decoy_id && second != decoy_id);
     ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &after));
     ASSERT_EQ(after.owned_bodies, before.owned_bodies + 2u);
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(gpu, &parcels_after, err, sizeof(err)));
+    ASSERT_EQ(parcels_after.live, parcels_before.live + 10u);
     dc_gpu_world_body_t still;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu, decoy_id, &still, err, sizeof(err)));
     ASSERT_EQ(still.body.vx_fp, 0);
@@ -309,7 +275,9 @@ static void test_fire_bolt_rejects_occupied_and_unmapped_footprints(void) {
     ASSERT_TRUE(dc_gpu_paint_material(gpu, 228u, 214u, 0u, DC_MATERIAL_STONE,
                                      err, sizeof(err)));
     dc_gpu_extraction_stats_t before, after;
+    fr_gpu_reactive_stats_t parcels_before, parcels_after;
     ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &before));
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(gpu, &parcels_before, err, sizeof(err)));
     uint32_t bolt = UINT32_MAX;
     ASSERT_TRUE(!fr_player_cast_fire_bolt(gpu, 7u, &origin, &target, &bolt,
                                           err, sizeof(err)));
@@ -324,6 +292,8 @@ static void test_fire_bolt_rejects_occupied_and_unmapped_footprints(void) {
     ASSERT_EQ(bolt, 0u);
     ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &after));
     ASSERT_EQ(after.owned_bodies, before.owned_bodies);
+    ASSERT_TRUE(fr_gpu_reactive_read_stats(gpu, &parcels_after, err, sizeof(err)));
+    ASSERT_EQ(parcels_after.live, parcels_before.live);
     PASS();
 }
 static void test_ice_storm_chills_cells_within_radius(void) {
@@ -457,7 +427,7 @@ static void test_ice_storm_rejects_unmapped_or_noncanonical_target(void) {
 int main(void) {
     printf("=== Player Ability Cast Tests ===\n\n");
     RUN(test_fire_bolt_spawns_burning_body_toward_target);
-    RUN(test_fire_bolt_ignites_wood_on_impact);
+    RUN(test_fire_bolt_heats_wood_on_impact);
     RUN(test_fire_bolt_owns_every_burning_texel_across_a_streamed_seam);
     RUN(test_repeated_bolts_leave_unrelated_bodies_and_terrain_alone);
     RUN(test_fire_bolt_rejects_occupied_and_unmapped_footprints);

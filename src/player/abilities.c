@@ -55,9 +55,12 @@ static bool bolt_offset_point(const fr_player_point_t *origin, double dx, double
         (chunk_offset.y > 0 && origin->chunk.y > INT64_MAX - chunk_offset.y) ||
         (chunk_offset.y < 0 && origin->chunk.y < INT64_MIN - chunk_offset.y))
         return false;
+    /* Rounding a fractional local coordinate must not move it to the next chunk. */
+    float max_local = nextafterf((float)DC_CHUNK_SIDE, 0.f);
     *out = (fr_player_point_t){{origin->chunk.x + chunk_offset.x,
                                 origin->chunk.y + chunk_offset.y},
-        (float)(lx + (x - floor_x)), (float)(ly + (y - floor_y))};
+        fminf((float)(lx + (x - floor_x)), max_local),
+        fminf((float)(ly + (y - floor_y)), max_local)};
     return true;
 }
 
