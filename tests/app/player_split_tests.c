@@ -18,6 +18,7 @@ static char err[256];
 static dc_level_view_t *v=NULL;
 static SDL_Window *cover_window;
 static uint32_t *before_pixels, *after_pixels;
+enum { RETICLE_ARM_SAMPLE = 4, RGB_WHITE = 0x00ffffff };
 
 static bool capture_window(dc_gpu_t *gpu, uint32_t **pixels) {
     size_t count = (size_t)gpu->swap_extent.width * gpu->swap_extent.height;
@@ -103,7 +104,8 @@ static void test_split_screen_routes_bands_to_their_players(void) {
     ASSERT_TRUE(dc_gpu_screen_cell(gpu,VIEW_WIDTH*WINDOW_SCALE/2u,0,&right_x,&y));
     ASSERT_TRUE(right_x>left_x);
     ASSERT_TRUE(dc_level_view_tick(v,err,sizeof(err)) && capture_window(gpu,&before_pixels));
-    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&band));
+    dc_level_view_status_t before, after;
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&band) && dc_level_view_status(v,&before));
     SDL_Event e={.type=SDL_KEYDOWN};e.key.keysym.scancode=SDL_SCANCODE_D;
     ASSERT_TRUE(dc_players_event(v,&e));
     for (unsigned n=0;n<40;n++)
@@ -111,8 +113,10 @@ static void test_split_screen_routes_bands_to_their_players(void) {
     e.type=SDL_KEYUP;ASSERT_TRUE(dc_players_event(v,&e));
     ASSERT_TRUE(capture_window(gpu,&after_pixels));
     dc_presentation_layout_t walked;
-    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&walked));
-    ASSERT_TRUE(walked.x != band.x && band_changed(gpu,&band));
+    ASSERT_TRUE(dc_gpu_presentation_view(gpu,0,&walked) && dc_level_view_status(v,&after));
+    int64_t before_x = before.origin.x * DC_CHUNK_SIDE + before.offset_x + band.x;
+    int64_t after_x = after.origin.x * DC_CHUNK_SIDE + after.offset_x + walked.x;
+    ASSERT_TRUE(before_x != after_x && band_changed(gpu,&band));
     mkdir("build/agents",0777);mkdir("build/agents/beaver-player",0777);
     mkdir("build/agents/beaver-player/split",0777);
     ASSERT_TRUE(save_window(gpu,before_pixels,"build/agents/beaver-player/split/split-start.bmp"));
@@ -321,17 +325,17 @@ static void test_aim_reticle_is_drawn_only_in_its_own_window_band(void) {
     uint32_t other_y=keyboard.top+(aim_y-keyboard.y)*keyboard.scale+keyboard.scale/2u;
     uint32_t aim_pixel, other_pixel;
     ASSERT_TRUE(capture_window(gpu,&before_pixels));
-    ASSERT_TRUE(read_window_pixel(gpu,before_pixels,marker_x+4u,marker_y,&aim_pixel));
-    ASSERT_TRUE(read_window_pixel(gpu,before_pixels,other_x+4u,other_y,&other_pixel));
-    ASSERT_EQ(aim_pixel & 0x00ffffffu, 0x00ffffffu);
-    ASSERT_TRUE((other_pixel & 0x00ffffffu) != 0x00ffffffu);
+    ASSERT_TRUE(read_window_pixel(gpu,before_pixels,marker_x+RETICLE_ARM_SAMPLE,marker_y,&aim_pixel));
+    ASSERT_TRUE(read_window_pixel(gpu,before_pixels,other_x+RETICLE_ARM_SAMPLE,other_y,&other_pixel));
+    ASSERT_EQ(aim_pixel & RGB_WHITE, RGB_WHITE);
+    ASSERT_TRUE((other_pixel & RGB_WHITE) != RGB_WHITE);
     const SDL_Event disconnect = {.cdevice = {.type = SDL_CONTROLLERDEVICEREMOVED, .which = 42}};
     dc_players_event(v,&disconnect);
     ASSERT_TRUE(world_step());
     ASSERT_TRUE(dc_players_status(v,1,&player,&body)&&!player.intent.has_target);
     ASSERT_TRUE(capture_window(gpu,&after_pixels));
-    ASSERT_TRUE(read_window_pixel(gpu,after_pixels,marker_x+4u,marker_y,&aim_pixel));
-    ASSERT_TRUE((aim_pixel & 0x00ffffffu) != 0x00ffffffu);
+    ASSERT_TRUE(read_window_pixel(gpu,after_pixels,marker_x+RETICLE_ARM_SAMPLE,marker_y,&aim_pixel));
+    ASSERT_TRUE((aim_pixel & RGB_WHITE) != RGB_WHITE);
     PASS();
 }
 

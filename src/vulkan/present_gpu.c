@@ -88,6 +88,21 @@ static void record_reticles(dc_gpu_t *gpu, VkImage destination,
         destination, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, count, blits, VK_FILTER_NEAREST);
 }
 
+static void record_composed_readback(dc_gpu_t *gpu, VkImage composed, VkBuffer capture) {
+    const VkPipelineStageFlags2 transfer = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    image_barrier(gpu->command, composed, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, transfer, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        transfer, VK_ACCESS_2_TRANSFER_READ_BIT);
+    const VkBufferImageCopy readback = {
+        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        .imageExtent = {gpu->swap_extent.width, gpu->swap_extent.height, 1},
+    };
+    vkCmdCopyImageToBuffer(gpu->command, composed, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        capture, 1, &readback);
+    fr_renderer_barrier(gpu->command, transfer, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+}
+
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkBuffer capture,
                           char *err, uint32_t cap) {
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
@@ -111,6 +126,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
         return error(err, cap, "Vulkan window image acquisition timed out");
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Cannot acquire Vulkan window image");
+    const VkImage composed = gpu->swap_images[index];
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset present command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -165,7 +181,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_TRANSFER_READ_BIT);
-    image_barrier(gpu->command, gpu->swap_images[index], VK_IMAGE_LAYOUT_UNDEFINED,
+    image_barrier(gpu->command, composed, VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     dc_presentation_layout_t layouts[DC_PRESENTATION_VIEW_LIMIT];
@@ -179,9 +195,9 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
         scaled_height != gpu->swap_extent.height) {
         VkClearColorValue background = { .float32 = {0.02f, 0.02f, 0.02f, 1.0f} };
         VkImageSubresourceRange color_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        vkCmdClearColorImage(gpu->command, gpu->swap_images[index],
+        vkCmdClearColorImage(gpu->command, composed,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &background, 1, &color_range);
-        image_barrier(gpu->command, gpu->swap_images[index],
+        image_barrier(gpu->command, composed,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
             VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
@@ -202,35 +218,21 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
                             {(int32_t)(left + band_scaled_width),
                              (int32_t)(top + band_scaled_height), 1} } };
         vkCmdBlitImage(gpu->command, gpu->frame_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            gpu->swap_images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+            composed, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
         if (band + 1u < band_count) {
-            image_barrier(gpu->command, gpu->swap_images[index],
+            image_barrier(gpu->command, composed,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
         }
     }
-    record_reticles(gpu, gpu->swap_images[index], layouts);
-    VkImageLayout composed_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    VkAccessFlags2 composed_access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    if (capture) {
-        image_barrier(gpu->command, gpu->swap_images[index], composed_layout,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            composed_access, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
-        const VkBufferImageCopy readback = {
-            .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-            .imageExtent = {gpu->swap_extent.width, gpu->swap_extent.height, 1},
-        };
-        composed_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        composed_access = VK_ACCESS_2_TRANSFER_READ_BIT;
-        vkCmdCopyImageToBuffer(gpu->command, gpu->swap_images[index], composed_layout,
-            capture, 1, &readback);
-        fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
-    }
-    image_barrier(gpu->command, gpu->swap_images[index], composed_layout,
+    record_reticles(gpu, composed, layouts);
+    if (capture) record_composed_readback(gpu, composed, capture);
+    image_barrier(gpu->command, composed,
+        capture ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        composed_access, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
+        capture ? VK_ACCESS_2_TRANSFER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end present command buffer");
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
