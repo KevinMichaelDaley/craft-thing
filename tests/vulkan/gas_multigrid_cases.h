@@ -86,6 +86,7 @@ static void check_native_gas_dispatch_fusion(const char *setting,bool metadata,u
             if(cached_neighbors&&step==0u) ASSERT_TRUE(fr_gas_gpu_activity_metadata(g,activity_modes+path));
             if(zero_energy&&step==0u) ASSERT_TRUE(fr_gas_gpu_zero_energy_metadata(g,zero_energy_used+path));
         }
+        /* Invalidated matrices take the full pressure path until rebuilt. */
         if(lazy_clear) ASSERT_EQ(lazy_clear_executed,path!=0u);
         work[path]=g_pressure_dispatches+g_direct_dispatches;
         ASSERT_TRUE(fr_gas_gpu_sor_tile_metadata(g,large_sor_used+path)&&fr_gas_gpu_sor_tile_size(g,large_sor_sizes+path));
@@ -353,16 +354,17 @@ static void test_native_rhs_neighbor_tile_cache_preserves_fused_fields(void) {
 }
 static void test_native_lazy_clear_keeps_active_quiet_and_dormant_fields(void) {
     char err[256]={0};
-    const char *options[]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_LARGE"};
-    char *previous[2]={0};
-    for(uint32_t i=0;i<2u;i++) {
+    const char *const options[]={"DC_GAS_SPARSE_RHS","DC_GAS_SPARSE_LARGE"};
+    char *previous[sizeof(options)/sizeof(options[0])]={0};
+    const size_t count=sizeof(previous)/sizeof(previous[0]);
+    for(size_t i=0;i<count;i++) {
         const char *value=getenv(options[i]);
         previous[i]=value?SDL_strdup(value):NULL;
         ASSERT_TRUE(!value||previous[i]);
         ASSERT_EQ(SDL_setenv(options[i],"1",1),0);
     }
     check_native_gas_dispatch_fusion("DC_GAS_LAZY_CLEAR",true,UINT32_MAX);
-    for(uint32_t i=0;i<2u;i++) {
+    for(size_t i=0;i<count;i++) {
         int restored=previous[i]?SDL_setenv(options[i],previous[i],1):unsetenv(options[i]);
         SDL_free(previous[i]);
         ASSERT_EQ(restored,0);

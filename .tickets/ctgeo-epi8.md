@@ -26,3 +26,7 @@ The helper currently configures multigrid, fused axis and temporal SOR. Neither 
 **2026-11-26T19:37:58Z**
 
 Correction from native tracing: sparse RHS and sparse large are enabled by default. With both enabled, the eagerly cleared comparison entered the pressure pass with an invalid matrix on ticks 1–7 and a valid matrix on tick 8. The old fixed check failed on the second lazy tick with 121 prior dirty pressure tiles and an invalid matrix. Checking execution across the full comparison passes at default settings with 53 versus 53 dispatches and exact snapshots. The same rebuilt regression remains RED when sparse options are inherited as zero, failing to keep the quiet mapped snapshot.
+
+**2026-11-26T19:40:24Z**
+
+The corrected displayed fixture passes both with default options and with sparse RHS and sparse large inherited as zero. It enables the two prerequisites locally and restores their prior values. It confirms lazy shader execution during the eight accepted steps, eager shader exclusion, 53 versus 53 dispatches, and bit-identical active, quiet, and dormant snapshots. The full displayed publication and whole-project suites are pending.

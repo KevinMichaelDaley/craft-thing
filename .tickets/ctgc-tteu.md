@@ -72,3 +72,7 @@ The exact 9513f4f3 locked depletion replay exited 2 at Greek second 141 after 84
 **2026-11-26T19:29:55Z**
 
 The arithmetic probe passed on 9513f4f3 at all 60 large-step ticks of the first second. It matched the locked native total +0.000722803 Q16 and reconciled the horizontal sweep exactly. The -0.000058689 horizontal change was represented-stock rounding (-0.000058082 explicit and -0.000000607 implicit), with zero signed face imbalance in both modes. The probe is capturing seconds 131–145 after native warm-up to test whether the late gain has the same source. The exact explicit-order refactor is queued for a separate locked replay after this probe.
+
+**2026-11-26T19:41:05Z**
+
+The 9513f4f3 late arithmetic capture matched the locked replay at second 141 (+4.012883186 Q16). Across the 900 accepted ticks of seconds 131–145, explicit horizontal stock rounding added +1.248927116 Q16. Horizontal face imbalance, horizontal implicit fallback, and the unexplained horizontal remainder each rounded to exactly 0.000000000 Q16. Vertical transport added +0.026367188 Q16. The aggregate matches the independent phase probe. Preserve the four-unit gate and the effect of small trace fluxes in the transport fix. The exact-order replay is queued separately.
