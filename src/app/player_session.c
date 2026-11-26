@@ -127,7 +127,20 @@ static bool players_publish(dc_level_view_t *v,char *err,uint32_t cap) {
     }
     return fr_renderer_sprite_poses(v->gpu,poses,s->count,err,cap);
 }
-static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
+static bool players_prepare_input(const struct dc_player_session *s,uint32_t seat,int64_t device,
+                                  fr_input_t *prepared,char *err,uint32_t cap) {
+    *prepared=s->input;
+    uint64_t identity=seat+1u;
+    if(seat==s->count&&(!fr_input_add_player(prepared,identity)||
+       !fr_input_context(prepared,identity,s->input.players[0].context)))
+        return players_error(err,cap,"Cannot register player input owner");
+    if(!fr_input_connect(prepared,device,identity)||
+       !fr_input_sdl_defaults(prepared,device,device!=FR_INPUT_KEYBOARD_DEVICE))
+        return players_error(err,cap,"Cannot bind player input owner");
+    return true;
+}
+
+static bool players_add(dc_level_view_t *v,int64_t device,const fr_input_t *prepared,char *err,uint32_t cap) {
     struct dc_player_session *s=v->players;uint32_t n=s->count;
     if(n>=FR_INPUT_PLAYERS) return players_error(err,cap,"Local player capacity reached");
     uint64_t transaction=DC_PLAYER_TRANSACTION_BASE+n+1u;uint32_t found=0;
@@ -152,10 +165,9 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
        !fr_player_ability_set(&s->players[n],s->fire,true)||!fr_player_ability_set(&s->players[n],s->ice,true)||
        !fr_player_hotbar_put_spell(&s->hotbar[n],1u,s->fire)||!fr_player_hotbar_put_spell(&s->hotbar[n],2u,s->ice)||
        !fr_player_hotbar_put_material(&s->hotbar[n],3u,DC_MATERIAL_STONE)||
-       !fr_player_hotbar_put_material(&s->hotbar[n],4u,DC_MATERIAL_WOOD)||
-       !fr_input_add_player(&s->input,n+1)||!fr_input_connect(&s->input,device,n+1)||
-       !fr_input_sdl_defaults(&s->input,device,device!=FR_INPUT_KEYBOARD_DEVICE)) return players_error(err,cap,"Cannot bind player input owner");
-    fr_input_context(&s->input,n+1,s->input.players[0].context);
+       !fr_player_hotbar_put_material(&s->hotbar[n],4u,DC_MATERIAL_WOOD))
+        return players_error(err,cap,"Cannot initialize player abilities and hotbar");
+    s->input=*prepared;
     s->manipulation[n] = (fr_player_manipulation_t){.carry_weight=60., .throw_force=4., .reach=24.};
     s->device[n]=device;s->count++;
     fr_player_body_binding_t bindings[FR_INPUT_PLAYERS];
@@ -169,6 +181,39 @@ static bool players_add(dc_level_view_t *v,int64_t device,char *err,uint32_t cap
     }
     return players_publish(v,err,cap);
 }
+
+static bool players_add_keyboard(dc_level_view_t *v,char *err,uint32_t cap) {
+    fr_input_t prepared;
+    return players_prepare_input(v->players,0u,FR_INPUT_KEYBOARD_DEVICE,&prepared,err,cap)&&
+        players_add(v,FR_INPUT_KEYBOARD_DEVICE,&prepared,err,cap);
+}
+
+static bool players_join_controller(dc_level_view_t *v,int64_t device,bool *backend_failed,
+                                     char *err,uint32_t cap) {
+    *backend_failed=false;
+    if(!v||!v->players) return players_error(err,cap,"Player session is absent");
+    if(device==FR_INPUT_KEYBOARD_DEVICE||device==INT64_MIN)
+        return players_error(err,cap,"Reserved controller device ID");
+    struct dc_player_session *s=v->players;
+    if(!s->count) return players_error(err,cap,"The keyboard player must enable first");
+    uint32_t seat=s->count;
+    for(uint32_t n=1u;n<s->count;n++) {
+        if(s->device[n]==device) return true;
+        if(s->device[n]==INT64_MIN&&seat==s->count) seat=n;
+    }
+    if(seat>=FR_INPUT_PLAYERS) return players_error(err,cap,"Local player capacity reached");
+    fr_input_t prepared;
+    if(!players_prepare_input(s,seat,device,&prepared,err,cap)) return false;
+    if(seat<s->count) {
+        s->input=prepared;
+        s->device[seat]=device;
+        return true;
+    }
+    bool joined=players_add(v,device,&prepared,err,cap);
+    *backend_failed=!joined;
+    return joined;
+}
+
 static void players_open(struct dc_player_session *s,int index) {
     if(!SDL_IsGameController(index)) return;
     for(unsigned n=0;n<FR_INPUT_DEVICES;n++) if(!s->controllers[n]) {
@@ -209,7 +254,7 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,
         fr_player_registry_init(&s->registry,s->definitions,2)&&
         fr_player_register(&s->registry,"test:fire_bolt",FR_PLAYER_ABILITY,0,&s->fire,err,cap)&&
         fr_player_register(&s->registry,"test:ice_storm",FR_PLAYER_ABILITY,0,&s->ice,err,cap)&&
-        fr_player_registry_seal(&s->registry)&&players_atlas(v,err,cap)&&players_add(v,FR_INPUT_KEYBOARD_DEVICE,err,cap)&&
+        fr_player_registry_seal(&s->registry)&&players_atlas(v,err,cap)&&players_add_keyboard(v,err,cap)&&
         fr_thermal_gpu_enable(v->gpu,err,cap)&&fr_thermal_gpu_overlay(v->gpu,0)&&
         dc_level_view_set_spring_enabled(v,false)&&dc_level_view_renderer_mode(v,FR_RENDERER_ALBEDO);
     if(!okay) {dc_players_destroy(v);return false;}
@@ -288,14 +333,14 @@ bool dc_players_event(dc_level_view_t *v,const SDL_Event *e) {
         for(uint32_t n=0;n<s->count;n++) players_cancel_windup(s,n);
     }
     if(e->type==SDL_CONTROLLERBUTTONDOWN&&e->cbutton.button==SDL_CONTROLLER_BUTTON_START) {
-        for(uint32_t n=0;n<s->count;n++) if(s->device[n]==e->cbutton.which) return true;
-        for(uint32_t n=1;n<s->count;n++) if(s->device[n]==INT64_MIN) {
-            fr_input_connect(&s->input,e->cbutton.which,n+1);fr_input_sdl_defaults(&s->input,e->cbutton.which,true);
-            s->device[n]=e->cbutton.which;return true;
+        uint32_t previous_count=s->count;
+        bool backend_failed;
+        char detail[sizeof(s->failure)]={0};
+        if(players_join_controller(v,e->cbutton.which,&backend_failed,detail,sizeof(detail))) {
+            if(s->count!=previous_count) dc_players_split_screen(v,s->count,s->failure,sizeof(s->failure));
+        } else if(backend_failed) {
+            players_error(s->failure,sizeof(s->failure),detail[0]?detail:"Cannot admit player body");
         }
-        if (s->count < FR_INPUT_PLAYERS &&
-            players_add(v,e->cbutton.which,s->failure,sizeof(s->failure)))
-            dc_players_split_screen(v,s->count,s->failure,sizeof(s->failure));
         return true;
     }
     uint32_t before[FR_INPUT_PLAYERS];
@@ -506,12 +551,8 @@ bool dc_players_inventory(dc_level_view_t *v,uint32_t n,
 }
 
 bool dc_players_join(dc_level_view_t *v,int64_t device,char *err,uint32_t cap) {
-    if(!v||!v->players) return players_error(err,cap,"Player session is absent");
-    struct dc_player_session *s=v->players;
-    for(uint32_t n=1;n<s->count;n++) if(s->device[n]==device) return true;
-    if(!s->count) return players_error(err,cap,"The keyboard player must enable first");
-    if(s->count>=FR_INPUT_PLAYERS) return players_error(err,cap,"Local player capacity reached");
-    return players_add(v,device,err,cap);
+    bool backend_failed;
+    return players_join_controller(v,device,&backend_failed,err,cap);
 }
 
 static bool split_refresh(dc_level_view_t *v, uint32_t count, char *err, uint32_t cap) {
