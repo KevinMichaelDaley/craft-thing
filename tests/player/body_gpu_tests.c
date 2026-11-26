@@ -197,7 +197,8 @@ static void test_visible_combustion_uses_local_oxygen_and_leaves_hidden_fuel(voi
     ASSERT_TRUE(dc_gpu_set_body_origin(g, (dc_chunk_coord_t){0, 0}, err, sizeof(err)));
     fr_beaver_body_t body;
     ASSERT_TRUE(fr_beaver_body_admit(g, 41, 71, 0, (dc_chunk_coord_t){0, 0},
-                                    8 * DC_FLUID_FULL, 8 * DC_FLUID_FULL, &body, err, sizeof(err)));
+                                    8 * DC_FLUID_FULL + DC_FLUID_FULL / 4, 8 * DC_FLUID_FULL,
+                                    &body, err, sizeof(err)));
     const fr_renderer_sprite_pixel_t atlas[2u * POSE_WIDTH] = {
         [0] = {0xffc08040u, FUR}, [POSE_WIDTH - 1] = {0xff8040c0u, HAT},
         [2u * POSE_WIDTH - 1] = {0xff8040c0u, HAT}
