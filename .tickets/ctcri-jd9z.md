@@ -2,7 +2,7 @@
 id: ctcri-jd9z
 status: in_progress
 deps: []
-links: [ct-1i55, ctcr-uh5f]
+links: [ct-1i55, ctcr-uh5f, ctpao-oywm, ctpao-vwpc]
 created: 2026-11-26T22:48:28Z
 type: bug
 priority: 1
@@ -32,3 +32,7 @@ RED production session fixture injects failures separately in movement, ray, and
 **2026-11-26T23:04:32Z**
 
 GREEN passed all 14 production session tests, including the individual drive, ray, and sprite failure controls and their retries. Seven ray scheduling cases passed, including append of a new emitter without replacing an active ray. The SDL/Vulkan fault-injection fixture and body, ray, and action binaries compiled.
+
+**2026-11-26T23:13:08Z**
+
+The first native join fixture completed all three rollback checks before its retry assertion read a cached slot bound as a count of live owners. The exhaustive fixture now counts live owner records directly. The separate Vulkan body suite passed 6/6, ray suite passed 3/3 and visible actions passed 8/8.
