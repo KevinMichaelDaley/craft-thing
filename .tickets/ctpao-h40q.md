@@ -1,6 +1,6 @@
 ---
 id: ctpao-h40q
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-26T23:12:45Z
@@ -23,3 +23,7 @@ Capture the Vulkan setup diagnostic in the halo fixture. Re-run the exact native
 **2026-11-26T23:12:45Z**
 
 Exact 486563d0 make test exited 2 at Makefile:871. The same revision has an isolated halo test queued under GPU memory headroom.
+
+**2026-11-26T23:32:27Z**
+
+RED links and drives the real halo fixture with the Vulkan driver deliberately unavailable. It exits with four setup failures, but the assertions suppress the Vulkan error and also print four OK lines. The regression fails on the absent loader diagnostic. The linked fixture additionally enforces one live context for the next native replay.

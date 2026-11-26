@@ -726,8 +726,12 @@ build/native_scene_tests: tests/vulkan/native_scene_tests.c tests/vulkan/native_
 bench_native: build/native_bench
 	./build/native_bench
 
-build/halo_tests: tests/vulkan/halo_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/halo_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+build/halo_tests: tests/vulkan/halo_tests.c tests/vulkan/halo_context_guard.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_create -Wl,--wrap=dc_gpu_destroy
+.PHONY: test_halo_fixture_diagnostic
+test_halo_fixture_diagnostic: build/halo_tests
+	python3 tests/vulkan/halo_fixture_test.py
+test: test_halo_fixture_diagnostic
 
 build/fluid_tests: tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/fluid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
