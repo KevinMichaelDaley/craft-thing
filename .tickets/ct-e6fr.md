@@ -2,7 +2,7 @@
 id: ct-e6fr
 status: in_progress
 deps: []
-links: [ctlo-ao7l]
+links: [ctlo-ao7l, ctfls-xxfd, ctlo-ehqj]
 created: 2026-11-03T12:23:48Z
 type: bug
 priority: 1

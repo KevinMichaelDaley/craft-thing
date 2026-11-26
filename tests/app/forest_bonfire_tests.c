@@ -364,8 +364,14 @@ static void test_locked_forest_scene_matches_the_manifest_fixture(void) {
     bool built = dc_forest_scene_build(gpu, false, false, &scene, err, sizeof(err));
     if (!built) printf("forest build: %s\n", err);
     ASSERT_TRUE(built);
-    /* Ember cells are the cell-owned pit-floor kindling starters. */
-    ASSERT_TRUE(scene.pile_cells > 80u && scene.ember_cells >= 5u);
+    const uint32_t floor_x = 238u, floor_y = 206u;
+    uint32_t floor_slot = forest_tile_slot(gpu, floor_x, floor_y);
+    ASSERT_TRUE(floor_slot != 0u);
+    dc_chunk_t floor = {0};
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, floor_slot - 1u, &floor, err, sizeof(err)));
+    ASSERT_EQ(floor.cells[(floor_y % 64u) * 64u + floor_x % 64u].material, DC_MATERIAL_AIR);
+    ASSERT_EQ(scene.pile_cells, 90u);
+    ASSERT_EQ(scene.ember_cells, 37u);
     ASSERT_TRUE(scene.pile_fuel_fp > 0u && scene.pile_char_fp > 0u);
     for (uint32_t tree = 0; tree < DC_FOREST_TREE_COUNT; tree++)
         ASSERT_TRUE(scene.tree_fuel_fp[tree] > 0u);
@@ -695,6 +701,15 @@ static void forest_probe_diagnostic(void) {
 #endif /* DC_FOREST_DISPLAY_INCLUDE */
 
 #ifndef DC_FOREST_DISPLAY_INCLUDE
+static void test_forest_manifest_starter_location(void) {
+    printf("Forest starter (%u,%u), radius %u\n", DC_FOREST_IGNITION_X,
+           DC_FOREST_IGNITION_Y, DC_FOREST_IGNITION_RADIUS);
+    ASSERT_INT_EQ(DC_FOREST_IGNITION_X, 228);
+    ASSERT_INT_EQ(DC_FOREST_IGNITION_Y, 204);
+    ASSERT_INT_EQ(DC_FOREST_IGNITION_RADIUS, 4);
+    PASS();
+}
+
 static void test_warmth_window_includes_its_scheduled_endpoint(void) {
     const uint32_t endpoint = DC_FOREST_WARMTH_END_S / DC_FOREST_SAMPLE_INTERVAL_S;
     forest_run_t run = {.sample_count = endpoint + 2u};
@@ -713,6 +728,12 @@ static void test_warmth_window_includes_its_scheduled_endpoint(void) {
 
 int main(int argc, char **argv) {
     mkdir("build/screenshots", 0777);
+    if (argc == 2 && strcmp(argv[1], "--manifest-starter") == 0) {
+        printf("RUN  test_forest_manifest_starter_location\n");
+        test_forest_manifest_starter_location();
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail ? 1 : 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--warmth-clock") == 0) {
         printf("RUN  test_warmth_window_includes_its_scheduled_endpoint\n");
         test_warmth_window_includes_its_scheduled_endpoint();
