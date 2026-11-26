@@ -23,3 +23,7 @@ All 6/8/8 animations visible; A/D/Space/Q/E and documented chew input work. Two 
 **2026-11-26T21:06:48Z**
 
 Integrated 3c94b591 passed seven live runtime, ten split-screen, six live action, three authored spawn and one live fire-ray cases. Both extra native acceptance probes passed: the keyboard and controller harvested different cells and received exactly 39,322 Q16 wood each; simultaneous casts produced one real burning coal body and 65,536 Q16 ice-storm fluid at the controller target. The authored runtime tests generated actual split-start.bmp and split-walk.bmp in the integration worktree. Full make test for 3c94b591 is queued behind the earlier published gas and pose runs. The current hotbar uses 2 then Q for keyboard ice and E for dropping a carried body.
+
+**2026-11-26T22:14:57Z**
+
+The 109361df full pose-combustion make test completed with exit 2 when the native fire-demo fixture could not allocate device-local memory on the shared RTX A2000. The separate fire-ray GPU group passed all three cases beforehand. That full test result does not establish demo acceptance. The newer integrated and inventory full runs remain queued.

@@ -10,12 +10,14 @@ enum { BOLT_SPEED_CELLS = 4u, BOLT_SIDE = 3u, BOLT_CLEARANCE_TICKS = 2u,
        STORM_CHILL_KEEP_NUM = 3u, STORM_CHILL_KEEP_DEN = 10u };
 #define BOLT_TEMPERATURE_K 1300.f
 
+_Static_assert(STORM_MAX_RADIUS < DC_CHUNK_SIDE, "Storm footprint cannot span more than one page per side");
+
 static bool error(char *err_buf,uint32_t cap,const char *text) {
     if(err_buf&&cap) snprintf(err_buf,cap,"%s",text);
     return false;
 }
 
-static bool bolt_point_valid(const fr_player_point_t *point) {
+static bool ability_point_valid(const fr_player_point_t *point) {
     return point && point->x >= 0.f && point->x < DC_CHUNK_SIDE &&
                     point->y >= 0.f && point->y < DC_CHUNK_SIDE;
 }
@@ -93,7 +95,7 @@ bool fr_player_cast_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
                               uint32_t *out_body, char *err_buf,
                               uint32_t err_cap) {
     if (out_body) *out_body = 0u;
-    if (!gpu || !owner_id || !bolt_point_valid(origin) || !bolt_point_valid(target))
+    if (!gpu || !owner_id || !ability_point_valid(origin) || !ability_point_valid(target))
         return error(err_buf, err_cap, "Invalid fire bolt aim or caster");
     double vx, vy;
     bolt_launch_velocity(origin, target, &vx, &vy);
@@ -107,13 +109,13 @@ bool fr_player_cast_body_fire_bolt(dc_gpu_t *gpu, uint64_t owner_id,
                                    uint32_t *out_body, char *err_buf, uint32_t err_cap) {
     if (out_body) *out_body = 0u;
     if (!gpu || !owner_id || !caster || !caster->body.active ||
-        !caster->body.width || !caster->body.height || !bolt_point_valid(target))
+        !caster->body.width || !caster->body.height || !ability_point_valid(target))
         return error(err_buf, err_cap, "Invalid fire bolt aim or body caster");
     fr_player_point_t anchor = {caster->chunk,
         caster->body.x_fp / (float)DC_FLUID_FULL, caster->body.y_fp / (float)DC_FLUID_FULL};
     double half_width = caster->body.width * .5, half_height = caster->body.height * .5;
     fr_player_point_t center;
-    if (!bolt_point_valid(&anchor) ||
+    if (!ability_point_valid(&anchor) ||
         !bolt_offset_point(&anchor, half_width, half_height, &center))
         return error(err_buf, err_cap, "Invalid fire bolt caster position");
     double vx, vy;
@@ -147,12 +149,15 @@ static bool storm_world_pages_match(dc_gpu_t *gpu, const fr_player_point_t *targ
     uint32_t last_column = (x + radius) / DC_CHUNK_SIDE;
     uint32_t first_row = (y - radius) / DC_CHUNK_SIDE;
     uint32_t last_row = (y + radius) / DC_CHUNK_SIDE;
+    int32_t center_column = (int32_t)(x / DC_CHUNK_SIDE);
+    int32_t center_row = (int32_t)(y / DC_CHUNK_SIDE);
     for (uint32_t row = first_row; row <= last_row; ++row)
         for (uint32_t column = first_column; column <= last_column; ++column) {
+            /* The closest cell determines whether this page touches the disc. */
             uint32_t dx = storm_page_distance(x, column), dy = storm_page_distance(y, row);
             if (dx * dx + dy * dy > radius * radius) continue;
-            int32_t offset_x = (int32_t)column - (int32_t)(x / DC_CHUNK_SIDE);
-            int32_t offset_y = (int32_t)row - (int32_t)(y / DC_CHUNK_SIDE);
+            int32_t offset_x = (int32_t)column - center_column;
+            int32_t offset_y = (int32_t)row - center_row;
             if ((offset_x < 0 && target->chunk.x == INT64_MIN) ||
                 (offset_x > 0 && target->chunk.x == INT64_MAX) ||
                 (offset_y < 0 && target->chunk.y == INT64_MIN) ||
@@ -170,9 +175,7 @@ static bool storm_world_pages_match(dc_gpu_t *gpu, const fr_player_point_t *targ
 
 bool fr_player_cast_ice_storm(dc_gpu_t *gpu, const fr_player_point_t *target,
                               uint32_t radius, char *err_buf, uint32_t err_cap) {
-    if (!gpu || !target || radius == 0u || radius > STORM_MAX_RADIUS ||
-        !(target->x >= 0.f && target->x < DC_CHUNK_SIDE &&
-          target->y >= 0.f && target->y < DC_CHUNK_SIDE))
+    if (!gpu || !ability_point_valid(target) || radius == 0u || radius > STORM_MAX_RADIUS)
         return error(err_buf, err_cap, "Invalid ice storm target or radius");
     uint32_t x, y;
     if (!storm_target_cell(gpu, target, &x, &y))

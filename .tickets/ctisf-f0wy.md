@@ -24,3 +24,7 @@ Reject mismatched addressed pages before any water or heat change. A mapped nega
 **2026-11-26T22:12:46Z**
 
 RED used the production storm function and active-owner registry. A physical seam backed by an unrelated world chunk admitted the storm, submitted one brush and read both thermal pages. A geometrically adjacent owner remapped elsewhere and a world-coordinate overflow also admitted the storm. Two controls passed and the three new admission cases failed.
+
+**2026-11-26T22:14:57Z**
+
+GREEN and refactor pass all five production host cases, both with the usual build and with AddressSanitizer and UndefinedBehaviorSanitizer. The rejected decoy now records zero brush calls and zero thermal reads. The negative seam, a missing neighbor, and the irrelevant diagonal all retain their intended behavior. Headless player, default recipe and tool checks passed. The real Vulkan case compiled in both revisions and is queued behind the already running GPU workloads.
