@@ -43,3 +43,7 @@ The finite mixture debit now rounds proportionally at the real simulation cadenc
 **2026-11-26T16:08:56Z**
 
 The terminal kinetics regression is closed. The updated 30-second pool replay completed both controls with matched starting film of 327680 Q16, matched initial bound water of 56416 Q16 and 36 of 36 wet faces. Greek retained 228620 Q16 fuel, while oil retained all 327680. The existing late-window guard passed at 45080 versus zero. The repeated comparison through actual depletion remains open.
+
+**2026-11-26T16:20:52Z**
+
+The locked full-length acceptance target reads the 0.5 ratio and two replays from fire_smoke_v1.json and samples the existing 327680 Q16 standing-pool loads. It records each completed simulation second and requires matching post-soak stock and water, sustained 36-face submersion, no off-body or mobile film, and closure of the finite fuel, bound-oxidizer, residue and gas product ledger. The first sampled Greek zero gives an upper bound. Ordinary oil must retain all fuel through the rounded-up inverse-ratio interval. 1200 seconds is a failure cap, never a substitute for reaching zero. Native short probes passed with 60 accepted steps per second and maximum Greek chemical drift 0.001953 Q16 versus four allowed. The 30-second guard stays wired into the standard suite. Full repeated acceptance remains in progress.

@@ -1862,7 +1862,7 @@ test_transport_options: build/transport_options_tests
 .PHONY: test_fire_fixtures
 test: test_fire_fixtures
 test_fire_fixtures:
-	python3 -m py_compile tests/fire/fixture_contract_tests.py tools/diagnostics/fire_fixture.py
+	python3 -m py_compile tests/fire/fixture_contract_tests.py tests/fire/greek_depletion_fixture_tests.py tools/diagnostics/fire_fixture.py
 	python3 tests/fire/fixture_contract_tests.py
 	python3 tests/fire/greek_depletion_fixture_tests.py
 
@@ -2067,6 +2067,7 @@ build/greek_siege_tests: tests/app/greek_siege_tests.c tests/app/greek_depletion
 test_greek_siege: build/greek_siege_tests
 	./build/greek_siege_tests --stage
 	./build/greek_siege_tests --douse-preflight
+	./build/greek_siege_tests --douse
 .PHONY: test_greek_siege_locked_risk
 test_greek_siege_locked_risk: build/greek_siege_tests
 	python3 -c 'import json, subprocess; \

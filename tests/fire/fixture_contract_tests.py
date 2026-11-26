@@ -85,6 +85,8 @@ class FireFixtureContractTests(unittest.TestCase):
         self.assertEqual(len(set(greek["risk_seeds"])), 64)
         self.assertEqual(greek["minimum_launcher_ignitions"], 48)
         self.assertEqual(greek["matched_fuel_mass"], 16)
+        self.assertEqual(greek["maximum_oil_relative_depletion_time"], 0.5)
+        self.assertEqual(greek["standing_pool_depletion"]["matched_fuel_fp"], 327680)
         self.assertGreater(greek["bound_oxidizer_mass"], 0)
         self.assertEqual(greek["phase_sources"][0]["fuel_mass"], 16)
         self.assertIn(25,greek["remove_objects"])
