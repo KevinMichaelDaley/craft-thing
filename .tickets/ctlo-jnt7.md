@@ -51,3 +51,7 @@ The 1d0fc902 make test process exited 2 after body_carve_tests reported 10 passe
 **2026-11-26T22:02:36Z**
 
 RED on native Vulkan: two 16x16 solid tiles with a single diagonal seam remain one 512-pixel component, then split into 255 and 256 when that seam is removed. The intact case traverses 1,861 union edges against a bound of one actual inter-tile edge. A colored 36,051-pixel workload counter and an exact end-to-end seam fixture are also in the regression.
+
+**2026-11-26T22:05:44Z**
+
+GREEN on native Vulkan: a full tile uses its lowest packed pixel, so the 512-pixel diagonal case performs one union edge instead of 1,861. The cut still yields 255 and 256 pixels in the original order. A separate GPU diagnostic matched the CPU 8-neighbor flood fill for all labels and counts across 18 mixed fixtures, 18,432 input pixels and 213 fragments, including empty and leaf-reserved cells. End-to-end colored workload and isolated latency are still queued; both existing time limits are unchanged.

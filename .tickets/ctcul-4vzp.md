@@ -23,3 +23,7 @@ Reproduce the stale root interleaving in the real Vulkan link code, retain all a
 **2026-11-26T21:54:54Z**
 
 The compiled native Vulkan probe returns observed parent 2 and retains parent 1 on the stale atomic minimum. After retry the roots are 0/1/0, so the already accepted edge is lost. This reproduces the interleaving without relying on scheduling or timing.
+
+**2026-11-26T22:05:44Z**
+
+The compare-and-swap change on 9d712cd0 preserves parent 2 and returns roots 0/0/0 on the native probe. The exact focused colored workload passed both cases with 36,051 pixels and matching mass and color. The body-carve and full suites remain queued at this exact revision.
