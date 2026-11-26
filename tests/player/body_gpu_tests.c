@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -120,9 +121,65 @@ static void test_wetting_follows_visible_owner_when_a_sprite_is_mirrored(void) {
     PASS();
 }
 
+static void test_terrain_heat_reaches_visible_owner_and_balances_source(void) {
+    enum { FUR = 30u * FR_BEAVER_WIDTH + 27u, HAT = 2u * FR_BEAVER_WIDTH + 32u,
+           CONTACT_X = 52, CONTACT_Y = 6, POSE_WIDTH = 9,
+           STONE_X = CONTACT_X + 1, STONE_CELL = CONTACT_Y * DC_CHUNK_SIDE + STONE_X };
+    char err[256] = {0};
+    dc_gpu_t *g = NULL;
+    ASSERT_TRUE(dc_gpu_create(&g, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    bool uploaded = dc_gpu_upload_chunk(g, 0, chunk, err, sizeof(err));
+    free(chunk);
+    ASSERT_TRUE(uploaded && dc_gpu_set_page(g, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(g, (dc_chunk_coord_t){0, 0}, err, sizeof(err)));
+    fr_beaver_body_t body;
+    ASSERT_TRUE(fr_beaver_body_admit(g, 41, 71, 0, (dc_chunk_coord_t){0, 0},
+                                    8 * DC_FLUID_FULL, 8 * DC_FLUID_FULL, &body, err, sizeof(err)));
+    const fr_renderer_sprite_pixel_t atlas[POSE_WIDTH] = {
+        [0] = {0xffc08040u, FUR}, [POSE_WIDTH - 1] = {0xff8040c0u, HAT}
+    };
+    fr_renderer_sprite_t pose = {
+        .body_id = body.binding.body_id, .generation = body.binding.generation,
+        .width = POSE_WIDTH, .height = 1,
+        .rest_origin_x = body.rest_origin_x, .rest_origin_y = body.rest_origin_y,
+        .origin_x = 8 - CONTACT_X, .origin_y = 8 - CONTACT_Y
+    };
+    ASSERT_TRUE(fr_renderer_sprite_atlas(g, atlas, POSE_WIDTH, err, sizeof(err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(g, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_paint_material(g, STONE_X, CONTACT_Y, 0, DC_MATERIAL_STONE, err, sizeof(err)));
+    const fr_reactive_profile_t *stone = fr_reactive_profile(DC_MATERIAL_STONE);
+    const uint32_t mass = (uint32_t)lroundf(stone->density * DC_FLUID_FULL);
+    fr_reactive_state_t hot;
+    ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_STONE, mass, 0, 900.f, 10000u, &hot, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_reactive_seed_cell(g, 0, STONE_CELL, &hot, err, sizeof(err)));
+    for (uint32_t flip = 0; flip < 2u; ++flip) {
+        pose.flip = flip;
+        ASSERT_TRUE(fr_renderer_sprite_poses(g, &pose, 1, err, sizeof(err)));
+        const uint32_t target = flip ? HAT : FUR;
+        fr_reactive_record_t before, after, source_before, source_after;
+        bool found;
+        ASSERT_TRUE(read_parcel(g, &body, target, &before, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 0, STONE_CELL, &source_before, &found, err, sizeof(err)) && found);
+        ASSERT_TRUE(fr_thermal_gpu_step(g, .25f, err, sizeof(err)));
+        ASSERT_TRUE(read_parcel(g, &body, target, &after, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(g, 0, STONE_CELL, &source_after, &found, err, sizeof(err)) && found);
+        const double gained = fr_reactive_state_energy(&after.state) - fr_reactive_state_energy(&before.state);
+        const double spent = fr_reactive_state_energy(&source_before.state) - fr_reactive_state_energy(&source_after.state);
+        printf("Posed contact %u transferred %.6f heat from debit %.6f\n", flip, gained, spent);
+        ASSERT_TRUE(gained > .01 && fabs(gained - spent) < .001);
+        ASSERT_EQ(after.state.parcel_id_low, before.state.parcel_id_low);
+        ASSERT_EQ(after.state.parcel_id_high, before.state.parcel_id_high);
+    }
+    dc_gpu_destroy(g);
+    PASS();
+}
+
 int main(void) {
     RUN(test_canonical_body_admits_hidden_owners_once);
     RUN(test_wetting_follows_visible_owner_when_a_sprite_is_mirrored);
+    RUN(test_terrain_heat_reaches_visible_owner_and_balances_source);
     printf("%d passed, %d failed\n",g_pass,g_fail);
     return g_fail?1:0;
 }

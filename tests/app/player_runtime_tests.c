@@ -293,12 +293,64 @@ static void test_wet_robe_darkening_follows_the_owner_across_walk_poses(void) {
     PASS();
 }
 
+static void test_heat_probe_targets_the_visible_robe_in_a_two_player_scene(void) {
+    enum { ROBE_X = 17, ROBE_Y = 20, ROBE_SOURCE = ROBE_Y * FR_BEAVER_WIDTH + ROBE_X + 1 };
+    char directory[] = "build/player_runtime_heating_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    uint32_t surface = 96;
+    dc_ground_profile_t ground = {.width = 1, .soil_depth = 1, .surface = &surface};
+    dc_level_view_t *v = dc_level_view_create_ground(directory, 314, &ground, err, sizeof(err));
+    ASSERT_TRUE(v && dc_level_view_pan_pixels(v, 0, -INITIAL_CHUNK_Y * DC_CHUNK_SIDE) &&
+                dc_level_view_wait_visible(v, 120000, err, sizeof(err)) &&
+                dc_players_enable_at(v, 80, 24, false, err, sizeof(err)) &&
+                dc_players_join(v, 42, err, sizeof(err)));
+    SDL_Event move = {.key = {.type = SDL_KEYDOWN, .keysym.scancode = SDL_SCANCODE_D}};
+    ASSERT_TRUE(dc_players_event(v, &move));
+    dc_players_frame_time(v, .12);
+    ASSERT_TRUE(dc_players_step(v, 1.f/60.f, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_heat_overlay(v, 1) && dc_level_view_tick(v, err, sizeof(err)));
+    uint32_t x, y, cold_color, hot_color;
+    ASSERT_TRUE(walk_source_pixel(v, ROBE_SOURCE, &x, &y, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_pixel(v, x, y, &cold_color, err, sizeof(err)));
+    dc_gpu_t *gpu = dc_level_view_gpu(v);
+    fr_player_t player;
+    fr_beaver_body_t bodies[2];
+    fr_reactive_record_t before[2];
+    for (uint32_t seat=0; seat<2; ++seat) {
+        bool found = false;
+        ASSERT_TRUE(dc_players_status(v, seat, &player, bodies + seat));
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[seat].binding.body_id,
+            ROBE_X - bodies[seat].rest_origin_x, ROBE_Y - bodies[seat].rest_origin_y,
+            before + seat, &found, err, sizeof(err)) && found);
+    }
+    ASSERT_TRUE(dc_level_view_heat_probe(v, x, y, true));
+    ASSERT_TRUE(fr_thermal_gpu_step(gpu, .75f, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_heat_probe(v, x, y, false));
+    ASSERT_TRUE(dc_level_view_tick(v, err, sizeof(err)));
+    for (uint32_t seat=0; seat<2; ++seat) {
+        fr_reactive_record_t after;
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bodies[seat].binding.body_id,
+            ROBE_X - bodies[seat].rest_origin_x, ROBE_Y - bodies[seat].rest_origin_y,
+            &after, &found, err, sizeof(err)) && found);
+        double heated = fr_reactive_state_energy(&after.state) - fr_reactive_state_energy(&before[seat].state);
+        ASSERT_EQ(after.state.parcel_id_low, before[seat].state.parcel_id_low);
+        ASSERT_EQ(after.state.parcel_id_high, before[seat].state.parcel_id_high);
+        ASSERT_TRUE(seat ? fabs(heated) < .001 : heated > .05);
+    }
+    ASSERT_TRUE(dc_level_view_pixel(v, x, y, &hot_color, err, sizeof(err)));
+    ASSERT_TRUE(((hot_color >> 8u) & 255u) > ((cold_color >> 8u) & 255u));
+    ASSERT_TRUE(dc_level_view_destroy(v, err, sizeof(err)));
+    PASS();
+}
+
 int main(void) {
     RUN(test_enabling_player_admits_only_the_player_body);
     RUN(test_editor_camera_holds_its_manual_position);
     RUN(test_real_app_keyboard_drives_body_and_animation);
     RUN(test_fire_ray_mode_uses_supplied_artwork_while_moving);
     RUN(test_wet_robe_darkening_follows_the_owner_across_walk_poses);
+    RUN(test_heat_probe_targets_the_visible_robe_in_a_two_player_scene);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
