@@ -12,7 +12,7 @@ uint carve_union_root(uint pixel) {
 }
 
 uint carve_union_attach_root(uint high,uint low) {
-    return atomicMin(DC_FRAGMENT_LABEL(high),low+1u);
+    return atomicCompSwap(DC_FRAGMENT_LABEL(high),high+1u,low+1u);
 }
 
 void carve_union_join(uint a,uint b) {
