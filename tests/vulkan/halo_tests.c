@@ -4,9 +4,19 @@
 #include "dungeoncraft/gpu.h"
 
 static int g_pass, g_fail;
-#define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
+#define RUN(fn) do { \
+    int previous_failures = g_fail; \
+    printf("RUN  %s\n", #fn); \
+    fflush(stdout); \
+    fn(); \
+    if (g_fail == previous_failures) printf("OK   %s\n", #fn); \
+} while (0)
 #define ASSERT_TRUE(expr) do { if (!(expr)) { \
-    printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #expr); g_fail++; return; \
+    printf("FAIL %s:%d: %s", __FILE__, __LINE__, #expr); \
+    if (err[0]) printf(" [%s]", err); \
+    putchar('\n'); \
+    g_fail++; \
+    goto cleanup; \
 } } while (0)
 #define ASSERT_EQ(a, b) ASSERT_TRUE((a) == (b))
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
@@ -43,8 +53,9 @@ static void test_halo_reads_neighbor_and_marks_missing_chunk(void) {
     ASSERT_TRUE(dc_gpu_refresh_halos(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_halo(gpu, 0, 0, 64, 10, &cell, err, sizeof(err)));
     ASSERT_EQ(cell.resident, 0u);
-    dc_gpu_destroy(gpu);
     PASS();
+cleanup:
+    dc_gpu_destroy(gpu);
 }
 
 static void test_scalar_transfer_waits_for_chunk_and_matches_unsplit_grid(void) {
@@ -62,6 +73,7 @@ static void test_scalar_transfer_waits_for_chunk_and_matches_unsplit_grid(void) 
     ASSERT_TRUE(dc_gpu_try_transfer(gpu, &state, err, sizeof(err)));
     ASSERT_EQ(state, DC_GPU_TRANSFER_PENDING);
     ASSERT_TRUE(!dc_gpu_queue_transfer(gpu, transfer, err, sizeof(err)));
+    err[0] = '\0';
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &saved_left, err, sizeof(err)));
     ASSERT_EQ(saved_left.cells[10 * 64 + 63].fluid_mass, 100u);
     ASSERT_TRUE(dc_gpu_set_page(gpu, 1, 0, 1, err, sizeof(err)));
@@ -80,25 +92,26 @@ static void test_scalar_transfer_waits_for_chunk_and_matches_unsplit_grid(void) 
     ASSERT_EQ(saved_left.cells[10 * 64 + 63].fluid_mass, 70u);
     ASSERT_EQ(saved_right.cells[10 * 64].fluid_mass, 55u);
 
-    dc_gpu_t *single = NULL;
+    dc_gpu_destroy(gpu);
+    gpu = NULL;
     dc_chunk_t unsplit = {0}, result = {0};
     unsplit.cells[10 * 64 + 20].fluid_mass = 100;
     unsplit.cells[10 * 64 + 21].fluid_mass = 25;
-    ASSERT_TRUE(dc_gpu_create(&single, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_upload_chunk(single, 0, &unsplit, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_page(single, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &unsplit, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     transfer.from_x = 20; transfer.to_x = 21;
-    ASSERT_TRUE(dc_gpu_queue_transfer(single, transfer, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_try_transfer(single, &state, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_queue_transfer(gpu, transfer, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_try_transfer(gpu, &state, err, sizeof(err)));
     ASSERT_EQ(state, DC_GPU_TRANSFER_APPLIED);
-    ASSERT_TRUE(dc_gpu_download_chunk(single, 0, &result, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &result, err, sizeof(err)));
     ASSERT_EQ(result.cells[10 * 64 + 20].fluid_mass,
               saved_left.cells[10 * 64 + 63].fluid_mass);
     ASSERT_EQ(result.cells[10 * 64 + 21].fluid_mass,
               saved_right.cells[10 * 64].fluid_mass);
-    dc_gpu_destroy(single);
-    dc_gpu_destroy(gpu);
     PASS();
+cleanup:
+    dc_gpu_destroy(gpu);
 }
 
 static void test_particle_transfer_crosses_chunk_edge_without_duplication(void) {
@@ -117,24 +130,25 @@ static void test_particle_transfer_crosses_chunk_edge_without_duplication(void) 
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &result_right, err, sizeof(err)));
     ASSERT_EQ(result_left.cells[12 * 64 + 63].material, DC_MATERIAL_AIR);
     ASSERT_EQ(result_right.cells[12 * 64].material, DC_MATERIAL_SAND);
-    dc_gpu_t *single = NULL;
+    dc_gpu_destroy(gpu);
+    gpu = NULL;
     dc_chunk_t unsplit = {0}, result = {0};
     unsplit.cells[12 * 64 + 20].material = DC_MATERIAL_SAND;
-    ASSERT_TRUE(dc_gpu_create(&single, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_upload_chunk(single, 0, &unsplit, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_page(single, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, &unsplit, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
     transfer.from_x = 20; transfer.to_x = 21;
-    ASSERT_TRUE(dc_gpu_queue_transfer(single, transfer, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_try_transfer(single, &state, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_queue_transfer(gpu, transfer, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_try_transfer(gpu, &state, err, sizeof(err)));
     ASSERT_EQ(state, DC_GPU_TRANSFER_APPLIED);
-    ASSERT_TRUE(dc_gpu_download_chunk(single, 0, &result, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, &result, err, sizeof(err)));
     ASSERT_EQ(result.cells[12 * 64 + 20].material,
               result_left.cells[12 * 64 + 63].material);
     ASSERT_EQ(result.cells[12 * 64 + 21].material,
               result_right.cells[12 * 64].material);
-    dc_gpu_destroy(single);
-    dc_gpu_destroy(gpu);
     PASS();
+cleanup:
+    dc_gpu_destroy(gpu);
 }
 
 static void test_slot_transfer_ignores_reused_view_pages(void) {
@@ -156,8 +170,9 @@ static void test_slot_transfer_ignores_reused_view_pages(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 1, &saved_right, err, sizeof(err)));
     ASSERT_EQ(saved_left.cells[5 * DC_CHUNK_SIDE + 63].fluid_mass, 70u);
     ASSERT_EQ(saved_right.cells[5 * DC_CHUNK_SIDE].fluid_mass, 30u);
-    dc_gpu_destroy(gpu);
     PASS();
+cleanup:
+    dc_gpu_destroy(gpu);
 }
 
 int main(void) {
