@@ -18,7 +18,11 @@ static void test_overview_retains_original_zoom(void) {
     ASSERT_EQ(r.width,480);ASSERT_EQ(r.height,270);ASSERT_EQ(r.scale,2);PASS();
 }
 static void test_invalid_crop_does_not_publish_a_layout(void) {
-    dc_presentation_layout_t r={.scale=7};ASSERT_TRUE(!dc_presentation_layout(480,270,1920,1080,2,(dc_presentation_focus_t){470,0,80,96},&r));
+    const dc_presentation_focus_t invalid={470,0,80,96};
+    dc_presentation_layout_t r={.scale=7};
+    ASSERT_TRUE(!dc_presentation_layout(480,270,1920,1080,2,invalid,&r));
+    ASSERT_TRUE(!dc_presentation_fit_layout(480,270,50,66,2,invalid,&r));
+    ASSERT_TRUE(!dc_presentation_fit_layout(480,270,0,66,2,(dc_presentation_focus_t){0},&r));
     ASSERT_EQ(r.scale,7);PASS();
 }
 static void test_single_view_lowers_zoom_when_the_full_grid_fits(void) {

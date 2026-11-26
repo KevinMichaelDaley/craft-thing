@@ -30,7 +30,8 @@ void dc_players_frame_time(dc_level_view_t *view,double seconds);
 bool dc_players_step(dc_level_view_t *view,float seconds,char *err,uint32_t cap);
 /** Reframe the shared streaming window around the active split-screen players. */
 void dc_players_prepare_view(dc_level_view_t *view);
-/** Apply the current gameplay or editor presentation to the shared view. */
+/** Apply the requested gameplay or editor presentation. Retry the split
+ * layout each frame while the single view is in use. */
 bool dc_players_present(dc_level_view_t *view, char *err, uint32_t cap);
 /** Copy action state for diagnostic tests; does not read GPU body state. */
 bool dc_players_status(dc_level_view_t *view,uint32_t index,fr_player_t *player,fr_beaver_body_t *body);

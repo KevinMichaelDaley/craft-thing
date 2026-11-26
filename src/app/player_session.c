@@ -443,6 +443,7 @@ static bool split_disable(dc_level_view_t *v, char *err, uint32_t cap) {
 bool dc_players_present(dc_level_view_t *v, char *err, uint32_t cap) {
     if (!v || !v->players || !v->players->split_requested) return true;
     struct dc_player_session *s = v->players;
+    /* Keep the request across an editor transition or a temporary layout failure. */
     if (!dc_players_gameplay(v) || !split_refresh(v, s->split_requested, NULL, 0))
         return split_disable(v, err, cap);
     for (uint32_t n = 0; n < s->split_requested; ++n) {

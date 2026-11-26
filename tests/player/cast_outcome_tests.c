@@ -227,7 +227,7 @@ void fr_fire_ray_gpu_commit_emitter(fr_fire_ray_gpu_t *ray, const fr_player_body
 }
 
 bool dc_gpu_set_split_presentation(dc_gpu_t *gpu, uint32_t count, const dc_presentation_focus_t *crops) {
-    (void)gpu; (void)count; (void)crops;
+    (void)gpu; (void)crops;
     if (count && !split_fits) return false;
     displayed_bands = count;
     return true;
@@ -514,9 +514,12 @@ static void test_rejected_split_refresh_falls_back_and_rebinds_aim_on_recovery(v
     ASSERT_TRUE(start_second_seat(&session, &slot));
     ASSERT_EQ(displayed_bands, 2u);
     split_fits = false;
+    const char previous_error[] = "Earlier fixture diagnostic";
+    snprintf(error_buf, sizeof(error_buf), "%s", previous_error);
     bool refreshed = dc_players_present(&view, error_buf, sizeof(error_buf));
     printf("Rejected active layout refresh returned %d with %u bands\n", refreshed, displayed_bands);
     ASSERT_TRUE(refreshed);
+    ASSERT_EQ(strcmp(error_buf, previous_error), 0);
     ASSERT_EQ(displayed_bands, 0u);
     controller_viewport = UINT32_MAX;
     ASSERT_TRUE(dc_players_step(&view, .05f, error_buf, sizeof(error_buf)));
@@ -527,6 +530,12 @@ static void test_rejected_split_refresh_falls_back_and_rebinds_aim_on_recovery(v
     ASSERT_TRUE(dc_players_step(&view, .05f, error_buf, sizeof(error_buf)));
     ASSERT_EQ(controller_viewport, 1u);
     ASSERT_EQ(session.device[1], 43);
+    split_fits = false;
+    ASSERT_TRUE(dc_players_present(&view, error_buf, sizeof(error_buf)));
+    ASSERT_TRUE(dc_players_split_screen(&view, 0u, error_buf, sizeof(error_buf)));
+    split_fits = true;
+    ASSERT_TRUE(dc_players_present(&view, error_buf, sizeof(error_buf)));
+    ASSERT_EQ(displayed_bands, 0u);
     PASS();
 }
 
