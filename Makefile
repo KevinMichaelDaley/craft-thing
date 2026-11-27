@@ -2108,6 +2108,12 @@ test_gas_numerics: build/gas_reference_tests build/gas_implicit_tests build/gas_
 	./build/gas_implicit_tests
 	./build/gas_transport_tests
 	./build/smoke_box_fixture_tests
+build/gas_seed_tests: tests/vulkan/gas_seed_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkQueueWaitIdle
+.PHONY: test_gas_seed
+test_gas_seed: build/gas_seed_tests
+	./build/gas_seed_tests
+test: test_gas_seed
 SMOKE_BOX_APP_OBJ = $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ))
 build/smoke_box_display_tests: tests/app/smoke_box_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level_internal.h $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(SMOKE_BOX_APP_OBJ) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)

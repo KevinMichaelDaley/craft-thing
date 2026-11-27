@@ -1,6 +1,6 @@
 ---
 id: ctgcs-wy3j
-status: open
+status: in_progress
 deps: []
 links: [ctsg-6060]
 created: 2026-11-27T02:04:51Z
