@@ -205,7 +205,32 @@ static void test_aborted_draft_allows_restage_on_the_same_world_writer(void) {
     PASS();
 }
 
+static void test_water_cycle_record_commits_and_discards_with_its_owner_clock(void) {
+    char directory[] = "build/world_water_cycle_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_world_save_t *save = dc_world_save_open(directory, err, sizeof(err));
+    ASSERT_TRUE(save && dc_world_save_begin(save, err, sizeof(err)));
+    const char *draft = dc_world_save_directory(save, true);
+    ASSERT_TRUE(write_record(draft, "water_cycle.bin", "partial"));
+    ASSERT_TRUE(write_record(draft, DC_WORLD_BODY_RECORD, "owners"));
+    ASSERT_TRUE(write_record(draft, DC_WORLD_PLAYER_RECORD, "inventory"));
+    ASSERT_TRUE(dc_world_save_store_clock(save, 2., err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_commit(save, err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
+    ASSERT_TRUE(write_record(dc_world_save_directory(save, true), "water_cycle.bin", "next"));
+    ASSERT_TRUE(dc_world_save_store_clock(save, 3., err, sizeof(err)));
+    dc_world_save_close(save);
+    save = dc_world_save_open(directory, err, sizeof(err));
+    double seconds;
+    ASSERT_TRUE(save && dc_world_save_load_clock(save, &seconds, err, sizeof(err)));
+    ASSERT_EQ(seconds, 2.);
+    ASSERT_TRUE(record_equals(directory, "water_cycle.bin", "partial"));
+    dc_world_save_close(save);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_water_cycle_record_commits_and_discards_with_its_owner_clock);
     RUN(test_commit_replaces_world_and_owned_material_together);
     RUN(test_failed_commit_keeps_previous_world_and_excludes_other_writers);
     RUN(test_open_recovers_a_committed_save_after_publication_stops);
