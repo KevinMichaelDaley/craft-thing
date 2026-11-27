@@ -6,6 +6,7 @@
 
 #define DC_WORLD_BODY_RECORD "rigid_bodies.bin"
 #define DC_WORLD_CLOCK_RECORD "world_clock.bin"
+#define DC_WORLD_WATER_CYCLE_RECORD "water_cycle.bin"
 #define DC_WORLD_PLAYER_RECORD "player_inventory.bin"
 
 typedef struct dc_world_save dc_world_save_t;
