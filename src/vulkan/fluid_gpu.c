@@ -252,7 +252,7 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
     if (!chunk_dx && !chunk_dy) {
         return true;
     }
-    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+    if (dc_gpu_liquid_owner_held(gpu))
         return error(err, cap, "Cannot shift velocity during a coupled water cycle");
     for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(gpu); ++slot)
         gpu->preserve_shifted_slot[slot] = gpu->slot_page[slot] != UINT32_MAX;
@@ -455,7 +455,7 @@ bool dc_gpu_fluid_max_divergence(dc_gpu_t *gpu, float *divergence,
 
 bool dc_gpu_fluid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
-    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+    if (dc_gpu_liquid_owner_held(gpu))
         return error(err, cap, "Cannot advance a single owner during a coupled water cycle");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset fluid command buffer");

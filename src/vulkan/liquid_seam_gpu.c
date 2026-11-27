@@ -74,6 +74,10 @@ bool dc_gpu_prepare_liquid_receipt(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return false;
 }
 
+bool dc_gpu_liquid_owner_held(const dc_gpu_t *gpu) {
+    return gpu && (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu));
+}
+
 static void clear_pending(struct dc_gpu_liquid_seam *seam) {
     if (seam->pending_peer) seam->pending_peer->liquid_seam_pending_owner = NULL;
     seam->pending_peer = NULL;

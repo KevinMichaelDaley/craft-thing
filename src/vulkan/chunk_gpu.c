@@ -279,7 +279,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
         chunk->marker_count > DC_MARKERS_PER_CHUNK ||
         chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return error(err, cap, "Invalid GPU chunk upload slot");
-    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+    if (dc_gpu_liquid_owner_held(gpu))
         return error(err, cap, "Cannot replace a chunk during a coupled water cycle");
     uint32_t particle_count = 0, missing_primary = 0;
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
@@ -408,7 +408,7 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         if (slot != UINT32_MAX) gpu->preserve_shifted_slot[slot] = false;
         return true;
     }
-    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+    if (dc_gpu_liquid_owner_held(gpu))
         return error(err, cap, "Cannot change page mappings during a coupled water cycle");
     fr_gas_gpu_invalidate_cache(gpu);
     gpu->body_refresh_pending = true;

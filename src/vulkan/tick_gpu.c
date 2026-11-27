@@ -244,7 +244,7 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
     if (!gpu || (interval != 1u && interval != 2u &&
                  interval != 3u && interval != 6u)) return false;
-    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu)) return false;
+    if (dc_gpu_liquid_owner_held(gpu)) return false;
     gpu->fluid_interval = interval;
     gpu->fluid_phase = 0u;
     gpu->fluid_phase_budget = 0.0f;

@@ -100,6 +100,9 @@ dc_liquid_seam_result_t dc_gpu_execute_water_seam(dc_liquid_seam_endpoint_t firs
 /** Whether this context participates in a seam write with an unresolved receipt. */
 bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu);
 
+/** Whether a partial water cycle or unresolved receipt holds this context's mappings and stock. */
+bool dc_gpu_liquid_owner_held(const dc_gpu_t *gpu);
+
 /** Run one native water cycle over connected mapped tiles in two shared-device contexts.
  * The caller holds all mappings and generations at the same interval start.
  * Tiles outside the supplied set form a sealed boundary. Both contexts must

@@ -300,7 +300,7 @@ bool dc_gpu_set_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
                              char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "Invalid body origin");
     bool changed = origin.x != gpu->body_origin.x || origin.y != gpu->body_origin.y;
-    if (changed && (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu)))
+    if (changed && dc_gpu_liquid_owner_held(gpu))
         return error(err, cap, "Cannot change the origin during a coupled water cycle");
     gpu->body_origin = origin;
     if (changed) dc_gpu_structural_data(gpu)[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = 1;
@@ -313,7 +313,7 @@ bool dc_gpu_prepare_body_origin(dc_gpu_t *gpu, dc_chunk_coord_t origin,
                                 char *err, uint32_t cap) {
     if(!gpu) return error(err,cap,"Invalid body origin");
     if(origin.x!=gpu->body_origin.x||origin.y!=gpu->body_origin.y) {
-        if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+        if (dc_gpu_liquid_owner_held(gpu))
             return error(err, cap, "Cannot change the origin during a coupled water cycle");
         gpu->body_origin=origin;
         gpu->body_refresh_pending=true;
