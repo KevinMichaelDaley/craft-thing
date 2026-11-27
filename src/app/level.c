@@ -381,11 +381,13 @@ static bool has_checkpoint_receipt(const dc_chunk_slot_t *slot) {
     return slot->time.known && dc_chunk_owner_valid(slot->checkpoint_owner);
 }
 
-static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
+static bool process_results(dc_level_view_t *view, bool *save_acknowledged, char *err, uint32_t cap) {
     dc_stream_result_t result;
     while (dc_stream_poll(view->stream, &result)) {
         dc_level_offscreen_result_t offscreen = dc_level_offscreen_result(view, &result, err, cap);
         if (offscreen != DC_LEVEL_OFFSCREEN_UNMATCHED) {
+            if (save_acknowledged && offscreen == DC_LEVEL_OFFSCREEN_HANDLED && result.kind == DC_STREAM_SAVED)
+                *save_acknowledged = true;
             dc_stream_result_release(&result);
             if (offscreen == DC_LEVEL_OFFSCREEN_FAILED) return false;
             continue;
@@ -427,6 +429,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 return error(err, cap, "Cannot complete chunk save");
             }
             dc_camera_offscreen_saved(view, &result);
+            if (save_acknowledged) *save_acknowledged = true;
         }
         dc_stream_result_release(&result);
     }
@@ -705,7 +708,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     }
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);
-    if (!process_results(view, err, cap)) return false;
+    if (!process_results(view, NULL, err, cap)) return false;
     if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
@@ -1148,10 +1151,11 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
             dc_chunk_table_set_active(&view->table, i, false);
     uint64_t deadline = 0;
     while (okay) {
-        if (!process_results(view, err, cap) || !schedule_saves(view, err, cap)) { okay = false; break; }
-        if (!deadline) deadline = SDL_GetTicks64() +
-                        (uint64_t)view->table.capacity * 50u + 5000u;
-        if (!process_results(view, err, cap)) { okay = false; break; }
+        bool save_acknowledged = false;
+        if (!process_results(view, &save_acknowledged, err, cap) || !schedule_saves(view, err, cap) ||
+            !process_results(view, &save_acknowledged, err, cap)) { okay = false; break; }
+        if (!deadline || save_acknowledged)
+            deadline = SDL_GetTicks64() + (uint64_t)view->table.capacity * 50u + 5000u;
         bool pending = dc_level_offscreen_writing(view);
         for (uint32_t i = 0; i < view->table.capacity; ++i) {
             dc_chunk_slot_t *slot = &view->table.slots[i];
