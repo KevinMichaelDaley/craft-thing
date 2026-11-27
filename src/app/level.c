@@ -541,9 +541,9 @@ static bool transfer_slot_matches(const dc_level_view_t *view, uint32_t index,
 static bool bind_transfer_destination(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view->transfer_pending || view->destination_bound) return true;
     uint32_t index;
+    if (dc_level_offscreen_owns(view, view->transfer_to) ||
+        dc_camera_offscreen_pending(view, view->transfer_to)) return true;
     if (!dc_chunk_table_find(&view->table, view->transfer_to, &index)) {
-        if (dc_level_offscreen_owns(view, view->transfer_to) ||
-            dc_camera_offscreen_pending(view, view->transfer_to)) return true;
         uint64_t generation;
         if (!dc_chunk_table_begin_load(&view->table, view->transfer_to,
                                        &index, &generation)) return true;
@@ -1099,7 +1099,8 @@ bool dc_level_view_queue_transfer(dc_level_view_t *view, int64_t from_x, int64_t
     if (!dc_chunk_table_find(&view->table, from, &index) ||
         (view->table.slots[index].state != DC_SLOT_ACTIVE &&
          view->table.slots[index].state != DC_SLOT_SLEEPING) ||
-        view->table.slots[index].pinned)
+        view->table.slots[index].pinned || dc_level_offscreen_owns(view, from) ||
+        dc_camera_offscreen_pending(view, from))
         return error(err, cap, "Transfer source is not available");
     view->from_slot = index;
     view->from_generation = view->table.slots[index].generation;
