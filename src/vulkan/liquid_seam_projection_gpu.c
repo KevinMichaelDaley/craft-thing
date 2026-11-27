@@ -354,3 +354,8 @@ dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoin
     }
     return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, err, cap);
 }
+
+dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap) {
+    return dc_gpu_execute_water_cohort(tiles, count, seconds, err, cap);
+}

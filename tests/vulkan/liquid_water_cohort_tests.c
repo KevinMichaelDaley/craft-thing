@@ -7,14 +7,22 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/renderer_internal.h"
 
 enum { CENTER, EAST, SOUTH, TILE_COUNT, EXCLUDED = TILE_COUNT, FIXTURE_TILES };
 static const float step_seconds = 1.f / 30.f;
 static int g_pass, g_fail;
 static bool g_lose_ack;
+static bool g_forbid_queue;
 static char g_err[256];
 
 bool __real_fr_renderer_submit(dc_gpu_t *gpu);
+VkResult __real_vkQueueWaitIdle(VkQueue queue);
+
+VkResult __wrap_vkQueueWaitIdle(VkQueue queue) {
+    if (g_forbid_queue) return VK_ERROR_DEVICE_LOST;
+    return __real_vkQueueWaitIdle(queue);
+}
 
 bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {
     const bool lose = g_lose_ack;
@@ -244,8 +252,183 @@ cleanup:
     free(initial);
 }
 
-int main(void) {
-    RUN(test_connected_tiles_match_monolithic_water_and_share_one_receipt);
+static bool native_water_tick(dc_gpu_t *gpu, float elapsed) {
+    if (!fr_renderer_begin(gpu)) return false;
+    fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    if (gpu->fluid_interval == 1u) {
+        gpu->fluid_step_scale = elapsed;
+        dc_gpu_record_fluid(gpu);
+    } else {
+        gpu->fluid_step_scale = (float)gpu->fluid_interval;
+        gpu->fluid_phase_budget += elapsed * (6.f / (float)gpu->fluid_interval);
+        while (gpu->fluid_phase_budget >= 1.f) {
+            dc_gpu_record_fluid_phase(gpu, gpu->fluid_phase);
+            gpu->fluid_phase = (gpu->fluid_phase + 1u) % 6u;
+            gpu->fluid_phase_budget -= 1.f;
+        }
+    }
+    fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+    return fr_renderer_submit(gpu);
+}
+
+typedef struct {
+    water_tile_t tiles[TILE_COUNT];
+    uint32_t phase, tick;
+    float budget;
+} water_tick_t;
+
+static void test_coupled_water_matches_every_native_tick_and_recovers_once(void) {
+    static const float elapsed[] = {.25f, .75f, 1.f, 2.f, 1.5f, .5f, 6.f};
+    static const uint32_t intervals[] = {1u, 2u, 3u, 6u};
+    enum { TICKS = sizeof(elapsed) / sizeof(elapsed[0]), INTERVALS = sizeof(intervals) / sizeof(intervals[0]) };
+    const char shader[] = "build/shaders/pattern.comp.spv";
+    const dc_chunk_coord_t origin = {-9, -5};
+    dc_gpu_t device = {0}, *resident = NULL, *offscreen = NULL, *mono = NULL;
+    water_tile_t *initial = calloc(TILE_COUNT, sizeof(*initial)), *observed = calloc(1, sizeof(*observed));
+    water_tick_t (*split)[TICKS] = calloc(INTERVALS, sizeof(*split));
+    dc_liquid_seam_endpoint_t tiles[] = {
+        {.coord = origin, .slot = 1, .tile_y = 1},
+        {.coord = {origin.x + 1, origin.y}, .tile_x = 1, .slot = 3},
+        {.coord = {origin.x, origin.y + 1}, .tile_y = 1, .slot = 1}
+    };
+    ASSERT_TRUE(initial && observed && split);
+    seed(initial, tiles);
+    ASSERT_TRUE(dc_gpu_initialize_device(&device, 4u * DC_CHUNK_CELLS * sizeof(dc_cell_t),
+                                        0, 0, 0, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&resident, &device, 64, 128, shader, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&offscreen, &device, 128, 128, shader, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(resident, (dc_chunk_coord_t){origin.x, origin.y - 1}, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(offscreen, origin, g_err, sizeof(g_err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(resident, g_err, sizeof(g_err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(offscreen, g_err, sizeof(g_err)));
+    tiles[CENTER].gpu = resident;
+    tiles[EAST].gpu = tiles[SOUTH].gpu = offscreen;
+    for (uint32_t i = 0; i < INTERVALS; ++i) {
+        ASSERT_TRUE(dc_gpu_set_fluid_interval(resident, intervals[i]) &&
+                    dc_gpu_set_fluid_interval(offscreen, intervals[i]));
+        resident->fluid_tick = offscreen->fluid_tick = 0;
+        resident->marker_ping = 0;
+        offscreen->marker_ping = 1;
+        resident->marker_correction = offscreen->marker_correction = i != 2u;
+        memset(resident->marker_grid_mapped, 0, dc_gpu_slot_capacity(resident) * sizeof(observed->guide));
+        memset(offscreen->marker_grid_mapped, 0, dc_gpu_slot_capacity(offscreen) * sizeof(observed->guide));
+        for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) ASSERT_TRUE(upload(tiles[tile], &initial[tile]));
+        seed_apertures(tiles[CENTER]);
+        for (uint32_t step = 0; step < TICKS; ++step) {
+            const bool lose_ack = step == 2u;
+            if (lose_ack) {
+                const uint32_t phase = resident->fluid_phase, tick = resident->fluid_tick;
+                const float budget = resident->fluid_phase_budget;
+                g_lose_ack = true;
+                ASSERT_EQ(dc_gpu_step_water_cohort(tiles, TILE_COUNT, elapsed[step] / 60.f, g_err, sizeof(g_err)),
+                          DC_LIQUID_SEAM_UNCONFIRMED);
+                ASSERT_EQ(resident->fluid_phase, phase);
+                ASSERT_EQ(resident->fluid_tick, tick);
+                ASSERT_EQ(resident->fluid_phase_budget, budget);
+                ASSERT_EQ(offscreen->fluid_phase, phase);
+                ASSERT_EQ(offscreen->fluid_tick, tick);
+                ASSERT_EQ(offscreen->fluid_phase_budget, budget);
+                ASSERT_EQ(dc_gpu_resolve_liquid_seam(offscreen, resident, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+            } else {
+                ASSERT_EQ(dc_gpu_step_water_cohort(tiles, TILE_COUNT, elapsed[step] / 60.f, g_err, sizeof(g_err)),
+                          DC_LIQUID_SEAM_COMMITTED);
+            }
+            water_tick_t *result = &split[i][step];
+            result->phase = resident->fluid_phase;
+            result->tick = resident->fluid_tick;
+            result->budget = resident->fluid_phase_budget;
+            ASSERT_EQ(offscreen->fluid_phase, result->phase);
+            ASSERT_EQ(offscreen->fluid_tick, result->tick);
+            ASSERT_EQ(offscreen->fluid_phase_budget, result->budget);
+            for (uint32_t tile = 0; tile < TILE_COUNT; ++tile)
+                ASSERT_TRUE(download(tiles[tile], &result->tiles[tile]));
+        }
+        ASSERT_EQ(resident->fluid_phase, 0u);
+        ASSERT_EQ(resident->fluid_tick, intervals[i] == 1u ? TICKS : 12u / intervals[i]);
+    }
+    dc_gpu_destroy(resident);
+    dc_gpu_destroy(offscreen);
+    resident = offscreen = NULL;
+
+    ASSERT_TRUE(dc_gpu_create_shared(&mono, &device, 128, 128, shader, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(mono, origin, g_err, sizeof(g_err)));
+    ASSERT_TRUE(fr_thermal_gpu_enable(mono, g_err, sizeof(g_err)));
+    const dc_liquid_seam_endpoint_t monolithic[] = {
+        {.gpu = mono, .coord = tiles[CENTER].coord, .slot = 0},
+        {.gpu = mono, .coord = tiles[EAST].coord, .tile_x = 1, .slot = 1},
+        {.gpu = mono, .coord = tiles[SOUTH].coord, .tile_y = 1, .slot = 2}
+    };
+    for (uint32_t i = 0; i < INTERVALS; ++i) {
+        ASSERT_TRUE(dc_gpu_set_fluid_interval(mono, intervals[i]));
+        mono->timed_fluid = true;
+        mono->fluid_tick = 0;
+        mono->marker_ping = 0;
+        mono->marker_correction = i != 2u;
+        memset(mono->marker_grid_mapped, 0, dc_gpu_slot_capacity(mono) * sizeof(observed->guide));
+        for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) ASSERT_TRUE(upload(monolithic[tile], &initial[tile]));
+        seed_apertures(monolithic[CENTER]);
+        for (uint32_t step = 0; step < TICKS; ++step) {
+            const float seconds = elapsed[step] / 60.f;
+            ASSERT_TRUE(native_water_tick(mono, seconds * 60.f));
+            water_tick_t *result = &split[i][step];
+            ASSERT_EQ(result->phase, mono->fluid_phase);
+            ASSERT_EQ(result->tick, mono->fluid_tick);
+            ASSERT_EQ(result->budget, mono->fluid_phase_budget);
+            for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) {
+                ASSERT_TRUE(download(monolithic[tile], observed));
+                ASSERT_TRUE(same_water(&result->tiles[tile], observed));
+            }
+        }
+    }
+    ASSERT_EQ(dc_gpu_validation_errors(&device), 0u);
+    PASS();
+
+cleanup:
+    g_lose_ack = false;
+    dc_gpu_destroy(mono);
+    dc_gpu_destroy(offscreen);
+    dc_gpu_destroy(resident);
+    dc_gpu_release_device(&device);
+    free(split);
+    free(observed);
+    free(initial);
+}
+
+static void test_fractional_tick_without_a_phase_keeps_the_queue_idle(void) {
+    uint32_t pages[] = {1u, 1u};
+    dc_gpu_t first = {.width = 64, .height = 64, .page_width = 1, .page_height = 1,
+                      .page_mapped = &pages[0], .fluid_interval = 6u};
+    dc_gpu_t second = {.width = 64, .height = 64, .page_width = 1, .page_height = 1,
+                       .page_mapped = &pages[1], .fluid_interval = 6u, .body_origin = {1, 0}};
+    void *identity = malloc(1u);
+    ASSERT_TRUE(identity);
+    first.device_lifetime = second.device_lifetime = identity;
+    const dc_liquid_seam_endpoint_t tiles[] = {{.gpu = &first}, {.gpu = &second, .coord = {1, 0}}};
+    g_forbid_queue = true;
+    ASSERT_EQ(dc_gpu_step_water_cohort(tiles, 2u, 1.f / 240.f, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+    ASSERT_EQ(first.fluid_phase_budget, .25f);
+    ASSERT_EQ(second.fluid_phase_budget, .25f);
+    ASSERT_EQ(first.fluid_tick, 0u);
+    ASSERT_EQ(second.fluid_tick, 0u);
+    PASS();
+cleanup:
+    g_forbid_queue = false;
+    free(identity);
+}
+
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
+        RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
+    } else if (argc == 2 && strcmp(argv[1], "--cadence-clock") == 0) {
+        RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
+    } else if (argc == 1) {
+        RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
+        RUN(test_connected_tiles_match_monolithic_water_and_share_one_receipt);
+        RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
+    } else return 2;
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

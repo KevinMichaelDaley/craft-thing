@@ -109,6 +109,14 @@ bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu);
 dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap);
 
+/** Advance the configured native water cadence for both contexts by one elapsed tick.
+ * Use the same ordered mappings from phase zero until all phases of a cycle finish.
+ * The caller holds the mappings and supplies current occupancy and transported fields.
+ * An unconfirmed submission leaves both phase clocks unchanged until receipt recovery.
+ */
+dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.
