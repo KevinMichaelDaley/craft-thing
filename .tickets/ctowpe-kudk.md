@@ -1,6 +1,6 @@
 ---
 id: ctowpe-kudk
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T15:57:04Z
@@ -26,3 +26,7 @@ Verified RED on the real native water recorder: terrain component labels changed
 **2026-11-27T16:14:48Z**
 
 The half-native production run with dedicated scratch completed all distance bands at 16 owners and the required 2.000000104 s simulated time per 60 measured frames. Near, middle, and far mean/p95 in ms were 87.039/121.872, 81.341/118.999, and 79.254/115.278. Before dedicated scratch these were 97.241/126.275, 94.972/132.820, and 98.886/134.871. The synchronized coupled-owner suite passed all 15 cases, including gas, grains, heat, bulk and water, and the graphical heated-water return passed. The 30 FPS parent gate remains open.
+
+**2026-11-27T16:25:31Z**
+
+On native 1920x1080 with 608 resident slots, 16 active owners, 12 warmups and 60 samples per band, mean/p95 in ms measured 142.140/203.249 near, 140.944/183.708 middle and 138.454/206.278 far. Before dedicated scratch these were 173.744/218.655, 167.248/212.237 and 175.243/219.521. Every band advanced 2.000000104 s. Post-refactor synchronization validation passed 3/3 native and seam tests with marker correction, 3/3 without correction, all four aperture cases and all ten transport cases. Full-suite verification and the outstanding frame budget remain on the parent.
