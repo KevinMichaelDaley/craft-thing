@@ -103,7 +103,7 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis,
     const dc_liquid_seam_flux_t flux[DC_CHUNK_SIDE], char *err, uint32_t cap);
 
-/** Reconcile an unconfirmed dispatch through its retained GPU receipt. */
+/** Reconcile a retained receipt from either order of its two live owners. */
 dc_liquid_seam_result_t dc_gpu_resolve_liquid_seam(dc_gpu_t *first, dc_gpu_t *second,
     char *err, uint32_t cap);
 

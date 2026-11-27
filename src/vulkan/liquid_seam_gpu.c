@@ -195,6 +195,11 @@ dc_liquid_seam_result_t dc_gpu_submit_liquid_seam(dc_gpu_t *gpu, dc_gpu_t *peer,
 
 dc_liquid_seam_result_t dc_gpu_resolve_liquid_seam(dc_gpu_t *first, dc_gpu_t *second,
                                                   char *err, uint32_t cap) {
+    if (first && second && first->liquid_seam_pending_owner == second) {
+        dc_gpu_t *swap = first;
+        first = second;
+        second = swap;
+    }
     struct dc_gpu_liquid_seam *seam = first ? first->liquid_seam : NULL;
     if (!seam || !second || seam->pending_peer != second || vkQueueWaitIdle(first->queue) != VK_SUCCESS)
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Cannot reconcile the liquid seam dispatch");
