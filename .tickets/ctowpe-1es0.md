@@ -1,6 +1,6 @@
 ---
 id: ctowpe-1es0
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T18:56:40Z
@@ -17,3 +17,9 @@ The aggregate suite and a fresh run of tests/vulkan/gpu_dependency_tests.py fail
 
 Both camera benchmark targets use the shared GPU source dependencies and rebuild when their compile configuration changes. The GPU dependency tests pass.
 
+
+## Notes
+
+**2026-11-27T18:57:16Z**
+
+GPU dependency suite passed 10/10 after reproducing four existing failures and both new configuration assertions. A make dry run with a changed coating layout schedules both benchmark compiler invocations.

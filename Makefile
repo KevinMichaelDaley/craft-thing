@@ -1286,7 +1286,8 @@ build/native_720_component_tests: tests/vulkan/native_720_component_tests.c test
 test_native_720_components: build/native_720_component_tests
 	./build/native_720_component_tests
 
-build/offscreen_half_native_bench build/offscreen_native_bench: Makefile src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
+OFFSCREEN_CACHE_BENCH_TARGETS = build/offscreen_half_native_bench build/offscreen_native_bench
+$(OFFSCREEN_CACHE_BENCH_TARGETS): Makefile src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
 OFFSCREEN_CACHE_BENCH_SRC = tests/app/offscreen_cache_bench.c $(filter-out src/app/main.c,$(NATIVE_SRC))
 build/offscreen_half_native_bench: $(OFFSCREEN_CACHE_BENCH_SRC) build/dungeoncraft_half_native
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u -DDC_PRESSURE_SWEEPS=16u $(OFFSCREEN_CACHE_BENCH_SRC) -o $@ $(LDLIBS)
@@ -1532,7 +1533,6 @@ GPU_SOURCE_BINARIES = $(addprefix build/, \
     dungeoncraft_native dungeoncraft_quarter_native marker_slot_tests \
     material_cut_buoyancy_tests dynamic_body_capacity_tests \
     native_360_performance_tests native_720_component_tests \
-    offscreen_half_native_bench offscreen_native_bench \
     native_720_performance_tests native_bench pixel_dynamics_visual_tests \
     pixel_performance_tests structural_bench structural_cadence_tests \
     structural_material_visual_tests structural_visual_scene_tests \
@@ -1544,6 +1544,7 @@ GPU_SOURCE_BINARIES += $(addprefix build/quarter_native_structural_, \
     buckling_tests equilibrium_tests failure_tests fracture_tests impact_tests \
     particle_identity_tests placement_tests root_identity_tests store_tests \
     streaming_tests submerged_load_tests)
+GPU_SOURCE_BINARIES += $(OFFSCREEN_CACHE_BENCH_TARGETS)
 GPU_SOURCE_BINARIES += build/material_cut_buoyancy_tests build/renderer_visual_tests build/renderer_performance_tests
 $(GPU_SOURCE_BINARIES): $(GPU_SRC) src/vulkan/gpu_internal.h src/vulkan/contact_shader_contract.h src/vulkan/fluid_transport_limits.h src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h $(CONTACT_SHADER) $(MPM_COMPACTION_SHADER) $(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER)
 $(GPU_SOURCE_BINARIES): $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv build/shaders/authored.comp.spv include/ferrum/assets/prop.h include/ferrum/assets/prop_gpu.h src/vulkan/renderer_internal.h
