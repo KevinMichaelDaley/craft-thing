@@ -12,6 +12,29 @@ static bool error(char *err, uint32_t cap, const char *message) {
     return false;
 }
 
+bool dc_level_view_set_marker_correction(dc_level_view_t *view, bool enabled) {
+    if (!view || !view->gpu) return false;
+    for (const dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        dc_gpu_t *gpu = p->workspace->gpu;
+        if (gpu->marker_correction != enabled && dc_gpu_liquid_owner_held(gpu)) return false;
+    }
+    if (!dc_gpu_set_marker_correction(view->gpu, enabled)) return false;
+    for (const dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next)
+        dc_gpu_set_marker_correction(p->workspace->gpu, enabled);
+    return true;
+}
+
+bool dc_level_view_set_fluid_interval(dc_level_view_t *view, uint32_t interval) {
+    if (!view || !view->gpu) return false;
+    for (const dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        if (dc_gpu_liquid_owner_held(p->workspace->gpu)) return false;
+    }
+    if (!dc_gpu_set_fluid_interval(view->gpu, interval)) return false;
+    for (const dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next)
+        dc_gpu_set_fluid_interval(p->workspace->gpu, interval);
+    return true;
+}
+
 bool dc_level_view_stage_world_save(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view || !view->save || !view->stream || view->closing || view->liquid_seam_failed)
         return error(err, cap, "Cannot stage this world save");
