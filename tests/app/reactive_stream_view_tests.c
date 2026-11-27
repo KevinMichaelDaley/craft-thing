@@ -116,12 +116,11 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t view = {0};
     view.save = dc_world_save_open(directory, err, sizeof(err));
+    view.world_seconds = 20.;
     view.stream = dc_stream_create(directory, 42, 4);
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(view.save && view.stream && chunk);
-    ASSERT_TRUE(dc_world_save_begin(view.save, err, sizeof(err)));
-    const char *staging = dc_world_save_directory(view.save, true);
-    ASSERT_TRUE(dc_stream_stage(view.stream, staging));
+    ASSERT_TRUE(dc_level_view_stage_player_save(&view, err, sizeof(err)));
     ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
     const dc_chunk_coord_t coords[] = {{-7, 2}, {4, 5}, {9, -6}};
@@ -150,8 +149,7 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
         dc_stream_result_release(&result);
     }
     char path[256], resaved[256];
-    snprintf(path, sizeof(path), "%s/%s", staging, DC_WORLD_BODY_RECORD);
-    ASSERT_TRUE(fr_gpu_save_structure_with_chunk_times(view.gpu, path, &view.table, err, sizeof(err)));
+    ASSERT_TRUE(save_level_structure(&view, err, sizeof(err)));
     ASSERT_TRUE(dc_player_inventory_stage(view.save, view.saved_inventory, err, sizeof(err)));
     ASSERT_TRUE(dc_world_save_commit(view.save, err, sizeof(err)));
     dc_stream_destroy(view.stream);
@@ -163,12 +161,16 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
     view.save = dc_world_save_open(directory, err, sizeof(err));
     view.stream = dc_stream_create(directory, 42, 4);
     ASSERT_TRUE(view.save && view.stream && dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
+    ASSERT_TRUE(dc_world_save_load_clock(view.save, &view.world_seconds, err, sizeof(err)));
+    ASSERT_EQ(view.world_seconds, 20.);
     ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
     snprintf(path, sizeof(path), "%s/%s", directory, DC_WORLD_BODY_RECORD);
     ASSERT_TRUE(fr_gpu_load_structure(view.gpu, path, err, sizeof(err)));
     uint32_t slot;
     ASSERT_TRUE(publish_timed_chunk(&view, coords[1], &slot, err, sizeof(err)));
     ASSERT_TRUE(view.table.slots[slot].time.known && view.table.slots[slot].time.seconds == 15.5);
+    ASSERT_TRUE(publish_timed_chunk(&view, (dc_chunk_coord_t){8, 2}, &slot, err, sizeof(err)));
+    ASSERT_TRUE(view.table.slots[slot].time.known && view.table.slots[slot].time.seconds == 20.);
 
     snprintf(resaved, sizeof(resaved), "%s/resaved.dcs", directory);
     ASSERT_TRUE(fr_gpu_save_structure_with_chunk_times(view.gpu, resaved, &view.table, err, sizeof(err)));
@@ -187,7 +189,8 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
         ASSERT_EQ(restored_time.known, times[i].known);
         ASSERT_EQ(restored_time.seconds, times[i].seconds);
     }
-    printf("Staged checkpoint recovered chunk times 0 and 15.5 s plus an unknown after resave\n");
+    printf("Staged epoch %.1f s stamped a new chunk and preserved prior chunk times across resave\n",
+           view.world_seconds);
     ASSERT_EQ(dc_gpu_validation_errors(view.gpu), 0u);
     dc_stream_destroy(view.stream);
     dc_gpu_destroy(view.gpu);

@@ -370,8 +370,6 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             if (!restored && result.generated) {
                 time = (dc_chunk_time_t){.seconds = view->world_seconds, .known = true};
             }
-            /* Older snapshots may have a chunk timestamp without an epoch record. */
-            if (time.known && time.seconds > view->world_seconds) view->world_seconds = time.seconds;
             view->table.slots[index].time = time;
             if(view->closing) {
                 view->closing_structure_saved=false;

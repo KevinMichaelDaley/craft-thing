@@ -206,7 +206,9 @@ static bool write_clock(int directory, double seconds, bool durable) {
     if (unlinkat(directory, clock_temp_name, 0) != 0 && errno != ENOENT) return false;
     int fd = openat(directory, clock_temp_name, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
     if (fd < 0) return false;
-    world_clock_record_t record = {.magic = {'D','W','C','1'}, .version = WORLD_CLOCK_VERSION, .seconds = seconds};
+    world_clock_record_t record = {
+        .magic = {'D', 'W', 'C', '1'}, .version = WORLD_CLOCK_VERSION, .seconds = seconds
+    };
     record.checksum = clock_checksum(&record);
     FILE *file = fdopen(fd, "wb");
     bool okay = file && fwrite(&record, sizeof(record), 1, file) == 1 &&
@@ -222,8 +224,9 @@ static bool write_clock(int directory, double seconds, bool durable) {
 bool dc_world_save_store_clock(dc_world_save_t *save, double seconds, char *err, uint32_t cap) {
     if (!save || !valid_clock(seconds)) return error(err, cap, "Invalid world clock time");
     if (save->clock_cached && save->stored_clock == seconds) return true;
-    int directory = save->staging ? openat(save->root, draft_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-                                  : save->root;
+    save->clock_cached = false;
+    int flags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+    int directory = save->staging ? openat(save->root, draft_name, flags) : save->root;
     if (directory < 0) return error(err, cap, "Cannot open world clock staging");
     bool okay = write_clock(directory, seconds, !save->staging);
     if (save->staging && close(directory) != 0) okay = false;

@@ -309,10 +309,12 @@ static void test_loading_frame_does_not_build_catch_up_debt(void) {
     ASSERT_TRUE(!timed->dirty);
     ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
     ASSERT_TRUE(timed->time.seconds == 4.5 && !timed->dirty);
+    ASSERT_EQ(view->world_seconds, 0.);
     ASSERT_TRUE(dc_chunk_table_finish_load(&view->table, 0, view->table.slots[0].generation));
     ASSERT_TRUE(dc_level_view_step_timed(view, .03f, NULL, 0));
     ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
     ASSERT_TRUE(timed->time.seconds == 4.5 + (double).03f && timed->dirty);
+    ASSERT_EQ(view->world_seconds, (double).03f);
     ASSERT_TRUE(!view->table.slots[0].time.known);
     dc_level_view_discard(view);
     ASSERT_INT_EQ(g_frame.presents, 2);
@@ -392,6 +394,7 @@ static void test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reope
     const dc_chunk_coord_t coord = view->table.slots[0].coord;
     ASSERT_TRUE(write_timed_chunk(directory, coord));
     ASSERT_TRUE(load_first_clock_chunk(view, directory));
+    ASSERT_EQ(view->world_seconds, 0.);
     ASSERT_EQ(g_frame.uploads[0], 1u);
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
@@ -455,28 +458,40 @@ static void test_generated_chunks_start_at_confirmed_world_time(void) {
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = ready_view(false);
     ASSERT_TRUE(view);
+    const dc_chunk_coord_t legacy = view->table.slots[0].coord;
+    view->save = dc_world_save_open(directory, NULL, 0);
     view->stream = dc_stream_create(directory, 42, 64);
-    ASSERT_TRUE(view->stream);
+    ASSERT_TRUE(view->save && view->stream);
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
     g_frame.reject_present = true;
     ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    ASSERT_EQ(view->world_seconds, .25);
     g_frame.reject_present = false;
     ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_EQ(view->world_seconds, .25);
     ASSERT_TRUE(dc_level_view_step_timed(view, .0625f, NULL, 0));
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
     ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
-    const dc_chunk_coord_t legacy = {0, 0};
     const dc_chunk_coord_t generated = {VIEW_CHUNKS_X + HALO_CHUNKS, 0};
     ASSERT_TRUE(pan_until_ready(view, 1));
     uint32_t index;
-    ASSERT_TRUE(dc_chunk_table_find(&view->table, legacy, &index));
-    ASSERT_TRUE(!view->table.slots[index].time.known);
+    ASSERT_TRUE(!dc_chunk_table_find(&view->table, legacy, &index));
     ASSERT_TRUE(dc_chunk_table_find(&view->table, generated, &index));
     dc_chunk_time_t time = view->table.slots[index].time;
     dc_level_view_discard(view);
     printf("Generated chunk time known %d, %.9f seconds at admission\n", time.known, time.seconds);
     ASSERT_TRUE(time.known && time.seconds == .4375);
+
+    view = ready_view(true);
+    ASSERT_TRUE(view);
+    view->save = dc_world_save_open(directory, NULL, 0);
+    ASSERT_TRUE(view->save && dc_world_save_load_clock(view->save, &view->world_seconds, NULL, 0));
+    ASSERT_EQ(view->world_seconds, .4375);
+    ASSERT_TRUE(load_first_clock_chunk(view, directory));
+    ASSERT_EQ(view->world_seconds, .4375);
+    ASSERT_TRUE(!view->table.slots[0].time.known);
+    dc_level_view_discard(view);
     PASS();
 }
 

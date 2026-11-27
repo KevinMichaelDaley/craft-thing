@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -132,18 +133,56 @@ static void test_committed_recovery_publishes_the_clock_with_physical_records(vo
     ASSERT_TRUE(snprintf(obstacle, sizeof(obstacle), "%s/rigid_bodies.bin", directory) > 0);
     ASSERT_INT_EQ(mkdir(obstacle, 0700), 0);
     dc_world_save_t *save = dc_world_save_open(directory, err, sizeof(err));
-    ASSERT_TRUE(save && dc_world_save_begin(save, err, sizeof(err)));
+    ASSERT_TRUE(save && dc_world_save_store_clock(save, 5.25, err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
     const char *staging = dc_world_save_directory(save, true);
     ASSERT_TRUE(write_record(staging, "rigid_bodies.bin", "bodies"));
     ASSERT_TRUE(write_record(staging, "player_inventory.bin", "empty"));
-    ASSERT_TRUE(write_record(staging, "world_clock.bin", "time at snapshot"));
+    ASSERT_TRUE(dc_world_save_store_clock(save, 7.5, err, sizeof(err)));
+    double seconds;
+    ASSERT_TRUE(dc_world_save_load_clock(save, &seconds, err, sizeof(err)));
+    ASSERT_EQ(seconds, 5.25);
     ASSERT_TRUE(!dc_world_save_commit(save, err, sizeof(err)));
     dc_world_save_close(save);
     ASSERT_INT_EQ(rmdir(obstacle), 0);
     save = dc_world_save_open(directory, err, sizeof(err));
     ASSERT_TRUE(save);
     ASSERT_TRUE(record_equals(directory, "rigid_bodies.bin", "bodies"));
-    ASSERT_TRUE(record_equals(directory, "world_clock.bin", "time at snapshot"));
+    ASSERT_TRUE(record_equals(directory, "player_inventory.bin", "empty"));
+    ASSERT_TRUE(dc_world_save_load_clock(save, &seconds, err, sizeof(err)));
+    ASSERT_EQ(seconds, 7.5);
+    dc_world_save_close(save);
+    PASS();
+}
+
+static void test_world_clock_preserves_canonical_time_across_discard_and_reopen(void) {
+    char directory[] = "build/world_clock_discard_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_world_save_t *save = dc_world_save_open(directory, err, sizeof(err));
+    double seconds = -1.;
+    ASSERT_TRUE(save && dc_world_save_load_clock(save, &seconds, err, sizeof(err)));
+    ASSERT_EQ(seconds, 0.);
+    ASSERT_TRUE(dc_world_save_store_clock(save, 9.125, err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_store_clock(save, 9.125, err, sizeof(err)));
+    char staged_path[512];
+    ASSERT_TRUE(snprintf(staged_path, sizeof(staged_path), "%s/%s",
+                         dc_world_save_directory(save, true), DC_WORLD_CLOCK_RECORD) > 0);
+    ASSERT_INT_EQ(access(staged_path, F_OK), 0);
+    ASSERT_TRUE(dc_world_save_store_clock(save, 10., err, sizeof(err)));
+    dc_world_save_close(save);
+    ASSERT_TRUE(access(staged_path, F_OK) != 0);
+
+    save = dc_world_save_open(directory, err, sizeof(err));
+    ASSERT_TRUE(save);
+    ASSERT_TRUE(!dc_world_save_store_clock(save, NAN, err, sizeof(err)));
+    ASSERT_TRUE(!dc_world_save_store_clock(save, INFINITY, err, sizeof(err)));
+    ASSERT_TRUE(!dc_world_save_store_clock(save, -1., err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_load_clock(save, &seconds, err, sizeof(err)));
+    ASSERT_EQ(seconds, 9.125);
+    ASSERT_TRUE(write_record(directory, DC_WORLD_CLOCK_RECORD, "DWC1"));
+    ASSERT_TRUE(!dc_world_save_load_clock(save, &seconds, err, sizeof(err)));
+    ASSERT_EQ(seconds, 9.125);
     dc_world_save_close(save);
     PASS();
 }
@@ -154,6 +193,7 @@ int main(void) {
     RUN(test_open_recovers_a_committed_save_after_publication_stops);
     RUN(test_legacy_and_invalid_player_records_preserve_expected_balances);
     RUN(test_committed_recovery_publishes_the_clock_with_physical_records);
+    RUN(test_world_clock_preserves_canonical_time_across_discard_and_reopen);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

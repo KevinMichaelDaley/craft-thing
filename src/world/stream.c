@@ -195,19 +195,20 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
         file = fopen(path, "rb");
     }
     if (!file && errno == ENOENT) {
+        bool okay = true;
         if (stream->ground_surface) {
-            if (!dc_generate_chunk_ground(coord,&stream->ground,chunk)) {free(chunk);return NULL;}
-            *generated = true;
-            return chunk;
-        }
+            okay = dc_generate_chunk_ground(coord, &stream->ground, chunk);
+        } else {
 #ifdef DC_NATIVE_VIEW
-        if (!dc_generate_chunk_scaled(stream->seed, coord, 4u, chunk)) {
+            okay = dc_generate_chunk_scaled(stream->seed, coord, 4u, chunk);
+#else
+            dc_generate_chunk(stream->seed, coord, chunk);
+#endif
+        }
+        if (!okay) {
             free(chunk);
             return NULL;
         }
-#else
-        dc_generate_chunk(stream->seed, coord, chunk);
-#endif
         *generated = true;
         return chunk;
     }

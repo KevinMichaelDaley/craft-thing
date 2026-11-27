@@ -38,7 +38,7 @@ static void test_worker_generates_saves_and_reloads_chunk(void) {
     ASSERT_TRUE(wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.generation, 7u);
-    ASSERT_TRUE(!result.time.known);
+    ASSERT_TRUE(result.generated && !result.time.known);
     ASSERT_TRUE(result.chunk != NULL);
     ASSERT_EQ(result.chunk->coord.x, -1);
     result.chunk->cells[10 * DC_CHUNK_SIDE + 63].material = 42;
@@ -56,6 +56,7 @@ static void test_worker_generates_saves_and_reloads_chunk(void) {
     ASSERT_TRUE(wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.generation, 9u);
+    ASSERT_TRUE(!result.generated && !result.time.known);
     ASSERT_EQ(result.chunk->cells[10 * DC_CHUNK_SIDE + 63].material, 42);
     ASSERT_TRUE(result.chunk->face_velocity[10 * DC_CHUNK_SIDE + 63].x == 1.25f);
     ASSERT_TRUE(result.chunk->face_velocity[10 * DC_CHUNK_SIDE + 63].y == -0.5f);
@@ -187,7 +188,7 @@ static void test_legacy_chunk_loads_with_zero_velocity(void) {
     ASSERT_EQ(result.chunk->markers[0].id, 42u);
     ASSERT_TRUE(result.chunk->face_velocity[10].x == 0.0f);
     ASSERT_TRUE(result.chunk->face_velocity[10].y == 0.0f);
-    ASSERT_TRUE(!result.time.known);
+    ASSERT_TRUE(!result.generated && !result.time.known);
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     PASS();
@@ -418,6 +419,7 @@ static void test_staged_chunk_reload_prefers_the_current_world_edit(void) {
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_WOOD);
     ASSERT_TRUE(result.time.known && result.time.seconds == canonical.seconds);
+    ASSERT_TRUE(!result.generated);
     ASSERT_EQ(result.colors->terrain[0][0], .5f);
     dc_stream_result_release(&result);
 
@@ -432,6 +434,7 @@ static void test_staged_chunk_reload_prefers_the_current_world_edit(void) {
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_AIR);
     ASSERT_TRUE(result.time.known && result.time.seconds == staged.seconds);
+    ASSERT_TRUE(!result.generated);
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     dc_world_save_close(save);
