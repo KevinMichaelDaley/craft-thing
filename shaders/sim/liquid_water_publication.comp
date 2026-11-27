@@ -6,6 +6,7 @@
 const uint SIDE = DC_WATER_SEAM_SIDE;
 const uint CELLS = SIDE * SIDE;
 const uint PAIR_CELLS = 2u * CELLS;
+const uint MARKER_CAPACITY = DC_WATER_SEAM_MARKER_CAPACITY;
 const uint FULL = 65536u;
 
 layout(local_size_x = 64) in;
@@ -18,14 +19,23 @@ layout(set = 0, binding = 5, std430) readonly buffer FinalVelocity { vec2 final_
 layout(set = 0, binding = 6, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 7, std430) readonly buffer Bulk { uint bulk[]; };
 layout(set = 0, binding = 8, std430) readonly buffer ScratchHeat { float scratch_heat[]; };
-layout(set = 0, binding = 9, std430) buffer FirstCells { uvec2 first_cells[]; };
-layout(set = 0, binding = 10, std430) buffer FirstColor { vec4 first_color[]; };
-layout(set = 0, binding = 11, std430) buffer FirstVelocity { vec2 first_velocity[]; };
-layout(set = 0, binding = 12, std430) buffer FirstHeat { float first_heat[]; };
-layout(set = 0, binding = 13, std430) buffer SecondCells { uvec2 second_cells[]; };
-layout(set = 0, binding = 14, std430) buffer SecondColor { vec4 second_color[]; };
-layout(set = 0, binding = 15, std430) buffer SecondVelocity { vec2 second_velocity[]; };
-layout(set = 0, binding = 16, std430) buffer SecondHeat { float second_heat[]; };
+layout(set = 0, binding = 9, std430) readonly buffer FinalMarkers { uvec4 final_markers[]; };
+layout(set = 0, binding = 10, std430) readonly buffer FinalMarkerCounts { uint final_marker_counts[]; };
+layout(set = 0, binding = 11, std430) readonly buffer FinalMarkerGrid { uint final_marker_grid[]; };
+layout(set = 0, binding = 12, std430) buffer FirstCells { uvec2 first_cells[]; };
+layout(set = 0, binding = 13, std430) buffer FirstColor { vec4 first_color[]; };
+layout(set = 0, binding = 14, std430) buffer FirstVelocity { vec2 first_velocity[]; };
+layout(set = 0, binding = 15, std430) buffer FirstHeat { float first_heat[]; };
+layout(set = 0, binding = 16, std430) buffer FirstMarkers { uvec4 first_markers[]; };
+layout(set = 0, binding = 17, std430) buffer FirstMarkerCounts { uint first_marker_counts[]; };
+layout(set = 0, binding = 18, std430) buffer FirstMarkerGrid { uint first_marker_grid[]; };
+layout(set = 0, binding = 19, std430) buffer SecondCells { uvec2 second_cells[]; };
+layout(set = 0, binding = 20, std430) buffer SecondColor { vec4 second_color[]; };
+layout(set = 0, binding = 21, std430) buffer SecondVelocity { vec2 second_velocity[]; };
+layout(set = 0, binding = 22, std430) buffer SecondHeat { float second_heat[]; };
+layout(set = 0, binding = 23, std430) buffer SecondMarkers { uvec4 second_markers[]; };
+layout(set = 0, binding = 24, std430) buffer SecondMarkerCounts { uint second_marker_counts[]; };
+layout(set = 0, binding = 25, std430) buffer SecondMarkerGrid { uint second_marker_grid[]; };
 
 struct Location { uint slot, x, y, width, height; };
 layout(push_constant) uniform Params { Location first, second; uint axis, thermal; } params;
@@ -70,7 +80,9 @@ bool valid_cell(uint atlas, bool second, uint local, Location owner, uint grid) 
 void main() {
     const uint lane = gl_LocalInvocationID.x;
     if (lane == 0u) {
-        invalid = 0u;
+        invalid = uint(final_marker_counts[0] > MARKER_CAPACITY || final_marker_counts[1] > MARKER_CAPACITY ||
+                       first_marker_counts[params.first.slot] > MARKER_CAPACITY ||
+                       second_marker_counts[params.second.slot] > MARKER_CAPACITY);
         stock_before = 0u;
         stock_after = 0u;
     }
@@ -106,16 +118,25 @@ void main() {
         const uint live = owner.slot * CELLS + local;
         const uint live_grid = owner_grid(owner, point);
         const uint grid = scratch_grid(second, point);
+        const uint tile = uint(second), marker_count = final_marker_counts[tile];
+        const uint marker = owner.slot * MARKER_CAPACITY + local;
+        const uint scratch_marker = tile * MARKER_CAPACITY + local;
         if (second) {
             second_cells[live].y = final_cells[atlas].y;
             second_color[live] = final_color[atlas];
             second_velocity[live_grid] = final_velocity[grid];
             if (params.thermal != 0u) second_heat[live] = scratch_heat[atlas];
+            second_marker_grid[live] = final_marker_grid[atlas];
+            if (local == 0u) second_marker_counts[owner.slot] = marker_count;
+            if (local < marker_count) second_markers[marker] = final_markers[scratch_marker];
         } else {
             first_cells[live].y = final_cells[atlas].y;
             first_color[live] = final_color[atlas];
             first_velocity[live_grid] = final_velocity[grid];
             if (params.thermal != 0u) first_heat[live] = scratch_heat[atlas];
+            first_marker_grid[live] = final_marker_grid[atlas];
+            if (local == 0u) first_marker_counts[owner.slot] = marker_count;
+            if (local < marker_count) first_markers[marker] = final_markers[scratch_marker];
         }
     }
     /* The completion receipt follows every lane's live storage writes. */

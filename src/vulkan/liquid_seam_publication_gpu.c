@@ -13,7 +13,7 @@ _Static_assert(sizeof(water_publication_push_t) == 12u * sizeof(uint32_t), "Wate
 bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
     fr_renderer_compute_t *compute, const VkDescriptorBufferInfo scratch[DC_WATER_PUBLICATION_SCRATCH_BINDINGS],
     char *err, uint32_t cap) {
-    enum { OWNER_BINDINGS = 4u, BINDINGS = DC_WATER_PUBLICATION_SCRATCH_BINDINGS + 2u * OWNER_BINDINGS };
+    enum { OWNER_BINDINGS = 7u, BINDINGS = DC_WATER_PUBLICATION_SCRATCH_BINDINGS + 2u * OWNER_BINDINGS };
     VkDescriptorBufferInfo buffers[BINDINGS];
     memcpy(buffers, scratch, DC_WATER_PUBLICATION_SCRATCH_BINDINGS * sizeof(*buffers));
     const dc_gpu_t *owners[] = {gpu, peer};
@@ -25,6 +25,11 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
         out[1] = (VkDescriptorBufferInfo){owner->water_color_buffer, 0, VK_WHOLE_SIZE};
         out[2] = (VkDescriptorBufferInfo){owner->velocity_buffer, 0, VK_WHOLE_SIZE};
         out[3] = (VkDescriptorBufferInfo){heat ? heat : owner->thermal_control_buffer, 0, VK_WHOLE_SIZE};
+        const VkBuffer markers = owner->marker_ping ? owner->marker_b_buffer : owner->marker_a_buffer;
+        const VkBuffer counts = owner->marker_ping ? owner->marker_count_b_buffer : owner->marker_count_a_buffer;
+        out[4] = (VkDescriptorBufferInfo){markers, 0, VK_WHOLE_SIZE};
+        out[5] = (VkDescriptorBufferInfo){counts, 0, VK_WHOLE_SIZE};
+        out[6] = (VkDescriptorBufferInfo){owner->marker_grid_buffer, 0, VK_WHOLE_SIZE};
     }
     if (compute->pipeline) {
         dc_gpu_seam_bind_buffers(gpu, compute->descriptor, buffers, BINDINGS);

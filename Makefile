@@ -281,7 +281,7 @@ FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.com
 FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_retained.comp.spv build/shaders/bulk_phase_thermal.comp.spv
 WATER_SEAM_SHADERS = build/shaders/fluid_water_seam.comp.spv build/shaders/fluid_water_seam_16.comp.spv
 WATER_SEAM_SHADERS += build/shaders/fluid_water_seam_recompute.comp.spv build/shaders/fluid_water_seam_recompute_16.comp.spv
-FLUID_SHADER += $(WATER_SEAM_SHADERS)
+FLUID_SHADER += $(WATER_SEAM_SHADERS) build/shaders/fluid_water_seam_correction.comp.spv
 FLUID_SHADER += build/shaders/liquid_seam.comp.spv build/shaders/liquid_water_publication.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
@@ -2542,3 +2542,9 @@ build/shaders/fluid_water_seam_recompute.comp.spv build/shaders/fluid_water_seam
 $(WATER_SEAM_SHADERS): shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/fluid_one_cell.glsl shaders/sim/fluid_short_run.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl shaders/sim/bulk_phase.glsl include/dungeoncraft/liquid_seam_layout.h include/dungeoncraft/fluid_aperture_layout.h
 	@mkdir -p $(@D)
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_WATER_SEAM_PLAN=1 $(SEAM_TRANSPORT_FLAGS) $< -o $@
+
+build/shaders/fluid_water_seam_correction.comp.spv: shaders/sim/fluid.comp shaders/sim/fluid_aperture.glsl shaders/sim/bulk_phase.glsl
+	@mkdir -p $(@D)
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_WATER_SEAM_PLAN=1 $< -o $@
+
+$(FLUID_SHADER) build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv build/diagnostics/fluid_transport_recompute_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv build/diagnostics/fluid_dry_line_profile.comp.spv build/shaders/fluid_transport_recompute.comp.spv build/shaders/fluid_transport_recompute_16.comp.spv: shaders/sim/water_seam_crossing.glsl

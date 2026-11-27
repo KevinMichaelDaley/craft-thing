@@ -58,10 +58,12 @@ typedef struct {
     float initial_excess_heat, final_excess_heat;
 } dc_water_seam_payload_t;
 
-/** The scratch water sweep's write set, in original owner chunk order. */
+/** The water cycle's stock and payload in original owner chunk order. */
 typedef struct {
     dc_liquid_seam_sample_t projection[DC_CHUNK_SIDE];
+    /** Signed Q16 volume across each lane after advection and marker correction. */
     int32_t crossing_fp[DC_CHUNK_SIDE];
+    /** Signed Q16 volume across each lane during advection. */
     int32_t advected_fp[DC_CHUNK_SIDE];
     float pressure_work[DC_CHUNK_SIDE];
     dc_water_seam_cell_t cells[2][DC_CHUNK_CELLS];
@@ -69,10 +71,10 @@ typedef struct {
     bool thermal_enabled;
 } dc_water_seam_plan_t;
 
-/** Plan water transport at a common owner interval on the projected two-tile domain.
- * Signed flow is positive from first to second. Pressure work is the native
- * pressure difference times net volume in cells. Input owners remain live and
- * read-only. The plan is published on success. Expected and final heat
+/** Plan the water cycle on the projected two-tile domain after rigid displacement.
+ * Signed flow is positive from first to second. Pressure work uses the native
+ * pressure difference and advected volume in cells. The plan is written on
+ * success and the owners are read-only. Expected and final heat
  * contain zero in worlds with thermal simulation disabled.
  */
 bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
@@ -80,9 +82,11 @@ bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
     const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
     char *err, uint32_t cap);
 
-/** Run and publish one native water sweep for a sealed pair.
+/** Run and publish the native water cycle for a sealed pair, including markers.
  * The caller holds both owner mappings and generations at the same interval start.
- * Inputs require settled rigid displacement. A rejected sweep leaves both owners
+ * Inputs require settled rigid displacement, matching marker correction settings,
+ * and matching fluid tick parity when marker correction is enabled.
+ * A rejected sweep leaves both owners
  * and the optional plan unchanged. An unconfirmed sweep fences both owners until
  * dc_gpu_resolve_liquid_seam confirms the retained receipt or owners are recovered.
  */

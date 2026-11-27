@@ -13,7 +13,7 @@ typedef struct {
     uint32_t axis;
 } dc_gpu_seam_push_t;
 
-enum { DC_WATER_PUBLICATION_SCRATCH_BINDINGS = 9u };
+enum { DC_WATER_PUBLICATION_SCRATCH_BINDINGS = 12u };
 
 dc_gpu_seam_push_t dc_gpu_seam_push(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis);

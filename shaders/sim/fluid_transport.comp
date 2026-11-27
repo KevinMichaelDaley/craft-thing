@@ -29,10 +29,6 @@ layout(set=0,binding=31,std430) buffer TransportProfile {uint transport_profile[
 uint request_queries=0u,blocker_checks=0u,source_queries=0u;
 uint buffer_barriers=0u,page_queries=0u,stagnant_sources=0u;
 #endif
-#ifdef DC_WATER_SEAM_PLAN
-#include "../../include/dungeoncraft/liquid_seam_layout.h"
-layout(set=0,binding=DC_WATER_SEAM_CROSSING_BINDING,std430) buffer Crossings {uvec2 crossings[];};
-#endif
 layout(push_constant) uniform Params {
     uint width,height,mode,tick_parity,unused1,step_scale_bits,elapsed_time_mode;
 #ifdef DC_WATER_SEAM_PLAN
@@ -71,6 +67,7 @@ uint page_at(ivec2 p) {
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
 #include "hydraulic_face.glsl"
 #include "water_color.glsl"
+#include "water_seam_crossing.glsl"
 void transport_buffer_barrier() {
     subgroupMemoryBarrierBuffer();
 #ifdef DC_TRANSPORT_PROFILE
@@ -123,16 +120,6 @@ void put_water(ivec2 p,uint value) {
         }
     }
     else chunk_cells[atlas_index(p,page_at(p))].y=value;
-}
-void record_water_crossing(ivec2 source, ivec2 target, uint amount) {
-#ifdef DC_WATER_SEAM_PLAN
-    uint axis = vertical ? DC_WATER_SEAM_VERTICAL : DC_WATER_SEAM_HORIZONTAL;
-    if (amount == 0u || params.seam_axis != axis) return;
-    int from = vertical ? source.y : source.x, to = vertical ? target.y : target.x;
-    if ((from < int(DC_WATER_SEAM_SIDE)) == (to < int(DC_WATER_SEAM_SIDE))) return;
-    atomicAdd(crossings[atlas_index(source, page_at(source))].x, amount);
-    atomicAdd(crossings[atlas_index(target, page_at(target))].y, amount);
-#endif
 }
 void move_water_recipient(ivec2 source, ivec2 target, uint amount, uint available) {
     uint receiving = water_at(target);

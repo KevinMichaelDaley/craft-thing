@@ -12,6 +12,7 @@
 
 static int g_pass, g_fail;
 static char g_err[256];
+static bool g_marker_correction = true;
 
 typedef enum { SUBMIT_OK, LOSE_ACKNOWLEDGEMENT, LOSE_RECEIPT } submit_fault_t;
 static submit_fault_t g_submit_fault;
@@ -37,7 +38,8 @@ bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {
 #define ASSERT_INT_EQ(a, b) ASSERT_EQ((int)(a), (int)(b))
 #define PASS() ++g_pass
 
-enum { FORWARD = 12, REVERSE = 16, SHALLOW = 21, BLOCKED = 26, BACKPRESSURE = 31, DONORS = 4 };
+enum { FORWARD = 12, REVERSE = 16, SHALLOW = 21, BLOCKED = 26, BACKPRESSURE = 31,
+       CORRECTION = 36, DONORS = 4 };
 static const uint32_t donor_stock = 49152u;
 static const VkDeviceSize pressure_bytes = 2u * DC_CHUNK_CELLS * sizeof(float);
 
@@ -78,6 +80,23 @@ static void seed_basin(dc_chunk_t *first, dc_chunk_t *second, fr_bulk_phase_chun
         chunks[tile]->marker_count = 1;
         chunks[tile]->markers[0] = (dc_marker_t){
             y_axis ? lane : normal, y_axis ? normal : lane, 100u + tile, DC_MARKER_INSIDE};
+    }
+    if (!y_axis) {
+        /* The dry pocket keeps the outside marker near a free surface. The earlier
+         * wet cell wins seeding in its two-cell block, leaving the seam marker outside. */
+        first->cells[index_on_line(false, 63, CORRECTION - 1u, DC_CHUNK_SIDE)].material = DC_MATERIAL_AIR;
+        const uint32_t correction_stock[] = {16384u, 24576u, 45056u, 0u};
+        for (uint32_t i = 0; i < sizeof(correction_stock) / sizeof(correction_stock[0]); ++i) {
+            const uint32_t normal = 62u + i;
+            chunks[normal / DC_CHUNK_SIDE]->cells[
+                index_on_line(false, normal % DC_CHUNK_SIDE, CORRECTION, DC_CHUNK_SIDE)] =
+                (dc_cell_t){.material = DC_MATERIAL_AIR, .fluid_mass = correction_stock[i]};
+        }
+        const int32_t lane = CORRECTION * DC_FLUID_FULL + DC_FLUID_FULL / 2u;
+        first->markers[first->marker_count++] = (dc_marker_t){
+            63u * DC_FLUID_FULL + DC_FLUID_FULL / 2u, lane, 102u, DC_MARKER_OUTSIDE};
+        second->markers[second->marker_count++] = (dc_marker_t){
+            DC_FLUID_FULL / 2u, lane, 103u, DC_MARKER_INSIDE};
     }
 }
 
@@ -123,6 +142,10 @@ static void seed_apertures(dc_gpu_t *gpu, bool y_axis, uint32_t x, uint32_t y) {
     const uint32_t base = y * gpu->width + x;
     plane[base + index_on_line(y_axis, 63, SHALLOW, gpu->width)] = DC_FLUID_FULL * 3u / 4u;
     plane[base + index_on_line(y_axis, 63, BLOCKED, gpu->width)] = DC_FLUID_FULL;
+    if (!y_axis) {
+        uint32_t *y_faces = (uint32_t *)gpu->occupancy_mapped + 4u * gpu->width * gpu->height;
+        y_faces[base + index_on_line(false, 63, CORRECTION - 1u, gpu->width)] = DC_FLUID_FULL;
+    }
 }
 
 static bool native_water_passes(dc_gpu_t *gpu, float step_seconds, VkBuffer pressure_readback) {
@@ -159,6 +182,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     dc_chunk_t *chunks[2] = {calloc(1, sizeof(*chunks[0])), calloc(1, sizeof(*chunks[1]))};
     dc_chunk_t *download = calloc(1, sizeof(*download));
     dc_chunk_t *published = calloc(2, sizeof(*published));
+    uint32_t published_grid[2][DC_CHUNK_CELLS];
     fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
     dc_water_seam_plan_t *plan = calloc(1, sizeof(*plan));
     dc_water_seam_plan_t *saved = malloc(sizeof(*saved));
@@ -190,8 +214,12 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         ASSERT_TRUE(dc_gpu_set_body_origin(ep.gpu, origin, g_err, sizeof(g_err)));
         ASSERT_TRUE(upload(ep.gpu, ep.slot, ep.tile_x, ep.tile_y, chunks[owner], owner ? bulk : NULL));
         ASSERT_TRUE(upload_payload(ep.gpu, ep.slot, chunks[owner], &colors[owner], heat[owner], y_axis));
+        ASSERT_TRUE(dc_gpu_set_marker_correction(ep.gpu, g_marker_correction));
+        ep.gpu->marker_ping = owner;
+        ep.gpu->fluid_tick = y_axis;
+        uint32_t *inactive_counts = owner ? ep.gpu->marker_count_a_mapped : ep.gpu->marker_count_b_mapped;
+        inactive_counts[ep.slot] = 0u;
     }
-    owners[1].gpu->marker_ping = 1u;
     seed_apertures(owners[0].gpu, y_axis, DC_CHUNK_SIDE, 0);
     owners[0].gpu->rigid_occupancy_present = true;
     ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
@@ -244,6 +272,18 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
                                       plan, g_err, sizeof(g_err)));
     ASSERT_INT_EQ(memcmp(saved, plan, sizeof(*saved)), 0);
+    owners[1].gpu->marker_correction = !g_marker_correction;
+    ASSERT_TRUE(!dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
+                                       plan, g_err, sizeof(g_err)));
+    ASSERT_INT_EQ(memcmp(saved, plan, sizeof(*saved)), 0);
+    owners[1].gpu->marker_correction = g_marker_correction;
+    if (g_marker_correction) {
+        owners[1].gpu->fluid_tick ^= 1u;
+        ASSERT_EQ(dc_gpu_execute_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
+            plan, g_err, sizeof(g_err)), DC_LIQUID_SEAM_REJECTED);
+        ASSERT_INT_EQ(memcmp(saved, plan, sizeof(*saved)), 0);
+        owners[1].gpu->fluid_tick ^= 1u;
+    }
     dc_liquid_seam_endpoint_t stale = owners[1];
     stale.slot = stale.slot + 1u;
     ASSERT_TRUE(!dc_gpu_plan_water_seam(owners[0], stale, axis, step_seconds, NULL,
@@ -320,6 +360,12 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
             ASSERT_TRUE(strstr(g_err, "unresolved liquid seam") != NULL);
         }
         ASSERT_TRUE(dc_gpu_download_chunk(ep.gpu, ep.slot, &published[owner], g_err, sizeof(g_err)));
+        ASSERT_EQ(ep.gpu->marker_ping, owner);
+        ASSERT_EQ(ep.gpu->fluid_tick, (uint32_t)y_axis);
+        const uint32_t *inactive_counts = owner ? ep.gpu->marker_count_a_mapped : ep.gpu->marker_count_b_mapped;
+        ASSERT_EQ(inactive_counts[ep.slot], 0u);
+        memcpy(published_grid[owner], (const uint32_t *)ep.gpu->marker_grid_mapped + ep.slot * DC_CHUNK_CELLS,
+               sizeof(published_grid[owner]));
         ASSERT_TRUE(fr_renderer_download_chunk_colors(ep.gpu, ep.slot, read_colors, g_err, sizeof(g_err)));
         if (y_axis)
             ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(ep.gpu, ep.slot, read_heat, DC_CHUNK_CELLS,
@@ -336,6 +382,8 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     }
 
     ASSERT_TRUE(dc_gpu_create_shared(&mono, &device, width, height, shader, g_err, sizeof(g_err)));
+    mono->fluid_tick = y_axis;
+    ASSERT_TRUE(dc_gpu_set_marker_correction(mono, g_marker_correction));
     ASSERT_TRUE(upload(mono, 0, 0, 0, chunks[0], NULL));
     ASSERT_TRUE(upload(mono, 1, !y_axis, y_axis, chunks[1], bulk));
     for (unsigned owner = 0; owner < 2; ++owner)
@@ -350,6 +398,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     int32_t crossing[2][DC_CHUNK_SIDE] = {{0}};
     int32_t advected_delta[DC_CHUNK_SIDE] = {0};
     const dc_cell_t *advected = (const dc_cell_t *)((const char *)mapped + pressure_bytes);
+    g_err[0] = '\0';
     for (unsigned owner = 0; owner < 2; ++owner) {
         ASSERT_TRUE(dc_gpu_download_chunk(mono, owner, download, g_err, sizeof(g_err)));
         ASSERT_TRUE(download->marker_count > chunks[owner]->marker_count);
@@ -358,6 +407,9 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         qsort(download->markers, download->marker_count, sizeof(dc_marker_t), marker_order);
         ASSERT_INT_EQ(memcmp(published[owner].markers, download->markers,
                              download->marker_count * sizeof(dc_marker_t)), 0);
+        ASSERT_INT_EQ(memcmp(published_grid[owner],
+                             (const uint32_t *)mono->marker_grid_mapped + owner * DC_CHUNK_CELLS,
+                             sizeof(published_grid[owner])), 0);
         for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
             ASSERT_TRUE(fabsf(download->face_velocity[i].x - published[owner].face_velocity[i].x) < 1e-5f);
             ASSERT_TRUE(fabsf(download->face_velocity[i].y - published[owner].face_velocity[i].y) < 1e-5f);
@@ -406,8 +458,15 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         const float work = (pressure[a] - pressure[b]) * ((float)advected_delta[lane] / DC_FLUID_FULL);
         ASSERT_TRUE(fabsf(plan->pressure_work[lane] - work) < 1e-5f);
     }
+    if (!y_axis)
+        ASSERT_INT_EQ(plan->crossing_fp[CORRECTION] - plan->advected_fp[CORRECTION],
+                      g_marker_correction ? DC_FLUID_FULL / 8u : 0u);
     ASSERT_TRUE(fabsf(plan->pressure_work[SHALLOW]) > 1e-5f);
-    ASSERT_TRUE(advected_delta[SHALLOW] > 0 && advected_delta[SHALLOW] <= (int32_t)DC_FLUID_FULL / 4);
+    ASSERT_TRUE(advected_delta[SHALLOW] > 0);
+    for (uint32_t normal = 0; normal < DC_CHUNK_SIDE; ++normal) {
+        const uint32_t recipient = index_on_line(y_axis, normal, SHALLOW, DC_CHUNK_SIDE);
+        ASSERT_TRUE(advected[DC_CHUNK_CELLS + recipient].fluid_mass <= DC_FLUID_FULL / 4u);
+    }
     ASSERT_INT_EQ(dc_gpu_validation_errors(&device), 0u);
     PASS();
 
@@ -441,7 +500,9 @@ static void test_vertical_water_crossings_match_native_sweeps(void) {
     compare_plan(DC_LIQUID_SEAM_Y);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--without-marker-correction") == 0) g_marker_correction = false;
+    else if (argc != 1) return 2;
     RUN(test_horizontal_water_crossings_match_native_sweeps);
     RUN(test_vertical_water_crossings_match_native_sweeps);
     printf("%d passed, %d failed\n", g_pass, g_fail);

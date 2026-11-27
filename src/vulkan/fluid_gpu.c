@@ -144,6 +144,12 @@ bool dc_gpu_make_water_seam_pipeline(dc_gpu_t *gpu, uint32_t mode, VkPipeline *p
                                2u * DC_CHUNK_SIDE, pipeline, err, cap);
 }
 
+bool dc_gpu_make_water_seam_correction_pipeline(dc_gpu_t *gpu, VkPipeline *pipeline,
+                                                char *err, uint32_t cap) {
+    return make_pipeline(gpu, "build/shaders/fluid_water_seam_correction.comp.spv",
+                         UINT32_MAX, pipeline, err, cap);
+}
+
 bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     const char *variant=getenv("DC_FLUID_VARIANTS");
     bool specialized=!variant||strcmp(variant,"specialized")==0;
@@ -332,40 +338,50 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
     }
 }
 
+static void record_mass_pass(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
+                             uint32_t slots, const uint32_t push[8]) {
+    if (pipeline) {
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+        vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+            gpu->pipeline_layout, 0, 1, &descriptor, 0, NULL);
+    } else {
+        bind_fluid_mode(gpu, push[2]);
+    }
+    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT, 0, (pipeline ? 8u : 7u) * sizeof(uint32_t), push);
+    vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, slots);
+}
+
+static void record_mass_relaxation(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
+                                   uint32_t slots, uint32_t push[8]) {
+    const uint32_t modes[] = {4u, 6u, 7u, 8u, 9u, 5u};
+    const uint32_t count = sizeof(modes) / sizeof(modes[0]);
+    for (uint32_t i = gpu->marker_correction ? 0u : count - 1u; i < count; ++i) {
+        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        push[2] = modes[i];
+        record_mass_pass(gpu, descriptor, pipeline, slots, push);
+    }
+}
+
 static void record_fluid_correction(dc_gpu_t *gpu) {
     dc_gpu_record_markers(gpu);
-    uint32_t push[7] = { gpu->width, gpu->height, 0,
-                         gpu->fluid_tick & 1u, 0, 0, 0 };
-    push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
-    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    if (gpu->marker_correction) {
-        const uint32_t correction_modes[6] = { 4u, 6u, 7u, 8u, 9u, 5u };
-        for (uint32_t i = 0; i < 6; ++i) {
-            push[2] = correction_modes[i];
-            bind_fluid_mode(gpu, push[2]);
-            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-            vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
-                          1u, dc_gpu_slot_capacity(gpu));
-            if (i < 5)
-                fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                    VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
-                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-        }
-    } else {
-        push[2] = 5u;
-        bind_fluid_mode(gpu, push[2]);
-        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
-                      1u, dc_gpu_slot_capacity(gpu));
-    }
+    uint32_t push[8] = {gpu->width, gpu->height, 0u, gpu->fluid_tick & 1u, 0u,
+                        dc_gpu_float_bits(gpu->fluid_step_scale)};
+    record_mass_relaxation(gpu, gpu->descriptor, VK_NULL_HANDLE, dc_gpu_slot_capacity(gpu), push);
     ++gpu->fluid_tick;
+}
+
+void dc_gpu_record_water_seam_correction(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    VkPipeline pipeline, uint32_t width, uint32_t height, float step_scale, uint32_t axis) {
+    const uint32_t slots = 2u;
+    uint32_t push[8] = {width, height, 4u, gpu->fluid_tick & 1u, 0u,
+                        dc_gpu_float_bits(step_scale), 0u, axis};
+    record_mass_pass(gpu, descriptor, pipeline, slots, push);
+    /* Both owners' active marker banks are gathered into bank A. */
+    dc_gpu_record_marker_domain(gpu, descriptor, width, height, slots, 0u, step_scale);
+    record_mass_relaxation(gpu, descriptor, pipeline, slots, push);
 }
 
 bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {

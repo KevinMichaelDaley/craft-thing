@@ -22,6 +22,9 @@ layout(push_constant) uniform Params {
     uint unused1;
     uint step_scale_bits;
     uint elapsed_time_mode;
+#ifdef DC_WATER_SEAM_PLAN
+    uint seam_axis;
+#endif
 } params;
 layout(constant_id=0) const uint FLUID_PHASE=0xffffffffu;
 uint dispatch_mode() {return FLUID_PHASE==0xffffffffu?params.mode:FLUID_PHASE;}
@@ -49,6 +52,7 @@ uint atlas_index(ivec2 p, uint page) {
 }
 #include "hydraulic_face.glsl"
 #include "water_color.glsl"
+#include "water_seam_crossing.glsl"
 
 uint source_mass(uint index) {
     return dispatch_mode() == 6u || dispatch_mode() == 8u ?
@@ -283,6 +287,7 @@ void correct_pair(ivec2 p) {
                     receiving < capacity ? capacity - receiving : 0u);
     if(sender) {
         uint source=atlas_index(p,own_page),target=atlas_index(neighbor,other_page);
+        record_water_crossing(p, neighbor, flux);
         water_color_move(source,target,receiving,flux,own);
         thermal_water_resize(source,own,own-flux);
         water_color_clear(source,own-flux);
