@@ -611,13 +611,14 @@ dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t see
         !dc_player_inventory_load(view->save, view->saved_inventory, err, cap)) goto fail;
     view->origin.y = INITIAL_CHUNK_Y;
     view->mapped_origin.y = INITIAL_CHUNK_Y;
+    if (!dc_level_restore_water_camera(view, err, cap)) goto fail;
     if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS)) goto fail;
     bonfire_startup_trace("chunk table",started);
     if (!dc_gpu_create_window(&view->gpu, SIM_WIDTH, SIM_HEIGHT,
             VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
             "build/shaders/pattern.comp.spv", err, cap)) goto fail;
     bonfire_startup_trace("GPU window",started);
-    if (!dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+    if (!dc_gpu_set_viewport(view->gpu, DC_CHUNK_SIDE + view->camera_offset_x, DC_CHUNK_SIDE + view->camera_offset_y,
                              VIEW_WIDTH, VIEW_HEIGHT) ||
         !dc_gpu_set_display_zoom(view->gpu, WINDOW_SCALE) ||
         !dc_gpu_set_fluid_interval(view->gpu, FLUID_INTERVAL) ||
@@ -769,6 +770,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
     bool water_ready = dc_camera_offscreen_water_ready(view);
+    if (all_resident && water_ready && !dc_level_offscreen_restore_camera_pair(view, err, cap)) return false;
     uint32_t ready_steps = all_resident && water_ready ? view->pending_steps : 0u;
     if (ready_steps && (view->players || view->offscreen_handoffs || view->end_run - view->first_run > 1u)) {
         /* A mixed frame publishes each completed step before trying to present. */

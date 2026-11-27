@@ -27,6 +27,9 @@ typedef struct {
     float budget, scale;
     double seconds;
     owner_clock_t owners[2];
+    dc_chunk_coord_t camera_origin, remote_coord;
+    dc_chunk_owner_t remote_owner;
+    uint32_t water_face, offset_x, offset_y, camera_reserved;
 } cycle_header_t;
 
 typedef struct {
@@ -77,6 +80,15 @@ static bool write_cycle(FILE *file, dc_level_view_t *view) {
         header.seconds = view->world_seconds;
         header.owners[0] = owner_clock(gpu);
         header.owners[1] = owner_clock(peer);
+        const dc_camera_offscreen_t *camera = &view->camera_offscreen;
+        if (camera->water_face && camera->workspace && camera->workspace->gpu == peer) {
+            header.camera_origin = view->mapped_origin;
+            header.remote_coord = camera->coord;
+            header.remote_owner = camera->owner;
+            header.water_face = camera->water_face;
+            header.offset_x = view->camera_offset_x;
+            header.offset_y = view->camera_offset_y;
+        }
     }
     uint64_t hash = UINT64_C(14695981039346656037);
     if (!transfer(file, &header, sizeof(header), true, &hash)) return false;
@@ -120,7 +132,12 @@ bool dc_level_stage_water_checkpoint(dc_level_view_t *view, char *err, uint32_t 
 
 static bool valid_header(const cycle_header_t *h) {
     if (memcmp(h->magic, "DWP1", 4) || h->version != WATER_RECORD_VERSION || h->reserved) return false;
-    if (!h->count) return true;
+    if (!h->count) return !h->water_face;
+    if (h->water_face && ((h->water_face & (h->water_face-1u)) || h->water_face > 8u ||
+        !dc_chunk_owner_valid(h->remote_owner) || h->offset_x >= DC_CHUNK_SIDE || h->offset_y >= DC_CHUNK_SIDE ||
+        h->camera_origin.x < INT64_MIN + HALO_CHUNKS || h->camera_origin.y < INT64_MIN + HALO_CHUNKS ||
+        h->camera_origin.x > INT64_MAX - VIEW_CHUNKS_X - HALO_CHUNKS ||
+        h->camera_origin.y > INT64_MAX - VIEW_CHUNKS_Y - HALO_CHUNKS)) return false;
     if (h->count < 2 || h->count > WATER_RECORD_MAX_TILES ||
         (h->interval != 1 && h->interval != 2 && h->interval != 3 && h->interval != 6) ||
         !h->phase || h->phase >= DC_FLUID_PHASES || !isfinite(h->budget) || h->budget < 0 ||
@@ -184,20 +201,62 @@ static bool read_cycle(FILE *file, dc_level_view_t *view, const dc_liquid_seam_e
     return true;
 }
 
-bool dc_level_resume_water_checkpoint(dc_level_view_t *view, const dc_liquid_seam_endpoint_t *tiles,
-    uint32_t count, char *err, uint32_t cap) {
-    if (view->water_checkpoint_checked || !view->save) return true;
+static bool open_checkpoint(dc_level_view_t *view, FILE **input, char *err, uint32_t cap) {
     const char *root = dc_world_save_directory(view->save, false);
     char path[1024];
     if (!root || snprintf(path, sizeof(path), "%s/" DC_WORLD_WATER_CYCLE_RECORD, root) >= (int)sizeof(path))
         return error(err, cap, "Invalid water continuation path");
     int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0 && errno == ENOENT) { view->water_checkpoint_checked = true; return true; }
+    if (fd < 0 && errno == ENOENT) { view->water_checkpoint_checked = true; *input = NULL; return true; }
     FILE *file = fd < 0 ? NULL : fdopen(fd, "rb");
     if (!file) {
         if (fd >= 0) close(fd);
         return error(err, cap, "Cannot open water continuation");
     }
+    *input = file;
+    return true;
+}
+
+bool dc_level_restore_water_camera(dc_level_view_t *view, char *err, uint32_t cap) {
+    FILE *file;
+    if (!open_checkpoint(view, &file, err, cap)) return false;
+    if (!file) return true;
+    uint64_t hash = UINT64_C(14695981039346656037), stored;
+    cycle_header_t h;
+    bool okay = transfer(file, &h, sizeof(h), false, &hash) && valid_header(&h);
+    if (okay) {
+        const size_t tile_bytes = sizeof(cycle_tile_t) + DC_CHUNK_CELLS * (sizeof(grid_fields) + sizeof(uint32_t));
+        unsigned char block[8192];
+        size_t left = tile_bytes * h.count;
+        while (okay && left) {
+            size_t bytes = left < sizeof(block) ? left : sizeof(block);
+            okay = transfer(file, block, bytes, false, &hash);
+            left -= bytes;
+        }
+        okay = okay && fread(&stored, sizeof(stored), 1, file) == 1 && hash == stored &&
+            fgetc(file) == EOF && !ferror(file) && (!h.count || h.seconds == view->world_seconds);
+    }
+    fclose(file);
+    if (!okay) return error(err, cap, "Invalid saved water continuation");
+    if (!h.count) view->water_checkpoint_checked = true;
+    if (h.water_face) {
+        view->water_camera_pending = true;
+        view->origin = view->mapped_origin = h.camera_origin;
+        view->camera_offset_x = h.offset_x;
+        view->camera_offset_y = h.offset_y;
+        view->camera_offscreen = (dc_camera_offscreen_t){.phase = DC_CAMERA_OFFSCREEN_STORED,
+            .coord = h.remote_coord, .owner = h.remote_owner, .water_face = h.water_face,
+            .time = {h.seconds, true}};
+    }
+    return true;
+}
+
+bool dc_level_resume_water_checkpoint(dc_level_view_t *view, const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, char *err, uint32_t cap) {
+    if (view->water_checkpoint_checked || !view->save) return true;
+    FILE *file;
+    if (!open_checkpoint(view, &file, err, cap)) return false;
+    if (!file) return true;
     bool okay = read_cycle(file, view, tiles, count, err, cap);
     fclose(file);
     return okay;

@@ -49,6 +49,8 @@ dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
     const dc_stream_result_t *result, char *err, uint32_t cap);
 /** Check whether camera or transfer admission must wait on a workspace owner. */
 bool dc_level_offscreen_owns(dc_level_view_t *view, dc_chunk_coord_t coord);
+/** Bind a persisted camera water cycle as soon as both owners have loaded. */
+bool dc_level_offscreen_restore_camera_pair(dc_level_view_t *view, char *err, uint32_t cap);
 /** Report writes that shutdown must drain before committing a staged world. */
 bool dc_level_offscreen_writing(const dc_level_view_t *view);
 /** Queue confirmed paired snapshots before the staged world closes. */

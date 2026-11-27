@@ -170,7 +170,7 @@ static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_s
     return true;
 }
 
-dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
+static dc_level_offscreen_result_t service_water_pair(dc_level_view_t *view, float seconds, bool resume_only,
     char *err, uint32_t cap) {
     dc_offscreen_t *workspace = NULL;
     for (dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
@@ -221,7 +221,8 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
     if (different_times && !water_regions_aligned(view, tiles, count, residents, err, cap)) goto stale;
     if (!dc_level_resume_water_checkpoint(view, tiles, count, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
     if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
-    dc_liquid_seam_result_t result = dc_gpu_tick_water_cohort(tiles, count, seconds, err, cap);
+    dc_liquid_seam_result_t result = resume_only ? DC_LIQUID_SEAM_COMMITTED :
+        dc_gpu_tick_water_cohort(tiles, count, seconds, err, cap);
     if (result != DC_LIQUID_SEAM_COMMITTED) {
         if (result == DC_LIQUID_SEAM_UNCONFIRMED) view->liquid_seam_failed = workspace->failed = true;
         return DC_LEVEL_OFFSCREEN_FAILED;
@@ -244,6 +245,18 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
 stale:
     error(err, cap, "Water tick requires current generations and a common interval start");
     return DC_LEVEL_OFFSCREEN_FAILED;
+}
+
+dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
+    char *err, uint32_t cap) {
+    return service_water_pair(view, seconds, false, err, cap);
+}
+
+bool dc_level_offscreen_restore_camera_pair(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!view->water_camera_pending) return true;
+    if (service_water_pair(view, 0.f, true, err, cap) != DC_LEVEL_OFFSCREEN_HANDLED) return false;
+    view->water_camera_pending = false;
+    return true;
 }
 
 dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *view,
