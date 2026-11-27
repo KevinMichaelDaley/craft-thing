@@ -1,7 +1,7 @@
 ---
 id: ctowpe-jc8w
 status: in_progress
-deps: []
+deps: [ctowpe-utq0]
 links: []
 created: 2026-11-27T19:39:06Z
 type: task
