@@ -195,6 +195,7 @@ struct dc_gpu {
     dc_chunk_colors_t *checkpoint_colors;
     dc_chunk_time_t *checkpoint_times;
     struct dc_checkpoint_fluid *checkpoint_fluids;
+    dc_chunk_owner_t *checkpoint_owners;
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;

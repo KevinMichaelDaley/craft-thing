@@ -4,7 +4,11 @@
 #include "thermal_gpu_internal.h"
 #include "revolute_gpu_internal.h"
 #include "structural_store_fluids.h"
-enum { DC_STRUCTURE_TIME_VERSION = 10, DC_STRUCTURE_FLUID_VERSION = 11 };
+enum {
+    DC_STRUCTURE_TIME_VERSION = 10,
+    DC_STRUCTURE_FLUID_VERSION = 11,
+    DC_STRUCTURE_OWNER_VERSION = 12
+};
 /** Cold checkpoint extension transaction; every allocation precedes publish. */
 typedef struct {
     uint8_t *reactive_bytes,*thermal_bytes,*joint_bytes,*time_bytes;
@@ -13,6 +17,9 @@ typedef struct {
     size_t fluid_length;
     uint32_t fluid_count;
     dc_checkpoint_fluid_t *fluids;
+    uint8_t *owner_bytes;
+    size_t owner_length;
+    dc_chunk_owner_t *owners;
     uint32_t version;
     dc_chunk_time_t *chunk_times;
     fr_reactive_archive_t reactive;
@@ -34,6 +41,11 @@ bool dc_checkpoint_channels_set_fluids(dc_gpu_t *gpu, dc_checkpoint_channels_t *
     char *err, uint32_t cap);
 /** Decode checked clock bytes against the number of embedded physical chunks. */
 bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *channels,uint32_t count);
+/** Preserve pending owner IDs and issue new IDs for captured level slots. */
+bool dc_checkpoint_channels_set_owners(const dc_gpu_t *gpu, dc_checkpoint_channels_t *channels,
+    const uint32_t *slots, uint32_t count, bool level_save);
+/** Validate the owner table against the ordered physical records. */
+bool dc_checkpoint_channels_decode_owners(dc_checkpoint_channels_t *channels, uint32_t count);
 /** Extend the outer snapshot checksum with canonical lengths and channel bytes. */
 uint64_t dc_checkpoint_channels_hash(uint64_t hash,const dc_checkpoint_channels_t *channels);
 /** Hash the structure record and its ordered channel payloads. */

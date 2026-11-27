@@ -148,12 +148,40 @@ static void test_structure_archive_carries_separate_durable_owners(void) {
     ASSERT_TRUE(file && fwrite(packet, sizeof(packet), 1, file) == 1);
     rewind(file);
     dc_checkpoint_channels_t channels = {0};
-    bool read = dc_checkpoint_channels_read(file, 12u, &channels);
+    bool read = dc_checkpoint_channels_read(file, DC_STRUCTURE_OWNER_VERSION, &channels);
     fclose(file);
     ASSERT_TRUE(read);
     ASSERT_TRUE(dc_checkpoint_channels_decode_times(&channels, 1));
     ASSERT_TRUE(!channels.chunk_times);
+    ASSERT_TRUE(!dc_checkpoint_channels_decode_owners(&channels, 2));
+    ASSERT_TRUE(dc_checkpoint_channels_decode_owners(&channels, 1));
+    ASSERT_TRUE(dc_chunk_owner_equal(channels.owners[0], (dc_chunk_owner_t){9, 3}));
+    free(channels.owners);
+    free(channels.owner_bytes);
     free(channels.fluid_bytes);
+    PASS();
+}
+
+static void test_resaving_pending_owner_keeps_its_id_and_new_owners_get_fresh_ids(void) {
+    dc_gpu_t *gpu = calloc(1, sizeof(*gpu));
+    ASSERT_TRUE(gpu);
+    dc_chunk_owner_t previous = {17, 2};
+    gpu->checkpoint_owners = &previous;
+    const uint32_t slots[] = {UINT32_MAX, 0u, 1u};
+    dc_checkpoint_channels_t first = {.fluid_length = 1}, second = {.fluid_length = 1};
+    ASSERT_TRUE(dc_checkpoint_channels_set_owners(gpu, &first, slots, 3, true));
+    ASSERT_TRUE(dc_checkpoint_channels_set_owners(gpu, &second, slots, 3, true));
+    ASSERT_TRUE(dc_checkpoint_channels_decode_owners(&first, 3));
+    ASSERT_TRUE(dc_checkpoint_channels_decode_owners(&second, 3));
+    ASSERT_TRUE(dc_chunk_owner_equal(first.owners[0], previous));
+    ASSERT_TRUE(dc_chunk_owner_equal(second.owners[0], previous));
+    ASSERT_TRUE(!dc_chunk_owner_equal(first.owners[1], first.owners[2]));
+    ASSERT_TRUE(!dc_chunk_owner_equal(first.owners[1], second.owners[1]));
+    free(first.owners);
+    free(second.owners);
+    free(first.owner_bytes);
+    free(second.owner_bytes);
+    free(gpu);
     PASS();
 }
 
@@ -164,6 +192,7 @@ int main(void) {
     RUN(test_fluid_channel_can_record_empty_stock_without_a_clock);
     RUN(test_fluid_channel_rejects_truncation_and_bulk_bound_to_wrong_water);
     RUN(test_structure_archive_carries_separate_durable_owners);
+    RUN(test_resaving_pending_owner_keeps_its_id_and_new_owners_get_fresh_ids);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

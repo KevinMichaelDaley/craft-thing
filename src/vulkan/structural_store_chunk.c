@@ -75,6 +75,7 @@ static bool upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot, const dc_chunk
                     uint32_t last=gpu->checkpoint_chunk_count-1u;
                     if (time) *time = saved_time;
                     if (gpu->checkpoint_times) gpu->checkpoint_times[i] = gpu->checkpoint_times[last];
+                    if (gpu->checkpoint_owners) gpu->checkpoint_owners[i] = gpu->checkpoint_owners[last];
                     if (gpu->checkpoint_fluids) {
                         dc_checkpoint_fluid_release(gpu->checkpoint_fluids + i);
                         if (i != last) {

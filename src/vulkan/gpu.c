@@ -25,6 +25,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     dc_checkpoint_fluid_destroy(gpu->checkpoint_fluids, gpu->checkpoint_chunk_count);
     free(gpu->checkpoint_chunks);
     free(gpu->checkpoint_times);
+    free(gpu->checkpoint_owners);
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     dc_gpu_solver_commands_destroy(gpu);
     if (gpu->device) fr_thermal_gpu_destroy(gpu);

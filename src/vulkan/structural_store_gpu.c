@@ -212,6 +212,8 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
     if(okay) okay=dc_checkpoint_channels_set_times(&channels,times,header.reserved[0]);
     if (okay) okay = dc_checkpoint_channels_set_fluids(gpu, &channels, chunks, slots,
         header.reserved[0], gas_admitted, err, cap);
+    if (okay) okay = dc_checkpoint_channels_set_owners(gpu, &channels, slots,
+        header.reserved[0], gas_admitted != NULL);
     header.version = channels.version;
     if(okay) okay=fr_gpu_reactive_checkpoint_mass_valid(channels.reactive_length?&channels.reactive:NULL,
         payload,pixels,header.reserved[1],err,cap);
@@ -362,7 +364,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     bool okay =
         framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= DC_STRUCTURE_FLUID_VERSION && header.body_words &&
+        header.version <= DC_STRUCTURE_OWNER_VERSION && header.body_words &&
         header.body_words%(sizeof(dc_gpu_body_record_t)/4u)==0 &&
         (header.version>=7 || header.body_words==STORE_BODY_WORDS) &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
@@ -413,6 +415,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     okay = okay && header.checksum == dc_gpu_structure_checksum(header, payload, pixels, chunks,
                                                                 body_colors, colors, &channels);
     okay = okay && dc_checkpoint_channels_decode_times(&channels,header.reserved[0]);
+    okay = okay && dc_checkpoint_channels_decode_owners(&channels, header.reserved[0]);
     if (okay && header.version == 4)
         okay = dc_gpu_upgrade_dense_pixels(gpu, payload->bodies, &pixels,
                                            &header.reserved[1]);
