@@ -9,6 +9,7 @@
 #include "ferrum/structural/gpu.h"
 
 #include "catapult_scene.h"
+#include "catapult_startup_trace.h"
 #include "view_config.h"
 
 enum {
@@ -45,7 +46,17 @@ static bool make_ground(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return okay;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    bool startup_probe = argc == 2 && strcmp(argv[1], "--startup-probe") == 0;
+    dc_catapult_startup_trace_t timing;
+    dc_catapult_startup_trace_t *trace = NULL;
+    if (startup_probe || getenv("DC_CATAPULT_STARTUP_TRACE")) {
+        Uint64 start = SDL_GetPerformanceCounter();
+        timing = (dc_catapult_startup_trace_t){start, start,
+            1000. / (double)SDL_GetPerformanceFrequency()};
+        trace = &timing;
+    }
+    if (startup_probe) fprintf(stderr, "Catapult startup probe begins\n");
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
     dc_catapult_scene_t scene = {0};
@@ -53,9 +64,11 @@ int main(void) {
         VIEW_WIDTH * WINDOW_SCALE, VIEW_HEIGHT * WINDOW_SCALE,
         "build/shaders/pattern.comp.spv", err, sizeof(err));
     if (okay) okay = dc_gpu_set_display_zoom(gpu, WINDOW_SCALE);
+    if (okay) dc_catapult_startup_mark(trace, "GPU setup");
     if (okay) okay = make_ground(gpu, err, sizeof(err));
-    if (okay) okay = dc_catapult_scene_build_with_chunk_stride(gpu, true,
-        VIEW_CHUNKS_X, &scene, err, sizeof(err));
+    if (okay) dc_catapult_startup_mark(trace, "ground upload");
+    if (okay) okay = dc_catapult_scene_build_profiled(gpu, true, VIEW_CHUNKS_X,
+        &scene, trace, err, sizeof(err));
     fr_renderer_sun_t sun = {.direction = {-.4f, -.8f, .45f},
         .intensity = 1.8f, .color = {1.f, .95f, .85f},
         .known_sky = FR_SKY_TOP | FR_SKY_LEFT};
@@ -64,6 +77,7 @@ int main(void) {
                      fr_renderer_set_mode(gpu, FR_RENDERER_LIT) &&
                      dc_gpu_set_tick_seconds(gpu, 1.f / 60.f) &&
                      dc_gpu_set_window_title(gpu, "Flaming catapult");
+    if (okay) dc_catapult_startup_mark(trace, "renderer setup");
     if (okay) fprintf(stderr, "Catapult demo: %dx%d game view ready\n",
                       VIEW_WIDTH, VIEW_HEIGHT);
     fr_reactive_record_t battlement_initial = {0};
@@ -75,19 +89,32 @@ int main(void) {
     dc_gpu_world_body_t wall = {0};
     if (okay) okay = dc_gpu_read_world_body(gpu, scene.wall_body, &wall,
                                             err, sizeof(err));
+    if (okay) dc_catapult_startup_mark(trace, "initial state");
     float wall_clear_x = world_x(wall) + 4.f;
     bool wall_cleared = false, battlement_ignited = false;
-    for (uint32_t frame = 0; okay && frame < CATAPULT_DEMO_FRAMES; frame++) {
+    uint32_t frames = startup_probe ? 1u : CATAPULT_DEMO_FRAMES;
+    for (uint32_t frame = 0; okay && frame < frames; frame++) {
         uint32_t start = SDL_GetTicks();
         SDL_Event event;
-        while (SDL_PollEvent(&event))
-            if (event.type == SDL_QUIT) goto done;
+        while (SDL_PollEvent(&event)) {
+            if (event.type != SDL_QUIT) continue;
+            if (startup_probe) {
+                snprintf(err, sizeof(err), "Window closed before first present");
+                okay = false;
+            }
+            goto done;
+        }
         if (frame == CATAPULT_DEMO_RELEASE_FRAME)
             okay = dc_catapult_scene_release(gpu, &scene, err, sizeof(err));
         if (frame == CATAPULT_DEMO_POUCH_FRAME)
             okay = dc_catapult_scene_release_projectile(gpu, &scene,
                                                          err, sizeof(err));
         if (okay) okay = dc_gpu_present_chunks_steps(gpu, 1, err, sizeof(err));
+        if (okay && trace && frame == 0u) {
+            dc_catapult_startup_mark(trace, "first present");
+            fprintf(stderr, "Catapult startup total: %.3f ms\n",
+                    (trace->last - trace->first) * trace->milliseconds_per_tick);
+        }
         if (okay) {
             dc_gpu_world_body_t coal;
             okay = dc_gpu_read_world_body(gpu, scene.coal_body, &coal,
@@ -111,14 +138,14 @@ int main(void) {
         }
         if (okay && frame % 10u == 0u)
             fprintf(stderr, "Catapult demo: frame %u/%u\n", frame + 1u,
-                    CATAPULT_DEMO_FRAMES);
+                    frames);
         uint32_t spent = SDL_GetTicks() - start;
-        if (okay && spent < 16u) SDL_Delay(16u - spent);
+        if (okay && !startup_probe && spent < 16u) SDL_Delay(16u - spent);
     }
-    if (okay) SDL_Delay(2000);
+    if (okay && !startup_probe) SDL_Delay(2000);
 done:
     if (!okay) fprintf(stderr, "Catapult demo: %s\n", err);
-    else fprintf(stderr, "Catapult demo: playback complete; wall cleared %u, "
+    else if (!startup_probe) fprintf(stderr, "Catapult demo: playback complete; wall cleared %u, "
                          "battlement ignited %u\n",
                  wall_cleared, battlement_ignited);
     dc_gpu_destroy(gpu);

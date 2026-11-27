@@ -950,11 +950,11 @@ build/component_material_tests: tests/vulkan/component_material_tests.c build/fl
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
 test: build/component_material_tests
-build/catapult_scene_tests: tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+build/catapult_scene_tests: tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h src/app/catapult_startup_trace.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/catapult_scene_display_tests: tests/app/catapult_scene_display_tests.c tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+build/catapult_scene_display_tests: tests/app/catapult_scene_display_tests.c tests/app/catapult_scene_tests.c src/app/catapult_scene.c src/app/catapult_scene.h src/app/catapult_startup_trace.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/catapult_scene_display_tests.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/catapult_demo: src/app/catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+build/catapult_demo: src/app/catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h src/app/catapult_startup_trace.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/catapult_demo.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/catapult_startup_tests: tests/app/catapult_startup_tests.c build/catapult_demo
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ -lm
@@ -963,7 +963,7 @@ test_catapult_startup: build/catapult_startup_tests
 	./build/catapult_startup_tests
 test_catapult_startup_host: build/catapult_startup_tests
 	DC_CATAPULT_STARTUP_TEST_HOST_ONLY=1 ./build/catapult_startup_tests
-build/catapult_demo_quarter_native: src/app/catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+build/catapult_demo_quarter_native: src/app/catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h src/app/catapult_startup_trace.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) src/app/catapult_demo.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/catapult_quarter_demo_tests: tests/app/catapult_quarter_demo_tests.c build/catapult_demo_quarter_native
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
@@ -976,7 +976,7 @@ catapult-demo-quarter-native: build/catapult_demo_quarter_native
 .PHONY: catapult-demo
 catapult-demo: build/catapult_demo
 	./build/catapult_demo
-build/greek_catapult_demo: src/app/greek_catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h build/fluid_tests
+build/greek_catapult_demo: src/app/greek_catapult_demo.c src/app/catapult_scene.c src/app/catapult_scene.h src/app/catapult_startup_trace.h build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) src/app/greek_catapult_demo.c src/app/catapult_scene.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 .PHONY: greek-catapult-demo
 greek-catapult-demo: build/greek_catapult_demo

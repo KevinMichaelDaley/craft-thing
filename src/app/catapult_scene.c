@@ -11,6 +11,7 @@
 #include "ferrum/structural/gpu.h"
 
 #include "catapult_scene.h"
+#include "catapult_startup_trace.h"
 
 enum {
     CATAPULT_ARM_ID = 0x80000001u,
@@ -231,29 +232,34 @@ static bool thin_battlement_wood(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return true;
 }
 
-bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
-                                                uint32_t chunk_stride,
-                                                dc_catapult_scene_t *scene,
-                                                char *err_buf,
-                                                uint32_t err_cap) {
+bool dc_catapult_scene_build_profiled(dc_gpu_t *gpu, bool hot, uint32_t chunk_stride,
+                                     dc_catapult_scene_t *scene,
+                                     dc_catapult_startup_trace_t *trace,
+                                     char *err_buf, uint32_t err_cap) {
     if (!gpu || !scene) return scene_error(err_buf, err_cap,
                                            "Missing catapult context or output");
     fr_structural_gpu_graph_t graph = support_graph();
     if (!fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
-        !fr_thermal_gpu_overlay(gpu, 0) ||
-        !fr_gpu_place_structure(gpu, &graph, err_buf, err_cap) ||
-        !fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
+        !fr_thermal_gpu_overlay(gpu, 0)) return false;
+    dc_catapult_startup_mark(trace, "thermal setup");
+    if (!fr_gpu_place_structure(gpu, &graph, err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "structural placement");
+    if (!fr_thermal_gpu_enable(gpu, err_buf, err_cap) ||
         !thin_battlement_wood(gpu, err_buf, err_cap) ||
         !dc_gpu_set_rigid_solver(gpu, true)) return false;
     for (uint32_t tick = 0; tick < 5; tick++)
         if (!dc_gpu_rigid_step(gpu, err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "structural settle");
     if (!triangular_base(gpu, err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "launcher base");
     if (!wooden_arm(gpu, chunk_stride, err_buf, err_cap) ||
         !dc_gpu_set_body_motion(gpu, CATAPULT_ARM_ID, CATAPULT_COCKED_ANGLE,
                                 0.f, 0,
-                                err_buf, err_cap) ||
-        !coal_load(gpu, hot, chunk_stride, err_buf, err_cap) ||
+                                err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "wood arm");
+    if (!coal_load(gpu, hot, chunk_stride, err_buf, err_cap) ||
         !dc_gpu_admit_authored_rigid_cells(gpu, err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "coal load");
     if (!dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0},
                                  err_buf, err_cap)) return false;
     fr_revolute_joint_t pivot = {.id = CATAPULT_PIVOT_ID,
@@ -280,12 +286,16 @@ bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
     if (!fr_gpu_revolute_add(gpu, &pivot, err_buf, err_cap) ||
         !fr_gpu_revolute_add(gpu, &latch, err_buf, err_cap) ||
         !fr_gpu_revolute_add(gpu, &pouch, err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "revolute joints");
     fr_gas_model_t gas = {.gas_constant = {.25984, .29680, .18892,
                                            .46152, 0},
         .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
         .kinetic_scale = 1. / 512.};
-    if (!fr_gas_gpu_enable(gpu, &gas, .0012f, 293.15f, err_buf, err_cap) ||
-        !fr_combustion_gpu_enable(gpu, err_buf, err_cap)) return false;
+    if (!fr_gas_gpu_enable(gpu, &gas, .0012f, 293.15f, err_buf, err_cap))
+        return false;
+    dc_catapult_startup_mark(trace, "gas setup");
+    if (!fr_combustion_gpu_enable(gpu, err_buf, err_cap)) return false;
+    dc_catapult_startup_mark(trace, "combustion setup");
     *scene = (dc_catapult_scene_t){.frame_body = FR_STRUCTURAL_BODY_ID_BASE + 1u,
         .wall_body = FR_STRUCTURAL_BODY_ID_BASE + 2u,
         .wall_upper_body = FR_STRUCTURAL_BODY_ID_BASE + 3u,
@@ -294,6 +304,15 @@ bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
         .pivot_joint = pivot.id, .latch_joint = latch.id,
         .pouch_joint = pouch.id};
     return true;
+}
+
+bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
+                                                uint32_t chunk_stride,
+                                                dc_catapult_scene_t *scene,
+                                                char *err_buf,
+                                                uint32_t err_cap) {
+    return dc_catapult_scene_build_profiled(gpu, hot, chunk_stride, scene,
+                                            NULL, err_buf, err_cap);
 }
 
 bool dc_catapult_scene_build(dc_gpu_t *gpu, bool hot,

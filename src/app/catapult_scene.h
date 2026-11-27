@@ -6,6 +6,8 @@
 
 #include "dungeoncraft/gpu.h"
 
+struct dc_catapult_startup_trace;
+
 typedef struct {
     uint32_t frame_body;
     uint32_t base_body;
@@ -32,6 +34,12 @@ bool dc_catapult_scene_build_with_chunk_stride(dc_gpu_t *gpu, bool hot,
                                                 dc_catapult_scene_t *scene,
                                                 char *err_buf,
                                                 uint32_t err_cap);
+
+/** Build the same scene and record completed startup phases when trace is set. */
+bool dc_catapult_scene_build_profiled(dc_gpu_t *gpu, bool hot, uint32_t chunk_stride,
+                                     dc_catapult_scene_t *scene,
+                                     struct dc_catapult_startup_trace *trace,
+                                     char *err_buf, uint32_t err_cap);
 
 /** Release the cocked arm without changing any body pose or velocity. */
 bool dc_catapult_scene_release(dc_gpu_t *gpu, dc_catapult_scene_t *scene,
