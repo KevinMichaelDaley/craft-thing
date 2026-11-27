@@ -99,6 +99,9 @@ LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread -lm
 GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
+GPU_OBJ += build/fluid_schedule.o
+build/fluid_schedule.o: src/vulkan/fluid_schedule.c src/vulkan/fluid_schedule.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
@@ -1426,6 +1429,7 @@ test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_
 	./build/mpm_layout_tests
 	./build/probe_feature_tests
 	./build/fluid_recording_tests
+	./build/fluid_schedule_tests
 	./build/native_demo_controls_tests
 	./build/extraction_stats_tests
 	./build/body_address_feature_tests
@@ -1539,6 +1543,9 @@ test: build/fluid_color_sync_tests
 build/fluid_recording_tests: tests/vulkan/fluid_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindDescriptorSets
 test_gpu_tools: build/fluid_recording_tests
+build/fluid_schedule_tests: tests/vulkan/fluid_schedule_tests.c build/fluid_schedule.o src/vulkan/fluid_schedule.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/fluid_schedule.o -o $@
+test_gpu_tools: build/fluid_schedule_tests
 build/native_demo_controls_tests: tests/app/native_demo_controls_tests.c tests/app/native_demo_controls.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test_gpu_tools: build/native_demo_controls_tests
