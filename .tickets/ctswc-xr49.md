@@ -21,4 +21,3 @@ Reuse the existing chunk coordinate and generation checks during ownership hando
 ## Acceptance Criteria
 
 Vulkan tests cover workspace creation and teardown, exact elapsed stepping without duplicate retries, idle and unknown chunk handling, and unchanged physical stock for an isolated tile across a cold save and return. Track cross-workspace conservation and production enablement in the parent.
-
