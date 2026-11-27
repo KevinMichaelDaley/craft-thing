@@ -20,3 +20,9 @@ Retain the scratch pressure, head and previous-stock fields, ordered ownership, 
 
 After any confirmed partial phase, quit without queuing more time, reopen, then advance one elapsed interval. Match uninterrupted stock, velocity, marker, pigment, energy and clock for both owners. A lost receipt must still expose the previous durable generation.
 
+
+## Notes
+
+**2026-11-27T12:17:48Z**
+
+All five partial phases now reopen with no queued elapsed time, match the first resumed native tick and finish with matching stocks, velocities, markers and pigment. With the first resumed receipt and its recovery both lost, close refuses publication and the prior partial generation reopens successfully. The public constructor camera test also checks heat and bulk momentum.

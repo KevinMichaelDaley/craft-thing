@@ -2,6 +2,7 @@
 #define DC_REACTIVE_STREAM_SEAM_CASES_H
 
 #include "../../src/app/offscreen_internal.h"
+#include "../../src/vulkan/fluid_schedule.h"
 
 static bool lose_seam_receipt, lose_seam_recovery, reject_next_queue_wait;
 
@@ -130,7 +131,7 @@ static bool same_water_chunk(const dc_chunk_t *actual, const dc_chunk_t *expecte
         !memcmp(actual->markers, expected->markers, actual->marker_count * sizeof(dc_marker_t));
 }
 
-static void check_level_step_advances_admitted_water_owners(bool restart_partial) {
+static void check_level_step_advances_admitted_water_owners(unsigned restart_phase) {
     char directory[] = "build/paired_water_tick_XXXXXX", err[256] = {0};
     const uint32_t lane = 24u;
     dc_level_liquid_exchange_t owners = {.resident = {5, -4}, .offscreen = {6, -4}, .begin_seconds = 2.};
@@ -205,11 +206,21 @@ static void check_level_step_advances_admitted_water_owners(bool restart_partial
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
     ASSERT_TRUE(dc_offscreen_advance(workspace, view->world_seconds + elapsed, 1u, err, sizeof(err)));
     ASSERT_EQ(workspace->time.seconds, view->world_seconds);
-    ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
-                execute_level_steps(view, err, sizeof(err)));
+    if (restart_phase) {
+        ASSERT_TRUE(dc_level_view_set_fluid_interval(view, 6u) && dc_gpu_set_fluid_interval(mono, 6u));
+    }
+    const unsigned confirmed_ticks = restart_phase ? restart_phase : 1u;
+    const unsigned cycle_ticks = restart_phase ? 6u : 4u;
+    for (unsigned i = 0; i < confirmed_ticks; ++i) {
+        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                    execute_level_steps(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_tick_step(mono, err, sizeof(err)));
+    }
     ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
-    const double end = view->world_seconds + 3. * elapsed;
-    if (restart_partial) {
+    const unsigned remaining = cycle_ticks - confirmed_ticks;
+    const double end = view->world_seconds + remaining * (double)elapsed;
+    if (restart_phase) {
+        ASSERT_EQ(view->gpu->fluid_phase, restart_phase);
         const double saved_time = view->world_seconds;
         ASSERT_EQ(view->pending_steps, 0u);
         ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
@@ -219,16 +230,36 @@ static void check_level_step_advances_admitted_water_owners(bool restart_partial
         ASSERT_TRUE(view && admit_seam_owners(view, &owners, &slot, &workspace, err, sizeof(err)));
         ASSERT_EQ(view->world_seconds, saved_time);
         ASSERT_EQ(workspace->time.seconds, saved_time);
+        if (restart_phase == 3u) {
+            lose_seam_receipt = lose_seam_recovery = true;
+            ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+            ASSERT_TRUE(!execute_level_steps(view, err, sizeof(err)));
+            ASSERT_TRUE(!lose_seam_receipt && !lose_seam_recovery);
+            ASSERT_TRUE(!dc_level_view_destroy(view, err, sizeof(err)));
+            dc_offscreen_destroy(workspace);
+            view = seam_test_view(directory, err, sizeof(err));
+            workspace = NULL;
+            ASSERT_TRUE(view && admit_seam_owners(view, &owners, &slot, &workspace, err, sizeof(err)));
+            ASSERT_EQ(view->world_seconds, saved_time);
+        }
     }
-    for (unsigned i = 0; i < 3; ++i)
+    for (unsigned i = 0; i < remaining; ++i) {
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
-    for (unsigned i = 0; i < 4; ++i)
         ASSERT_TRUE(dc_gpu_tick_step(mono, err, sizeof(err)));
+        if (restart_phase && i == 0u) {
+            ASSERT_TRUE(execute_level_steps(view, err, sizeof(err)));
+            ASSERT_EQ(view->gpu->fluid_phase, mono->fluid_phase);
+            ASSERT_EQ(workspace->time.seconds, view->world_seconds);
+            ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)) &&
+                        dc_gpu_download_chunk(mono, 0u, &expected[0], err, sizeof(err)));
+            ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
+        }
+    }
     ASSERT_TRUE(dc_gpu_download_chunk(mono, 0u, &expected[0], err, sizeof(err)) &&
                 dc_gpu_download_chunk(mono, 1u, &expected[1], err, sizeof(err)) &&
                 fr_renderer_download_chunk_colors(mono, 1u, &pigment, err, sizeof(err)));
     dc_gpu_destroy(mono);
-    if (restart_partial) ASSERT_TRUE(execute_level_steps(view, err, sizeof(err)));
+    if (restart_phase) ASSERT_TRUE(execute_level_steps(view, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     dc_offscreen_destroy(workspace);
     view = seam_test_view(directory, err, sizeof(err));
@@ -265,11 +296,12 @@ static void check_level_step_advances_admitted_water_owners(bool restart_partial
 }
 
 static void test_level_step_advances_admitted_water_owners_together(void) {
-    check_level_step_advances_admitted_water_owners(false);
+    check_level_step_advances_admitted_water_owners(0u);
 }
 
 static void test_quit_resumes_confirmed_partial_water_cycle(void) {
-    check_level_step_advances_admitted_water_owners(true);
+    for (unsigned phase = 1; phase < DC_FLUID_PHASES; ++phase)
+        check_level_step_advances_admitted_water_owners(phase);
 }
 
 static void test_new_exchange_cannot_claim_an_earlier_receipt(void) {
