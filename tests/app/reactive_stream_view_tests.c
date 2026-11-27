@@ -367,6 +367,11 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--camera-water-heat") == 0) {
+        RUN(test_camera_heated_water_returns_with_its_energy);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera-water") == 0) {
         RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
         printf("%d passed, %d failed\n", g_pass, g_fail);
@@ -412,6 +417,7 @@ int main(int argc, char **argv) {
     RUN(test_camera_eviction_keeps_the_published_owner_across_archive_rewrites);
     RUN(test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
+    RUN(test_camera_heated_water_returns_with_its_energy);
     RUN(test_dormant_clock_uses_the_authoritative_structure_channels);
     RUN(test_dormant_room_starts_offscreen_water_at_its_edit_time);
     RUN(test_level_seam_orders_owner_clocks_receipts_and_cold_publication);

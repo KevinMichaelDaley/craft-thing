@@ -97,7 +97,7 @@ static int camera_marker_order(const void *left, const void *right) {
     return memcmp(left, right, sizeof(dc_marker_t));
 }
 
-static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
+static void check_camera_water_returns(bool heated) {
     char directory[] = "build/camera_water_basin_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -111,6 +111,9 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
         dc_gpu_set_body_origin(reference, first, err, sizeof(err)) &&
         dc_gpu_set_fluid_interval(reference, 2u));
     dc_chunk_colors_t colors = {0}, expected_colors;
+    float heat[DC_CHUNK_CELLS] = {0}, expected_heat[DC_CHUNK_CELLS];
+    if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(view->gpu, err, sizeof(err)) &&
+                            fr_thermal_gpu_enable(reference, err, sizeof(err)));
     for (unsigned tile = 0; tile < 2u; ++tile) {
         memset(chunk, 0, sizeof(*chunk));
         chunk->coord = (dc_chunk_coord_t){first.x + tile, first.y};
@@ -126,10 +129,12 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
                                                1001u, DC_MARKER_INSIDE};
         }
         memset(&colors, 0, sizeof(colors));
+        memset(heat, 0, sizeof(heat));
         for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
             if (!chunk->cells[i].fluid_mass) continue;
             colors.water[i][1] = .75f;
             colors.water[i][3] = 1.f;
+            heat[i] = 2.f + .25f * (i % DC_CHUNK_SIDE);
         }
         ASSERT_TRUE(dc_gpu_upload_chunk(reference, tile, chunk, err, sizeof(err)) &&
             dc_gpu_set_page(reference, tile, 0, tile, err, sizeof(err)) &&
@@ -141,6 +146,8 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             fr_renderer_upload_chunk_colors(view->gpu, slot, &colors, err, sizeof(err)) &&
             dc_chunk_table_finish_load(&view->table, slot, generation));
         view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
+        if (heated) ASSERT_TRUE(fr_thermal_gpu_import_water_chunk(view->gpu, slot, chunk, heat, err, sizeof(err)) &&
+                                fr_thermal_gpu_import_water_chunk(reference, tile, chunk, heat, err, sizeof(err)));
         ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, slot));
     }
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
@@ -261,6 +268,11 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             stock[tile] = camera_stock(chunk, NULL, false);
             dc_chunk_t expected;
             ASSERT_TRUE(dc_gpu_download_chunk(reference, tile, &expected, err, sizeof(err)));
+            if (heated) {
+                ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(view->gpu, slot, heat, DC_CHUNK_CELLS, err, sizeof(err)) &&
+                    fr_thermal_gpu_read_water_chunk(reference, tile, expected_heat, DC_CHUNK_CELLS, err, sizeof(err)));
+                for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) ASSERT_TRUE(fabsf(heat[i] - expected_heat[i]) <= 1e-5f);
+            }
             ASSERT_EQ(chunk->marker_count, expected.marker_count);
             qsort(chunk->markers, chunk->marker_count, sizeof(dc_marker_t), camera_marker_order);
             qsort(expected.markers, expected.marker_count, sizeof(dc_marker_t), camera_marker_order);
@@ -282,6 +294,9 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
     free(chunk);
     PASS();
 }
+
+static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(false); }
+static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(true); }
 
 static void test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner(void) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
