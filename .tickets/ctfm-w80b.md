@@ -20,3 +20,9 @@ Rebuild offscreen workspaces on current dynamic body storage and Vulkan device a
 ## Acceptance Criteria
 
 Offscreen simulation code is active in current build; two-screen pan, seam transfer, equal world time, cold chunk return, conservation, and native frame budget tests pass. Full make test and actual display run pass with no compile warnings.
+
+## Notes
+
+**2026-11-27T21:06:03Z**
+
+Runtime validation at f90a75ca on the persistent hidden Xephyr :93 display: all 31 fluid solver cases and all eight pressure/marker cases passed with Vulkan synchronization validation. All ten GPU dependency checks passed. The full-suite prebuild completed 679 requested artifacts without a compiler warning or error. The aggregate make test run is executing its camera, reopen and structure snapshot cases first; this integration result remains pending. The nine accepted production performance results are recorded on ctowpe-vtlh.
