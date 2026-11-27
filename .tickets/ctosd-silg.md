@@ -31,3 +31,7 @@ RGR 8638a588, 728a91a4, and 7e8a2dad. All three lifecycle checks pass under core
 **2026-11-27T02:17:32Z**
 
 The exact native GPU suite completed on the RTX A2000 with core and synchronization validation. All 14 cases passed, including independent shared-device physics, both destruction orders, and failed child construction. The standalone X11 window-parent probe and whole make test run remain queued.
+
+**2026-11-27T02:20:23Z**
+
+The isolated RTX A2000 X11 window-parent probe passed with core and synchronization validation. A shared headless child successfully rendered and read back its expected pixels after the window-backed parent was destroyed.
