@@ -20,3 +20,9 @@ On repeated camera pans the opposite edge of the resident atlas can reenter with
 
 After spending simulation time in both camera positions, a restored far-edge tile with an older clock cannot freeze the open basin. Repeat the pan and compare connected stock and carried fields against a monolithic run. An actually stale participating generation must still reject the whole interval with both clocks unchanged.
 
+
+## Notes
+
+**2026-11-27T11:14:41Z**
+
+On Xephyr :93 the third round trip now matches the monolithic basin cell by cell. A separate older pool advances its own clock and transports its own stock on the same dispatch. An old connected participant and a stale pinned generation both reject the interval before consumption.
