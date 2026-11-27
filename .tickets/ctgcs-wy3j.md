@@ -31,3 +31,7 @@ The CPU source trace identifies the representation mismatch before any Vulkan wr
 **2026-11-27T02:20:08Z**
 
 RED compiled and reproduced packet revalidation failure on equal pigment and carrier. Seed admission now retains nearest-float pigment where valid and otherwise selects the greatest float within the represented exhaust-plus-soot inventory. The original inputs and decoded packets still pass strict thermodynamics. Three host tests passed, including atomic rejection of a barely over-limit original value and rejection of corrupt checkpoint pigment. All three passed ASan and UBSan, all 26 gas numerics and fixture cases passed, and all 143 direct make test build prerequisites compiled. The explicit, implicit, two-chunk seam, and compensated checkpoint fixtures all passed on the RTX A2000 with core and synchronization validation on a4b5e887. Exact refactor native repetition and full make test are queued.
+
+**2026-11-27T02:33:22Z**
+
+The exact 1c3c6f1a native rerun also passed all four RTX A2000 cases with core and synchronization validation: explicit transport, implicit transport, the two-chunk color seam, and compensated checkpoint restore. The complete make test run remains queued.
