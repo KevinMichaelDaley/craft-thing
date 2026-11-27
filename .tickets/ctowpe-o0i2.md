@@ -31,3 +31,7 @@ All static 1920x1080 WSI controls used the RTX A2000, 12 warmups and 60 measured
 **2026-11-27T16:33:47Z**
 
 A sampled real 1920x1080 FIFO presentation measured 156 writev calls on the presenting thread, 497667360 bytes in 60 frames, and 3847.618 ms total inside those calls (64.127 ms/frame, including sampling overhead). The largest 4193280-byte segment belonged to a /dev/nvidiactl mapping. The four baseline mode/damage controls averaged 52–53 ms of submit-thread CPU time with no profiler. Testing an identical-byte host staging copy to distinguish transfer cost from socket throughput.
+
+**2026-11-27T16:36:52Z**
+
+In an isolated diagnostic retaining the real Vulkan swapchain and identical pixels, the unmodified X11 transfer measured 54.410 ms mean and 65.572 p95. A normal memcpy into host storage worsened the result (227.023/382.915). Streaming loads from the NVIDIA mapping into host storage before forwarding the same iovecs reduced it to 16.916/31.907 ms. Warmup memcmp verified 26,697,596 staged bytes for the streaming run, including repeated transfers after partial writes. This remains an experimental measurement. Actual populated half-native camera measurements are queued; the production presenter is unchanged.
