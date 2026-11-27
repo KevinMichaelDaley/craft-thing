@@ -103,35 +103,46 @@ typedef struct {
     bool active, visited;
 } water_region_tile_t;
 
-/* Tiles on different clocks can share a dispatch when the only open paths
- * between their epochs contain stationary dry air. Keep each owner's time. */
+static bool inspect_water_region(dc_liquid_seam_endpoint_t tile, water_region_tile_t *r) {
+    _Static_assert(DC_CHUNK_SIDE == 64, "Water boundary mask needs one bit per cell");
+    const dc_gpu_t *gpu = tile.gpu;
+    if (tile.tile_x >= gpu->width / DC_CHUNK_SIDE || tile.tile_y >= gpu->height / DC_CHUNK_SIDE ||
+        ((const uint32_t *)gpu->particle_count_mapped)[tile.slot]) return false;
+    const uint32_t *markers = gpu->marker_ping ? gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
+    r->active |= markers[tile.slot] != 0;
+    const dc_cell_t *cells = (const dc_cell_t *)gpu->chunk_mapped + (size_t)tile.slot * DC_CHUNK_CELLS;
+    const fr_bulk_phase_chunk_t *bulk = (const fr_bulk_phase_chunk_t *)gpu->bulk_phase_mapped + tile.slot;
+    const dc_face_velocity_t *faces = (const dc_face_velocity_t *)gpu->velocity_mapped +
+        ((size_t)tile.tile_y * gpu->width + tile.tile_x) * DC_CHUNK_SIDE;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        if (bulk->oil_fp[i] || bulk->slime_fp[i]) return false;
+        uint32_t x = i % DC_CHUNK_SIDE, y = i / DC_CHUNK_SIDE;
+        dc_face_velocity_t velocity = faces[(size_t)y * gpu->width + x];
+        r->active |= cells[i].fluid_mass || velocity.x || velocity.y;
+        if (cells[i].material == DC_MATERIAL_STONE && (cells[i].flags & DC_CELL_LOADED_TERRAIN) &&
+            !(cells[i].flags & (DC_CELL_RELEASED_TERRAIN | DC_CELL_BURNING_SMOKE_PASS))) continue;
+        if (cells[i].material != DC_MATERIAL_AIR || cells[i].flags) return false;
+        if (!x) r->west |= UINT64_C(1) << y;
+        if (x == DC_CHUNK_SIDE - 1u) r->east |= UINT64_C(1) << y;
+        if (!y) r->north |= UINT64_C(1) << x;
+        if (y == DC_CHUNK_SIDE - 1u) r->south |= UINT64_C(1) << x;
+    }
+    return true;
+}
+
+/* Every connected component carrying water must have one confirmed epoch.
+ * Dry, stationary components can advance each local clock by the same step. */
 static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_seam_endpoint_t *tiles,
                                  uint32_t count, uint32_t residents, char *err, uint32_t cap) {
     water_region_tile_t regions[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS] = {0};
     uint32_t queue[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS];
-    _Static_assert(DC_CHUNK_SIDE == 64, "Water boundary mask needs one bit per cell");
     for (uint32_t t = 0; t < count; ++t) {
         dc_gpu_t *gpu = tiles[t].gpu;
-        uint32_t slot = tiles[t].slot;
-        dc_chunk_t chunk;
-        if (!dc_gpu_chunk_physics_isolated(gpu) || gpu->gas || gpu->tick_water_source ||
-            !dc_gpu_download_chunk(gpu, slot, &chunk, err, cap) || chunk.particle_count) return false;
-        const fr_bulk_phase_chunk_t *bulk = (fr_bulk_phase_chunk_t *)gpu->bulk_phase_mapped + slot;
-        water_region_tile_t *r = &regions[t];
-        r->active = t >= residents || chunk.marker_count;
-        for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
-            const dc_cell_t cell = chunk.cells[i];
-            if (bulk->oil_fp[i] || bulk->slime_fp[i]) return false;
-            r->active |= cell.fluid_mass || chunk.face_velocity[i].x || chunk.face_velocity[i].y;
-            if (cell.material == DC_MATERIAL_STONE && (cell.flags & DC_CELL_LOADED_TERRAIN) &&
-                !(cell.flags & (DC_CELL_RELEASED_TERRAIN | DC_CELL_BURNING_SMOKE_PASS))) continue;
-            if (cell.material != DC_MATERIAL_AIR || cell.flags) return false;
-            uint32_t x = i % DC_CHUNK_SIDE, y = i / DC_CHUNK_SIDE;
-            if (!x) r->west |= UINT64_C(1) << y;
-            if (x == DC_CHUNK_SIDE - 1u) r->east |= UINT64_C(1) << y;
-            if (!y) r->north |= UINT64_C(1) << x;
-            if (y == DC_CHUNK_SIDE - 1u) r->south |= UINT64_C(1) << x;
-        }
+        if ((t == 0 || t == residents) && (!dc_gpu_chunk_physics_isolated(gpu) || gpu->gas ||
+            gpu->tick_water_source || !dc_gpu_copy_chunk_state(gpu, UINT32_MAX, false, false, err, cap)))
+            return false;
+        regions[t].active = t >= residents;
+        if (!inspect_water_region(tiles[t], &regions[t])) return false;
     }
     for (uint32_t seed = 0; seed < count; ++seed) {
         if (regions[seed].visited || !regions[seed].active) continue;
