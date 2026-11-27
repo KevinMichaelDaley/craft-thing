@@ -432,6 +432,48 @@ static void test_camera_heated_water_returns_with_its_energy(void) { check_camer
 static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(CAMERA_BULK); }
 static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(CAMERA_HEAT|CAMERA_BULK|CAMERA_REOPEN); }
 
+static void test_two_evicted_sealed_rooms_return_at_the_world_clock(void) {
+    char directory[] = "build/camera_two_rooms_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(view && chunk);
+    dc_chunk_coord_t rooms[] = {view->origin, {view->origin.x + 1, view->origin.y + 1}};
+    uint32_t center = 32u * DC_CHUNK_SIDE + 32u;
+    for (unsigned i = 0; i < 2u; ++i) {
+        uint32_t slot;
+        uint64_t generation;
+        camera_seal_room(chunk, rooms[i]);
+        chunk->cells[center].fluid_mass = 14000u + i;
+        ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, rooms[i], &slot, &generation) &&
+            dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
+            dc_chunk_table_finish_load(&view->table, slot, generation) &&
+            dc_chunk_table_mark_dirty(&view->table, slot));
+        view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
+    }
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)) &&
+        dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0) &&
+        dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[0]));
+    ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[1]));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .0625f, err, sizeof(err)) &&
+        dc_level_view_tick(view, err, sizeof(err)) &&
+        dc_level_view_pan_pixels(view, -2 * VIEW_WIDTH, 0) &&
+        dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+    for (unsigned i = 0; i < 2u; ++i) {
+        uint32_t slot;
+        ASSERT_TRUE(!dc_level_offscreen_owns(view, rooms[i]) &&
+            dc_chunk_table_find(&view->table, rooms[i], &slot) &&
+            dc_gpu_download_chunk(view->gpu, slot, chunk, err, sizeof(err)));
+        ASSERT_EQ(view->table.slots[slot].time.seconds, 2.0625);
+        ASSERT_EQ(camera_stock(chunk, NULL, false), 14000u + i);
+        ASSERT_TRUE(chunk->cells[center].fluid_mass < 14000u + i);
+    }
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    free(chunk);
+    PASS();
+}
+
 static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
     ASSERT_TRUE(mkdtemp(directory));
