@@ -26,3 +26,7 @@ Focused Xephyr reproduction on 65bd762b: all seven far halo rooms were admitted 
 **2026-11-27T19:31:15Z**
 
 Focused GPU regression at 7de09c5f passed all three pan cycles, exact shared gas stock/pressure and independent older room advancement on Xephyr :93. Vulkan synchronization validation reached the final pan and timed out waiting 25 seconds for residency. Testing outward-facing openings on all seven far rooms to avoid six unrelated sealed gas workspaces in this fixture. The parked-room case, four paired-seam cases, and all 22 stream/gas-stream/world-save host tests passed. Aggregate run pending.
+
+**2026-11-27T19:46:33Z**
+
+All seven far chambers now have only an outward-facing opening. The designated room returned at its saved clock and did both native updates while the shared gas pair matched its reference. Both regular execution and synchronization validation passed the full focused regression within its original per-pan deadline. Latest aggregate suite pending.

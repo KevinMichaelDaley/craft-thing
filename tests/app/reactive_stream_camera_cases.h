@@ -264,15 +264,13 @@ static void check_camera_water_returns(unsigned channels) {
         ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(dc_level_offscreen_owns(view, first));
         if (gas && cycle == 0u) {
-            /* Keep the test room open only toward the unmapped east side of the halo. */
+            /* Each chamber opens only toward the unmapped east side and stays independent of its neighbors. */
             for (uint32_t i = 0; i < view->table.capacity; ++i) {
                 const dc_chunk_slot_t *s = &view->table.slots[i];
-                if (s->state != DC_SLOT_ACTIVE || s->coord.x !=
-                    view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS - 1) continue;
+                if (s->state != DC_SLOT_ACTIVE || s->coord.x != far_room.x) continue;
                 memset(chunk, 0, sizeof(*chunk));
                 camera_seal_room(chunk, s->coord);
-                if (s->coord.y == far_room.y)
-                    chunk->cells[row + DC_CHUNK_SIDE - 1u] = (dc_cell_t){0};
+                chunk->cells[row + DC_CHUNK_SIDE - 1u] = (dc_cell_t){0};
                 ASSERT_TRUE(dc_gpu_upload_chunk(view->gpu, i, chunk, err, sizeof(err)) &&
                     camera_seed_gas(view->gpu, i, chunk, false, err, sizeof(err)) &&
                     dc_chunk_table_mark_dirty(&view->table, i));
