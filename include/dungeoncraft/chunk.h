@@ -111,6 +111,7 @@ typedef struct {
     dc_chunk_coord_t coord;
     dc_slot_state_t state;
     uint64_t generation;
+    uint64_t save_generation;
     uint64_t last_gpu_use;
     bool dirty;
     bool pinned;
@@ -145,18 +146,26 @@ bool dc_chunk_table_begin_load(dc_chunk_table_t *table, dc_chunk_coord_t coord,
 bool dc_chunk_table_finish_load(dc_chunk_table_t *table, uint32_t index,
                                 uint64_t generation);
 
+/** Release a matching loading reservation whose worker request failed. */
+bool dc_chunk_table_cancel_load(dc_chunk_table_t *table, uint32_t index,
+                                uint64_t generation);
+
 /** Mark a loaded chunk active or sleeping. */
 bool dc_chunk_table_set_active(dc_chunk_table_t *table, uint32_t index, bool active);
 
 /** Mark a chunk modified; dirty chunks require saving before eviction. */
 bool dc_chunk_table_mark_dirty(dc_chunk_table_t *table, uint32_t index);
 
-/** Freeze a sleeping dirty slot for an asynchronous save. */
+/** Freeze a sleeping dirty slot and return a distinct generation for the write. */
 bool dc_chunk_table_begin_save(dc_chunk_table_t *table, uint32_t index,
                                uint64_t *generation);
 
 /** Clear dirty state after the matching asynchronous save completes. */
 bool dc_chunk_table_finish_save(dc_chunk_table_t *table, uint32_t index,
+                                uint64_t generation);
+
+/** Keep the resident dirty owner after a matching write fails. */
+bool dc_chunk_table_cancel_save(dc_chunk_table_t *table, uint32_t index,
                                 uint64_t generation);
 
 /** Evict only a clean, unpinned sleeping slot after GPU use has completed. */

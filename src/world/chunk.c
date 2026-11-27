@@ -127,6 +127,15 @@ bool dc_chunk_table_finish_load(dc_chunk_table_t *table, uint32_t index,
     return true;
 }
 
+bool dc_chunk_table_cancel_load(dc_chunk_table_t *table, uint32_t index,
+                                uint64_t generation) {
+    if (!table || index >= table->capacity) return false;
+    dc_chunk_slot_t *slot = &table->slots[index];
+    if (slot->state != DC_SLOT_LOADING || slot->generation != generation) return false;
+    memset(slot, 0, sizeof(*slot));
+    return true;
+}
+
 bool dc_chunk_table_set_active(dc_chunk_table_t *table, uint32_t index, bool active) {
     if (!table || index >= table->capacity) return false;
     dc_chunk_slot_t *slot = &table->slots[index];
@@ -145,22 +154,34 @@ bool dc_chunk_table_mark_dirty(dc_chunk_table_t *table, uint32_t index) {
 
 bool dc_chunk_table_begin_save(dc_chunk_table_t *table, uint32_t index,
                                uint64_t *generation) {
-    if (!table || index >= table->capacity || !generation) return false;
+    if (!table || index >= table->capacity || !generation || table->next_generation == UINT64_MAX)
+        return false;
     dc_chunk_slot_t *slot = &table->slots[index];
     if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) return false;
     slot->state = DC_SLOT_SAVING;
-    *generation = slot->generation;
+    slot->save_generation = table->next_generation++;
+    *generation = slot->save_generation;
+    return true;
+}
+
+static bool end_save(dc_chunk_table_t *table, uint32_t index, uint64_t generation, bool written) {
+    if (!table || index >= table->capacity) return false;
+    dc_chunk_slot_t *slot = &table->slots[index];
+    if (slot->state != DC_SLOT_SAVING || slot->save_generation != generation) return false;
+    slot->dirty = !written;
+    slot->state = DC_SLOT_SLEEPING;
+    slot->save_generation = 0;
     return true;
 }
 
 bool dc_chunk_table_finish_save(dc_chunk_table_t *table, uint32_t index,
                                 uint64_t generation) {
-    if (!table || index >= table->capacity) return false;
-    dc_chunk_slot_t *slot = &table->slots[index];
-    if (slot->state != DC_SLOT_SAVING || slot->generation != generation) return false;
-    slot->dirty = false;
-    slot->state = DC_SLOT_SLEEPING;
-    return true;
+    return end_save(table, index, generation, true);
+}
+
+bool dc_chunk_table_cancel_save(dc_chunk_table_t *table, uint32_t index,
+                                uint64_t generation) {
+    return end_save(table, index, generation, false);
 }
 
 bool dc_chunk_table_evict(dc_chunk_table_t *table, uint32_t index,

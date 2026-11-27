@@ -321,18 +321,44 @@ static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
            coord.y < view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
 }
 
+static bool cancel_load(dc_level_view_t *view, uint32_t index, uint64_t generation) {
+    if (!dc_chunk_table_cancel_load(&view->table, index, generation)) return false;
+    if (view->destination_bound && view->to_slot == index && view->to_generation == generation)
+        view->destination_bound = false;
+    return true;
+}
+
+static bool queue_reserved_load(dc_level_view_t *view, uint32_t index, uint64_t generation,
+                                char *err, uint32_t cap) {
+    if (dc_stream_request_load(view->stream, view->table.slots[index].coord, generation)) return true;
+    if (!cancel_load(view, index, generation)) return error(err, cap, "Cannot release rejected chunk load");
+    return error(err, cap, "Cannot queue chunk load");
+}
+
 static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
     dc_stream_result_t result;
     while (dc_stream_poll(view->stream, &result)) {
         uint32_t index;
-        if (!dc_chunk_table_find(&view->table, result.coord, &index) ||
-            view->table.slots[index].generation != result.generation) {
+        if (!dc_chunk_table_find(&view->table, result.coord, &index)) {
             dc_stream_result_release(&result);
             continue;
         }
-        if (result.kind == DC_STREAM_FAILED) {
+        const dc_chunk_slot_t *slot = &view->table.slots[index];
+        bool failed = result.kind == DC_STREAM_FAILED;
+        bool loading = slot->state == DC_SLOT_LOADING && slot->generation == result.generation &&
+                       (failed || result.kind == DC_STREAM_LOADED);
+        bool saving = slot->state == DC_SLOT_SAVING && slot->save_generation == result.generation &&
+                      (failed || result.kind == DC_STREAM_SAVED);
+        if (!loading && !saving) {
             dc_stream_result_release(&result);
-            return error(err, cap, "Chunk worker load or save failed");
+            continue;
+        }
+        if (failed) {
+            bool released = loading ? cancel_load(view, index, result.generation) :
+                dc_chunk_table_cancel_save(&view->table, index, result.generation);
+            dc_stream_result_release(&result);
+            return error(err, cap, released ? "Chunk worker load or save failed" :
+                                             "Cannot release failed chunk operation");
         }
         if (result.kind == DC_STREAM_LOADED) {
             bool restored = false;
@@ -450,8 +476,11 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         free(gas);
         fr_reactive_chunk_release(&reactive);
         if(trace) parts[5]+=SDL_GetTicks64()-stage;
-        if(!queued)
+        if (!queued) {
+            if (!dc_chunk_table_cancel_save(&view->table, i, generation))
+                return error(err, cap, "Cannot release rejected chunk save");
             return error(err, cap, "Cannot queue dirty chunk save");
+        }
     }
     chunk_ms=SDL_GetTicks64()-chunk_start;
     if(trace) fprintf(stderr,"Save schedule structure%llums chunks%llums\n",
@@ -476,8 +505,7 @@ static bool bind_transfer_destination(dc_level_view_t *view, char *err, uint32_t
         uint64_t generation;
         if (!dc_chunk_table_begin_load(&view->table, view->transfer_to,
                                        &index, &generation)) return true;
-        if (!dc_stream_request_load(view->stream, view->transfer_to, generation))
-            return error(err, cap, "Cannot load transfer destination");
+        if (!queue_reserved_load(view, index, generation, err, cap)) return false;
     }
     view->to_slot = index;
     view->to_generation = view->table.slots[index].generation;
@@ -660,22 +688,20 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if ((view->pending_chunk_dx || view->pending_chunk_dy) &&
         !dc_gpu_shift_velocity(view->gpu, view->pending_chunk_dx,
                                 view->pending_chunk_dy, err, cap)) return false;
-    bool all_resident = true;
+    bool all_resident = true, load_queued = true;
     for (uint32_t y = 0; y < SIM_CHUNKS_Y; ++y) {
         for (uint32_t x = 0; x < SIM_CHUNKS_X; ++x) {
             dc_chunk_coord_t coord = {
                 view->origin.x + (int64_t)x - HALO_CHUNKS,
                 view->origin.y + (int64_t)y - HALO_CHUNKS };
-            uint32_t index;
-            if (!dc_chunk_table_find(&view->table, coord, &index)) {
+            uint32_t page = UINT32_MAX, index;
+            if (dc_chunk_table_find(&view->table, coord, &index)) {
+                if (view->table.slots[index].state == DC_SLOT_ACTIVE) page = index;
+            } else if (load_queued) {
                 uint64_t generation;
-                if (dc_chunk_table_begin_load(&view->table, coord, &index, &generation) &&
-                    !dc_stream_request_load(view->stream, coord, generation))
-                    return error(err, cap, "Cannot queue chunk load");
+                if (dc_chunk_table_begin_load(&view->table, coord, &index, &generation))
+                    load_queued = queue_reserved_load(view, index, generation, err, cap);
             }
-            uint32_t page = UINT32_MAX;
-            if (dc_chunk_table_find(&view->table, coord, &index) &&
-                view->table.slots[index].state == DC_SLOT_ACTIVE) page = index;
             if (page == UINT32_MAX) all_resident = false;
             if (!dc_gpu_set_page(view->gpu, x, y, page, err, cap)) return false;
         }
@@ -687,6 +713,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     bool ticking=all_resident&&view->pending_steps!=0u&&!view->transfer_pending;
     if(!(ticking?dc_gpu_prepare_body_origin(view->gpu,body_origin,err,cap):
                  dc_gpu_set_body_origin(view->gpu,body_origin,err,cap))) return false;
+    /* Complete the remap before an accepted load can publish on a retry. */
+    if (!load_queued) return false;
     if (!resolve_world_transfer(view, err, cap)) return false;
     if (view->spring_enabled && view->origin.x - HALO_CHUNKS <= 2 * WORLD_SCALE &&
         view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS > 2 * WORLD_SCALE &&
