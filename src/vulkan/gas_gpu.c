@@ -301,9 +301,12 @@ static float rate(struct fr_gas_gpu *t) {
     memcpy(&value,words+FR_GAS_RATE_WORD,4);return value;
 }
 static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
-    uint32_t count=g->width*g->height;VkDeviceSize states=(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*sizeof(gas_packet_t);
+    uint32_t count = g->width * g->height;
+    uint32_t slots = dc_gpu_slot_capacity(g);
+    uint32_t atlas_cells = slots * DC_CHUNK_CELLS;
+    VkDeviceSize states = (VkDeviceSize)atlas_cells * sizeof(gas_packet_t);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
-    uint32_t scan=count>dc_gpu_slot_capacity(g)*4096u?count:dc_gpu_slot_capacity(g)*4096u;
+    uint32_t scan = count > atlas_cells ? count : atlas_cells;
     uint32_t groups=(scan-1u)/64u+1u;t->groups_x=groups<properties.limits.maxComputeWorkGroupCount[0]?groups:properties.limits.maxComputeWorkGroupCount[0];
     t->groups_y=(groups-1u)/t->groups_x+1u;
     if(states>properties.limits.maxStorageBufferRange||(VkDeviceSize)count*32u>properties.limits.maxStorageBufferRange||
@@ -319,8 +322,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     if(!dc_gpu_address_buffer_create(g,tiles*8u,mapped_work,&t->owner_tiles,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*8u,mapped_work,&t->conduction_faces,err,cap)) return false;
-    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*4u,true,&t->gates,err,cap)) return false;
-    if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+dc_gpu_slot_capacity(g))*4u,true,&t->parameters,err,cap)||
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)atlas_cells*sizeof(uint32_t),true,&t->gates,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+slots)*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)) return false;
     for(uint32_t i=0;i<2;i++)
         if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*8u,false,t->smoke_coordinates+i,err,cap)) return false;
@@ -335,7 +338,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
     parameters[13]=.21f;parameters[14]=0;
     parameters[FR_GAS_OPACITY_WORD]=FR_GAS_SMOKE_DISPLAY_OPACITY;
-    ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=dc_gpu_slot_capacity(g);
+    ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=slots;
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
     VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS+4u];
     for(uint32_t i=12u;i<28u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};

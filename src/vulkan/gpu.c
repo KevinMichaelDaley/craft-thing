@@ -183,10 +183,10 @@ static bool create_gpu(dc_gpu_t **out, const dc_gpu_t *parent, uint32_t width, u
     const char *boundary_cache = getenv("DC_CONTACT_BODY_CACHE");
     gpu->contact_boundary_cache_enabled = boundary_cache && strcmp(boundary_cache, "1") == 0;
     gpu->width = width; gpu->height = height;
+    gpu->page_width = (width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
+    gpu->page_height = (height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     if (parent) {
-        uint32_t columns = (width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
-        uint32_t rows = (height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
-        uint64_t pages = (uint64_t)columns * rows;
+        uint64_t pages = (uint64_t)gpu->page_width * gpu->page_height;
         gpu->workspace_slots = pages < DC_GPU_CHUNK_SLOTS ? (uint32_t)pages : DC_GPU_CHUNK_SLOTS;
     }
     gpu->pixel_pool_words = DC_GPU_INITIAL_PIXEL_POOL_WORDS;

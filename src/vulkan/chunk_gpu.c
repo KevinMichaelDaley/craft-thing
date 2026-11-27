@@ -130,8 +130,6 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                                   sizeof(*gpu->chunk_velocity));
     if (!gpu->chunk_velocity)
         return error(err, cap, "Cannot allocate streamed chunk velocity staging");
-    gpu->page_width = (gpu->width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
-    gpu->page_height = (gpu->height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
     VkDeviceSize chunk_bytes = (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
     VkDeviceSize particle_bytes = (VkDeviceSize)dc_gpu_slot_capacity(gpu) *

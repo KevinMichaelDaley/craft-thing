@@ -1,10 +1,14 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "dungeoncraft/gpu.h"
+#include "ferrum/renderer/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass = 0;
@@ -26,6 +30,27 @@ static VkDeviceSize buffer_allocation(const dc_gpu_t *gpu, VkBuffer buffer) {
     return requirements.size;
 }
 
+static bool restore_foreground_checkpoint(dc_gpu_t *foreground, dc_gpu_t *workspace,
+                                           uint32_t slot, dc_chunk_t *chunk,
+                                           char *err, uint32_t cap) {
+    dc_chunk_colors_t expected = {.terrain = {[64] = {.25f, .5f, .75f, 1.f}}};
+    dc_chunk_colors_t actual;
+    if (!fr_renderer_upload_chunk_colors(foreground, DC_GPU_CHUNK_SLOTS - 1u, &expected, err, cap))
+        return false;
+    char path[] = "build/workspace-checkpoint-XXXXXX";
+    int file = mkstemp(path);
+    if (file < 0) return false;
+    chunk->cells[64].material = DC_MATERIAL_WOOD;
+    bool okay = close(file) == 0 && fr_gpu_save_structure(foreground, path, err, cap) &&
+                dc_gpu_upload_chunk(workspace, slot, chunk, err, cap) &&
+                fr_gpu_load_structure(workspace, path, err, cap) &&
+                dc_gpu_download_chunk(workspace, slot, chunk, err, cap) &&
+                chunk->cells[64].material == DC_MATERIAL_STONE &&
+                fr_renderer_download_chunk_colors(workspace, slot, &actual, err, cap) &&
+                memcmp(&actual, &expected, sizeof(actual)) == 0;
+    return unlink(path) == 0 && okay;
+}
+
 static void test_shared_workspace_allocates_only_its_rounded_pages(void) {
     char err[256] = {0};
     dc_gpu_t *foreground = NULL, *workspace = NULL;
@@ -37,9 +62,9 @@ static void test_shared_workspace_allocates_only_its_rounded_pages(void) {
     ASSERT_TRUE(dc_gpu_upload_chunk(foreground, DC_GPU_CHUNK_SLOTS - 1u, &chunk, err, sizeof(err)));
     const VkDeviceSize foreground_bytes = buffer_allocation(foreground, foreground->chunk_buffer);
     const VkDeviceSize workspace_bytes = buffer_allocation(workspace, workspace->chunk_buffer);
+    printf("Workspace cell buffer %llu bytes, foreground %llu bytes\n",
+           (unsigned long long)workspace_bytes, (unsigned long long)foreground_bytes);
     if (workspace_bytes * 4u > foreground_bytes) {
-        printf("Workspace cell buffer %llu bytes, foreground %llu bytes\n",
-               (unsigned long long)workspace_bytes, (unsigned long long)foreground_bytes);
         dc_gpu_destroy(workspace);
         dc_gpu_destroy(foreground);
         ASSERT_TRUE(workspace_bytes * 4u <= foreground_bytes);
@@ -56,6 +81,7 @@ static void test_shared_workspace_allocates_only_its_rounded_pages(void) {
     ASSERT_TRUE(dc_gpu_tick_step(workspace, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(workspace, last_slot, &chunk, err, sizeof(err)));
     ASSERT_EQ(chunk.cells[64].material, DC_MATERIAL_STONE);
+    ASSERT_TRUE(restore_foreground_checkpoint(foreground, workspace, last_slot, &chunk, err, sizeof(err)));
     ASSERT_EQ(dc_gpu_validation_errors(workspace), 0u);
     dc_gpu_destroy(workspace);
     dc_gpu_destroy(foreground);
