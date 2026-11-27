@@ -424,9 +424,17 @@ void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase) {
     else if (phase == 5u) record_fluid_correction(gpu);
 }
 
-void dc_gpu_record_fluid(dc_gpu_t *gpu) {
-    for (uint32_t phase = 0; phase < DC_FLUID_PHASES; ++phase)
+void dc_gpu_record_fluid_run(dc_gpu_t *gpu, uint32_t first, uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t phase = (first + i) % DC_FLUID_PHASES;
+        gpu->recording_prepared_pressure = gpu->pressure_work_enabled && i > 0 && phase >= 1 && phase <= 3;
         dc_gpu_record_fluid_phase(gpu, phase);
+    }
+    gpu->recording_prepared_pressure = false;
+}
+
+void dc_gpu_record_fluid(dc_gpu_t *gpu) {
+    dc_gpu_record_fluid_run(gpu, 0, DC_FLUID_PHASES);
 }
 
 bool dc_gpu_fluid_max_divergence(dc_gpu_t *gpu, float *divergence,

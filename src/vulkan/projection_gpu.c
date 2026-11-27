@@ -97,8 +97,10 @@ void dc_gpu_fluid_pressure_range(uint32_t phase, uint32_t *first, uint32_t *stop
 void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
                                     uint32_t stop) {
     if (first >= stop) return;
-    if (gpu->pressure_work_enabled) dc_gpu_record_pressure_work(gpu);
-    if (gpu->pressure_work_enabled && first != 0u) record_pressure_stencil(gpu);
+    if (gpu->pressure_work_enabled && !gpu->recording_prepared_pressure) {
+        dc_gpu_record_pressure_work(gpu);
+        if (first != 0u) record_pressure_stencil(gpu);
+    }
     const VkDescriptorSet sets[] = {gpu->descriptor, gpu->pressure_work_descriptor};
     uint32_t push[7] = {gpu->width, gpu->height, 0u, 1u, 0u,
                         dc_gpu_float_bits(gpu->fluid_step_scale), 0u};

@@ -86,11 +86,10 @@ static void record_scheduled_fluid(dc_gpu_t *gpu) {
     const dc_fluid_schedule_t schedule = dc_gpu_plan_fluid_tick(gpu->fluid_interval, gpu->fluid_phase,
         gpu->fluid_phase_budget, gpu->tick_time_scale, gpu->timed_fluid);
     gpu->fluid_step_scale = schedule.step_scale;
-    for (uint32_t i = 0; i < schedule.phase_count; ++i) {
-        const uint32_t phase = (schedule.first_phase + i) % DC_FLUID_PHASES;
-        if (gpu->fluid_work_possible) dc_gpu_record_fluid_phase(gpu, phase);
-        else if (phase == DC_FLUID_PHASES - 1u) ++gpu->fluid_tick;
-    }
+    if (gpu->fluid_work_possible)
+        dc_gpu_record_fluid_run(gpu, schedule.first_phase, schedule.phase_count);
+    else
+        gpu->fluid_tick += (schedule.first_phase + schedule.phase_count) / DC_FLUID_PHASES;
     gpu->fluid_phase = schedule.next_phase;
     gpu->fluid_phase_budget = schedule.remaining_budget;
 }

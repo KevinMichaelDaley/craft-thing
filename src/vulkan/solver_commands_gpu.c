@@ -16,7 +16,8 @@ typedef struct {
     uint64_t fluid_scale,fluid_timed,fluid_occupancy,pressure_work,water_slot_extent;
     uint64_t joints,mpm_gas_force;
 } solver_command_key_t;
-enum { RIGID_PROGRAM, MPM_PROGRAM, FLUID_PROGRAM, COMMAND_PROGRAM_COUNT=FLUID_PROGRAM+10 };
+enum { RIGID_PROGRAM, MPM_PROGRAM, FLUID_PROGRAM, PREPARED_FLUID_PROGRAM=FLUID_PROGRAM+10,
+       COMMAND_PROGRAM_COUNT=PREPARED_FLUID_PROGRAM+6 };
 typedef struct {
     VkCommandBuffer command;
     solver_command_key_t key;
@@ -94,6 +95,8 @@ bool dc_gpu_solver_commands_stats(const dc_gpu_t *g,uint64_t *recordings,uint64_
 static void record_program(dc_gpu_t *g,unsigned program) {
     if(program==RIGID_PROGRAM) dc_gpu_record_solver_uncached(g);
     else if(program==MPM_PROGRAM) dc_gpu_record_mpm_interval(g, 1.f, g->gas != NULL);
+    else if (program >= PREPARED_FLUID_PROGRAM)
+        dc_gpu_record_fluid_phase_uncached(g, 1u + (program - PREPARED_FLUID_PROGRAM) / 2u);
     else dc_gpu_record_fluid_phase_uncached(g,(program-FLUID_PROGRAM)/2u);
 }
 static bool execute_cached(dc_gpu_t *g,unsigned program) {
@@ -142,7 +145,9 @@ void dc_gpu_record_mpm(dc_gpu_t *g) {
 
 void dc_gpu_record_fluid_phase(dc_gpu_t *g,uint32_t phase) {
     dc_gpu_fluid_uploads_invalidate(g);
-    if(phase>=5u||!execute_cached(g,FLUID_PROGRAM+phase*2u+(g->fluid_tick&1u))) {
+    unsigned program = g->recording_prepared_pressure ?
+        PREPARED_FLUID_PROGRAM + (phase - 1u) * 2u : FLUID_PROGRAM + phase * 2u;
+    if(phase>=5u||!execute_cached(g,program+(g->fluid_tick&1u))) {
         dc_gpu_record_fluid_phase_uncached(g,phase);
         return;
     }

@@ -270,6 +270,7 @@ struct dc_gpu {
     VkPipelineLayout pressure_pipeline_layout;
     VkPipeline pressure_work_pipelines[3];
     bool pressure_work_enabled;
+    bool recording_prepared_pressure; /**< Only during adjacent pressure phases in one command stream. */
     VkPipeline hydro_head_pipeline;
     VkPipeline fluid_aperture_pipeline;
     VkDescriptorSet fluid_transport_descriptor;
@@ -630,6 +631,7 @@ void dc_gpu_bind_native_transport(dc_gpu_t *gpu, const VkDescriptorBufferInfo ow
 VkDeviceSize dc_gpu_fluid_aperture_tree_bytes(uint32_t width, uint32_t height);
 void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
+void dc_gpu_record_fluid_run(dc_gpu_t *gpu, uint32_t first, uint32_t count);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
