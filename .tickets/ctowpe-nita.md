@@ -1,6 +1,6 @@
 ---
 id: ctowpe-nita
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T17:13:23Z
@@ -31,3 +31,7 @@ GREEN passes all 18 focused displacement cases under synchronization validation.
 **2026-11-27T17:21:46Z**
 
 Independent repeat: old upward/lateral 7.022/3.389 ms with all pages, 8.464/2.138 with a missing page. New 0.436/0.315 ms and 0.413/0.302 ms. Every resident water value matched its serial reference in both repetitions of all four scenarios. Normal, wide, tall and profiled displacement passed again after refactoring.
+
+**2026-11-27T17:32:16Z**
+
+Refactor 1abdfaa8 passed all 39 focused cases under Vulkan synchronization validation: 18 basic, profiled, wide and tall displacement cases; three seam-water cases each with marker correction on and off; and all 15 coupled-owner water, rigid, gas, bulk and grain cases. The repeated native-size timings and serial mass assertions meet this ticket's acceptance criteria. Production frame gates and aggregate make test continue separately.
