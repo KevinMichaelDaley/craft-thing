@@ -184,6 +184,7 @@ static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terra
 }
 static dc_gpu_t *traced_workspace;
 static VkPipeline traced_pipeline;
+static unsigned expected_lines[2], transport_modes, wrong_lines;
 static const dc_gpu_t *traced_pressure;
 static unsigned tile_scans, stencil_builds;
 
@@ -207,6 +208,11 @@ void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint3
         ++tile_scans;
     if (traced_workspace) {
         dc_gpu_t *g = traced_workspace;
+        for (unsigned mode = 0; mode < 4; ++mode) {
+            if (traced_pipeline != g->fluid_transport_pipelines[mode]) continue;
+            transport_modes |= 1u << mode;
+            wrong_lines += x != expected_lines[mode / 2] || y != 1 || z != 1;
+        }
         bool pressure = traced_pipeline == g->projection_pipeline;
         for (unsigned i = 0; i < 7; ++i)
             pressure |= traced_pipeline == g->projection_phase_pipelines[i];
@@ -223,32 +229,35 @@ void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint3
 }
 
 static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
-    enum { SIDE = DC_CHUNK_SIDE * 3, PIXELS = SIDE * SIDE };
+    enum { WIDTH = 150, HEIGHT = 143, PIXELS = WIDTH * HEIGHT };
     const char *shader = "build/shaders/pattern.comp.spv";
     char err[256] = {0};
     dc_gpu_t *resident = NULL, *workspace = NULL;
-    ASSERT_TRUE(dc_gpu_create(&resident, SIDE, SIDE, shader, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_create_shared(&workspace, resident, SIDE, SIDE, shader, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create(&resident, WIDTH, HEIGHT, shader, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&workspace, resident, WIDTH, HEIGHT, shader, err, sizeof(err)));
     dc_gpu_t *owners[] = {resident, workspace};
     dc_chunk_t *chunks = calloc(2, sizeof(*chunks));
     float *pressure = malloc(2 * PIXELS * sizeof(*pressure));
     ASSERT_TRUE(chunks && pressure);
-    for (unsigned round = 0; round < 3; ++round) {
+    for (unsigned round = 0; round < 4; ++round) {
         unsigned slot = round ? 5 : 0;
-        unsigned tile = round ? 1 : 0;
+        unsigned x = round == 1 ? 2 : 0, y = round >= 2 ? 2 : 0;
         memset(chunks, 0, sizeof(*chunks));
-        chunks->cells[32 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
-        chunks->face_velocity[32 * DC_CHUNK_SIDE + 32].x = .5f;
-        chunks->coord.x = tile;
+        chunks->cells[8 * DC_CHUNK_SIDE + 8].fluid_mass = DC_FLUID_FULL;
+        chunks->face_velocity[8 * DC_CHUNK_SIDE + 8].x = .5f;
+        chunks->coord = (dc_chunk_coord_t){x, y};
         chunks->marker_count = 1;
-        chunks->markers[0] = (dc_marker_t){32 * DC_FLUID_FULL, 32 * DC_FLUID_FULL, 33 + slot, DC_MARKER_INSIDE};
+        chunks->markers[0] = (dc_marker_t){8 * DC_FLUID_FULL, 8 * DC_FLUID_FULL, 33 + slot, DC_MARKER_INSIDE};
         for (unsigned owner = 0; owner < 2; ++owner) {
             dc_gpu_t *g = owners[owner];
-            if (round < 2)
+            if (round < 3)
                 ASSERT_TRUE(dc_gpu_upload_chunk(g, slot, chunks, err, sizeof(err)));
-            ASSERT_TRUE(dc_gpu_set_page(g, tile, 0, round == 2 ? UINT32_MAX : slot, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_set_page(g, x, y, round == 3 ? UINT32_MAX : slot, err, sizeof(err)));
             if (g == workspace) {
-                expected_slots = round == 1 ? 6 : 1;
+                expected_slots = round == 1 || round == 2 ? 6 : 1;
+                expected_lines[0] = round == 1 ? WIDTH : DC_CHUNK_SIDE;
+                expected_lines[1] = round == 2 ? HEIGHT : DC_CHUNK_SIDE;
+                transport_modes = wrong_lines = 0;
                 pressure_dispatches = mass_dispatches = wrong_dispatches = 0;
                 traced_workspace = g;
             }
@@ -261,13 +270,15 @@ static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
                        expected_slots, pressure_dispatches, mass_dispatches, wrong_dispatches);
                 ASSERT_TRUE(pressure_dispatches && mass_dispatches);
                 ASSERT_EQ(wrong_dispatches, 0u);
+                ASSERT_EQ(transport_modes, 15u);
+                ASSERT_EQ(wrong_lines, 0u);
             }
             ASSERT_TRUE(pressure_snapshot(g, pressure + owner * PIXELS, err, sizeof(err)));
         }
         ASSERT_EQ(resident->fluid_tick, workspace->fluid_tick);
         ASSERT_EQ(resident->fluid_tick, (round + 1) * 2);
         ASSERT_EQ(memcmp(pressure, pressure + PIXELS, PIXELS * sizeof(*pressure)), 0);
-        for (unsigned page = 0; page < (round == 1 ? 2u : 1u); ++page) {
+        for (unsigned page = 0; page < (round == 1 || round == 2 ? 2u : 1u); ++page) {
             for (unsigned owner = 0; owner < 2; ++owner)
                 ASSERT_TRUE(dc_gpu_download_chunk(owners[owner], page * 5, chunks + owner, err, sizeof(err)));
             ASSERT_EQ(memcmp(chunks[0].cells, chunks[1].cells, sizeof(chunks[0].cells)), 0);
