@@ -631,6 +631,7 @@ void dc_gpu_bind_native_transport(dc_gpu_t *gpu, const VkDescriptorBufferInfo ow
 VkDeviceSize dc_gpu_fluid_aperture_tree_bytes(uint32_t width, uint32_t height);
 void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
+/** Record contiguous phases with one preparation per uninterrupted pressure range. */
 void dc_gpu_record_fluid_run(dc_gpu_t *gpu, uint32_t first, uint32_t count);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase);

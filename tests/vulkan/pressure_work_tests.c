@@ -301,8 +301,9 @@ static void test_scheduled_pressure_runs_match_independent_phases(void) {
     ASSERT_TRUE(run && ref);
     ASSERT_TRUE(dc_gpu_set_fluid_interval(run, 6) && dc_gpu_set_fluid_interval(ref, 6));
     ASSERT_TRUE(run->pressure_work_enabled);
-    const unsigned lengths[] = {2, 2, 2, 6, 6};
-    const unsigned expected[] = {1, 1, 0, 1, 1};
+    /* The last tick records fresh and continued phase one at identical parity. */
+    const unsigned lengths[] = {2, 2, 2, 6, 6, 1, 13};
+    const unsigned expected_uncached[] = {1, 1, 0};
     bool counts_match = true;
     unsigned next = 0;
     for (unsigned tick = 0; tick < sizeof(lengths) / sizeof(*lengths); ++tick) {
@@ -326,7 +327,11 @@ static void test_scheduled_pressure_runs_match_independent_phases(void) {
         traced_pressure = run;
         ASSERT_TRUE(dc_gpu_tick_step(run, err, sizeof(err)));
         traced_pressure = NULL;
-        if (tick < 3) counts_match &= tile_scans == expected[tick] && stencil_builds == expected[tick];
+        if (tick < 3) {
+            printf("Pressure run from phase %u over %u phases: %u scans, %u stencils\n",
+                   next, lengths[tick], tile_scans, stencil_builds);
+            counts_match &= tile_scans == expected_uncached[tick] && stencil_builds == expected_uncached[tick];
+        }
         for (unsigned i = 0; i < lengths[tick]; ++i) {
             ASSERT_TRUE(phase(ref, next));
             next = (next + 1) % 6;

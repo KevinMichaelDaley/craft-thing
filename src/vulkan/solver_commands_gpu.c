@@ -145,6 +145,7 @@ void dc_gpu_record_mpm(dc_gpu_t *g) {
 
 void dc_gpu_record_fluid_phase(dc_gpu_t *g,uint32_t phase) {
     dc_gpu_fluid_uploads_invalidate(g);
+    /* A long scheduled tick can reference both variants before submission. */
     unsigned program = g->recording_prepared_pressure ?
         PREPARED_FLUID_PROGRAM + (phase - 1u) * 2u : FLUID_PROGRAM + phase * 2u;
     if(phase>=5u||!execute_cached(g,program+(g->fluid_tick&1u))) {
