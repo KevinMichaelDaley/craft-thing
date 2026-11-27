@@ -211,7 +211,7 @@ bool dc_level_view_place_structure(dc_level_view_t *view,
         if (view->table.slots[i].state == DC_SLOT_ACTIVE ||
             view->table.slots[i].state == DC_SLOT_SLEEPING)
             dc_chunk_table_mark_dirty(&view->table, i);
-    return fr_gpu_save_structure(view->gpu, view->body_path, err, cap);
+    return fr_gpu_save_structure_with_chunk_times(view->gpu, view->body_path, &view->table, err, cap);
 }
 
 static dc_level_step_run_t *pending_runs(dc_level_view_t *view) {
@@ -326,12 +326,14 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
         }
         if (result.kind == DC_STREAM_LOADED) {
             bool restored = false;
+            dc_chunk_time_t checkpoint_time;
             for (uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
                 uint32_t m=result.chunk->cells[i].material;
                 if (m==DC_MATERIAL_STONE || m==DC_MATERIAL_WOOD || m==DC_MATERIAL_DENSE_WOOD || m==DC_MATERIAL_LEAVES)
                     result.chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
             }
-            if (!fr_gpu_upload_structure_chunk(view->gpu,index,result.chunk,&restored,err,cap)) {
+            if (!fr_gpu_upload_structure_chunk_with_time(view->gpu,index,result.chunk,
+                                                         &restored,&checkpoint_time,err,cap)) {
                 dc_stream_result_release(&result);
                 return error(err, cap, "Cannot publish loaded GPU chunk");
             }
@@ -354,8 +356,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }
-            /* A structure checkpoint can supply different physical stock. */
-            view->table.slots[index].time = restored ? (dc_chunk_time_t){0} : result.time;
+            view->table.slots[index].time = restored ? checkpoint_time : result.time;
             if(view->closing) {
                 view->closing_structure_saved=false;
                 view->save_color_stale[index]=true;
@@ -382,7 +383,7 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             pending |= slot->state == DC_SLOT_SLEEPING && slot->dirty && !slot->pinned;
         }
         if (pending && (!view->closing || !view->closing_structure_saved)) {
-            if(!fr_gpu_save_structure(view->gpu, view->body_path, err, cap)) return false;
+            if(!fr_gpu_save_structure_with_chunk_times(view->gpu,view->body_path,&view->table,err,cap)) return false;
             if(view->closing) view->closing_structure_saved=true;
         }
     }
@@ -1039,7 +1040,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     view->closing=true;
     uint64_t save_start=SDL_GetTicks64();
     if (okay) {
-        okay = fr_gpu_save_structure(view->gpu, view->body_path, err, cap);
+        okay = fr_gpu_save_structure_with_chunk_times(view->gpu,view->body_path,&view->table,err,cap);
         view->closing_structure_saved = okay;
     }
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save final structure%llums\n",
@@ -1077,7 +1078,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         SDL_Delay(1);
     }
     if(okay&&!view->closing_structure_saved)
-        okay=fr_gpu_save_structure(view->gpu,view->body_path,err,cap);
+        okay=fr_gpu_save_structure_with_chunk_times(view->gpu,view->body_path,&view->table,err,cap);
     dc_stream_destroy(view->stream);
     if (okay && staged) okay = dc_world_save_commit(view->save, err, cap);
     dc_world_save_close(view->save);

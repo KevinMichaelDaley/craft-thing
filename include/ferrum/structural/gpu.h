@@ -90,6 +90,9 @@ bool fr_gpu_set_structure_bond_capacity(dc_gpu_t *gpu, uint32_t capacity);
 /** Atomically save authoritative graph, body and output ownership at a boundary. */
 bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path,
                            char *err_buf, uint32_t err_cap);
+/** Save a structure snapshot with completed times for matching resident slots. */
+bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
+    const dc_chunk_table_t *resident, char *err_buf, uint32_t err_cap);
 /** Validate and restore a graph-aware snapshot; accept older body-only worlds. */
 bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path,
                            char *err_buf, uint32_t err_cap);
@@ -97,6 +100,10 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path,
 bool fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
                                    const dc_chunk_t *chunk, bool *restored,
                                    char *err_buf, uint32_t err_cap);
+/** Report the saved time of the embedded chunk that supplied physical stock. */
+bool fr_gpu_upload_structure_chunk_with_time(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, bool *restored, dc_chunk_time_t *time,
+    char *err_buf, uint32_t err_cap);
 /** Query authored ownership configuration without reading GPU runtime state. */
 bool fr_gpu_structure_checkpoint_required(const dc_gpu_t *gpu);
 /** Explicit diagnostic GPU readback; ordinary frames do not traverse/read the

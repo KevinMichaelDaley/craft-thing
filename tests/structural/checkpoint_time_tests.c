@@ -27,6 +27,11 @@ static void test_reads_timed_checkpoint_channel(void) {
     fclose(file);
     ASSERT_TRUE(read);
     ASSERT_INT_EQ(channels.version, 10u);
+    ASSERT_TRUE(dc_checkpoint_channels_decode_times(&channels, 2u));
+    ASSERT_TRUE(channels.chunk_times[0].known && channels.chunk_times[0].seconds == 0.0);
+    ASSERT_TRUE(channels.chunk_times[1].known && channels.chunk_times[1].seconds == 1.5);
+    free(channels.time_bytes);
+    free(channels.chunk_times);
     PASS();
 }
 

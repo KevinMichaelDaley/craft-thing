@@ -19,8 +19,13 @@ enum {
 bool fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
                                    const dc_chunk_t *chunk, bool *restored,
                                    char *err, uint32_t cap) {
-    return dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, false, restored,
-                                          err, cap);
+    return fr_gpu_upload_structure_chunk_with_time(gpu, slot, chunk, restored, NULL, err, cap);
+}
+
+bool fr_gpu_upload_structure_chunk_with_time(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, bool *restored, dc_chunk_time_t *time,
+    char *err, uint32_t cap) {
+    return dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, false, restored, time, err, cap);
 }
 
 bool fr_gpu_structure_checkpoint_required(const dc_gpu_t *gpu) {
@@ -92,8 +97,17 @@ static void clear_transients(uint32_t *graph) {
         memset(graph + 30000u + i * 20u + 15u, 0, 3 * sizeof(uint32_t));
 }
 
-bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
-                           uint32_t cap) {
+static dc_chunk_time_t resident_chunk_time(const dc_chunk_table_t *table,
+    uint32_t slot, dc_chunk_coord_t coord) {
+    if (!table || slot >= table->capacity) return (dc_chunk_time_t){0};
+    const dc_chunk_slot_t *owner = &table->slots[slot];
+    if (owner->state == DC_SLOT_EMPTY || owner->state == DC_SLOT_LOADING ||
+        owner->coord.x != coord.x || owner->coord.y != coord.y) return (dc_chunk_time_t){0};
+    return owner->time;
+}
+
+bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
+    const dc_chunk_table_t *resident, char *err, uint32_t cap) {
     if (!gpu || !path || !*path)
         return error(err, cap, "Invalid structure snapshot path");
     if(err&&cap) err[0]='\0';
@@ -132,7 +146,6 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     clear_transients(payload->graph);
     dc_structural_store_header_t header = {
         .magic = {'D', 'C', 'S', '1'},
-        .version = fr_gpu_revolute_span(gpu)?9u:8u,
         .body_words = payload->body_count * (sizeof(dc_gpu_body_record_t)/4u),
         .graph_words = DC_STRUCTURAL_RESERVE_WORDS,
         .flags = 1u | (gpu->impact_fracture_enabled ? 2u : 0u) |
@@ -172,13 +185,18 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     dc_chunk_t *chunks = calloc(
         DC_GPU_CHUNK_SLOTS + gpu->checkpoint_chunk_count, sizeof(*chunks));
     dc_chunk_colors_t *colors=calloc(DC_GPU_CHUNK_SLOTS+gpu->checkpoint_chunk_count,sizeof(*colors));
-    okay = okay && chunks != NULL && colors != NULL;
+    bool collect_times = resident || gpu->checkpoint_times;
+    dc_chunk_time_t *times = collect_times ?
+        calloc(DC_GPU_CHUNK_SLOTS + gpu->checkpoint_chunk_count, sizeof(*times)) : NULL;
+    okay = okay && chunks != NULL && colors != NULL && (!collect_times || times);
     if (okay && gpu->checkpoint_chunk_count) {
         memcpy(chunks, gpu->checkpoint_chunks,
                (size_t)gpu->checkpoint_chunk_count * sizeof(*chunks));
         header.reserved[0] = gpu->checkpoint_chunk_count;
         if(gpu->checkpoint_colors) memcpy(colors,gpu->checkpoint_colors,
             (size_t)gpu->checkpoint_chunk_count*sizeof(*colors));
+        if (gpu->checkpoint_times) memcpy(times,gpu->checkpoint_times,
+            (size_t)gpu->checkpoint_chunk_count*sizeof(*times));
     }
     for (unsigned slot = 0; okay && slot < DC_GPU_CHUNK_SLOTS; slot++) {
         const uint32_t *record = data + DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
@@ -190,6 +208,7 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
                dc_gpu_checkpoint_chunk_valid(chunk);
         if (okay) {
             dc_gpu_read_chunk_colors(gpu,slot,colors+header.reserved[0]);
+            if (times) times[header.reserved[0]] = resident_chunk_time(resident,slot,chunk->coord);
             header.reserved[0]++;
         }
     }
@@ -208,6 +227,8 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
         okay=dc_color_records_valid((const float*)(colors+c),DC_CHUNK_CELLS*2);
     dc_checkpoint_channels_t channels={0};
     if(okay) okay=dc_checkpoint_channels_collect(gpu,chunks,header.reserved[0],&channels,err,cap);
+    if(okay) okay=dc_checkpoint_channels_set_times(&channels,times,header.reserved[0]);
+    header.version = channels.version;
     if(okay) okay=fr_gpu_reactive_checkpoint_mass_valid(channels.reactive_length?&channels.reactive:NULL,
         payload,pixels,header.reserved[1],err,cap);
     if (okay)
@@ -237,9 +258,14 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err,
     dc_checkpoint_channels_discard(gpu,&channels);
     free(pixels);
     free(chunks);
+    free(times);
     free(body_colors);free(colors);
     if(!okay&&err&&cap&&err[0]) return false;
     return okay || error(err, cap, "Cannot write validated structure snapshot");
+}
+
+bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
+    return fr_gpu_save_structure_with_chunk_times(gpu, path, NULL, err, cap);
 }
 
 static bool refresh_topology(dc_gpu_t *gpu) {
@@ -340,7 +366,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     bool okay =
         framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= 9 && header.body_words &&
+        header.version <= DC_STRUCTURE_TIME_VERSION && header.body_words &&
         header.body_words%(sizeof(dc_gpu_body_record_t)/4u)==0 &&
         (header.version>=7 || header.body_words==STORE_BODY_WORDS) &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&
@@ -389,6 +415,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     if (fclose(file) != 0)
         okay = false;
     okay = okay && header.checksum == checksum(header, payload, pixels, chunks,body_colors,colors,&channels);
+    okay = okay && dc_checkpoint_channels_decode_times(&channels,header.reserved[0]);
     if (okay && header.version == 4)
         okay = dc_gpu_upgrade_dense_pixels(gpu, payload->bodies, &pixels,
                                            &header.reserved[1]);
@@ -455,7 +482,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
             dc_chunk_t *chunk = gpu->checkpoint_chunks + i;
             if (chunk->coord.x != coord.x || chunk->coord.y != coord.y)
                 continue;
-            okay = dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, false,NULL,err,cap);
+            okay = dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, false,NULL,NULL,err,cap);
             break;
         }
     }

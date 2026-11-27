@@ -192,6 +192,7 @@ struct dc_gpu {
     uint32_t **checkpoint_reactive_handles;
     bool reactive_checkpoint_installing;
     dc_chunk_colors_t *checkpoint_colors;
+    dc_chunk_time_t *checkpoint_times;
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
@@ -442,7 +443,8 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
                               bool seed, char *err, uint32_t cap);
 bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
                                     const dc_chunk_t *chunk, bool seed,
-                                    bool *restored, char *err, uint32_t cap);
+                                    bool *restored, dc_chunk_time_t *time,
+                                    char *err, uint32_t cap);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types);

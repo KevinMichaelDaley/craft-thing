@@ -350,8 +350,10 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
 
 bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
                                     const dc_chunk_t *chunk, bool seed,
-                                    bool *restored, char *err, uint32_t cap) {
+                                    bool *restored, dc_chunk_time_t *time,
+                                    char *err, uint32_t cap) {
     if (restored) *restored = false;
+    if (time) *time = (dc_chunk_time_t){0};
     if (gpu && chunk) {
         for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; i++) {
             const dc_chunk_t *saved = gpu->checkpoint_chunks + i;
@@ -364,6 +366,10 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
                 if (okay) {
                     if(gpu->checkpoint_colors) dc_gpu_write_chunk_colors(gpu,slot,gpu->checkpoint_colors+i);
                     uint32_t last=gpu->checkpoint_chunk_count-1u;
+                    if (gpu->checkpoint_times) {
+                        if (time) *time = gpu->checkpoint_times[i];
+                        gpu->checkpoint_times[i] = gpu->checkpoint_times[last];
+                    }
                     fr_gpu_reactive_checkpoint_remove_pending(gpu,i,last);
                     fr_thermal_checkpoint_remove_pending(gpu,i,last);
                     gpu->checkpoint_chunks[i]=gpu->checkpoint_chunks[last];gpu->checkpoint_chunk_count=last;
@@ -379,7 +385,7 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
 
 bool dc_gpu_upload_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
                          char *err, uint32_t cap) {
-    return dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, true, NULL, err, cap);
+    return dc_gpu_upload_chunk_checkpoint(gpu, slot, chunk, true, NULL, NULL, err, cap);
 }
 
 bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,

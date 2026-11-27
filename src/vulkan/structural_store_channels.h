@@ -3,11 +3,13 @@
 #include "reactive_checkpoint_gpu.h"
 #include "thermal_gpu_internal.h"
 #include "revolute_gpu_internal.h"
+enum { DC_STRUCTURE_TIME_VERSION = 10 };
 /** Cold checkpoint extension transaction; every allocation precedes publish. */
 typedef struct {
-    uint8_t *reactive_bytes,*thermal_bytes,*joint_bytes;
-    size_t reactive_length,thermal_length,joint_length;
+    uint8_t *reactive_bytes,*thermal_bytes,*joint_bytes,*time_bytes;
+    size_t reactive_length,thermal_length,joint_length,time_length;
     uint32_t version;
+    dc_chunk_time_t *chunk_times;
     fr_reactive_archive_t reactive;
     fr_thermal_checkpoint_t thermal;
     struct fr_reactive_gpu *prepared_reactive;
@@ -18,6 +20,11 @@ typedef struct {
 /** Collect and frame immutable logical channels without changing the live world. */
 bool dc_checkpoint_channels_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,uint32_t count,
     dc_checkpoint_channels_t *out,char *err,uint32_t cap);
+/** Add an optional clock record for each chunk in snapshot order. */
+bool dc_checkpoint_channels_set_times(dc_checkpoint_channels_t *channels,
+                                      const dc_chunk_time_t *times,uint32_t count);
+/** Decode checked clock bytes against the number of embedded physical chunks. */
+bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *channels,uint32_t count);
 /** Extend the outer snapshot checksum with canonical lengths and channel bytes. */
 uint64_t dc_checkpoint_channels_hash(uint64_t hash,const dc_checkpoint_channels_t *channels);
 /** Write/read exact framed extension bytes; read owns temporary buffers only. */

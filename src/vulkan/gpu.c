@@ -170,8 +170,10 @@ static void dc_gpu_create_validation_messenger(dc_gpu_t *gpu) {
 }
 
 void dc_gpu_destroy(dc_gpu_t *gpu) {
-    if (gpu) {fr_gpu_reactive_checkpoint_clear_pending(gpu);free(gpu->checkpoint_chunks);}
     if (!gpu) return;
+    fr_gpu_reactive_checkpoint_clear_pending(gpu);
+    free(gpu->checkpoint_chunks);
+    free(gpu->checkpoint_times);
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     if (gpu->device) pipeline_cache_save(gpu);
     dc_gpu_solver_commands_destroy(gpu);

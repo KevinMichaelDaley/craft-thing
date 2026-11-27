@@ -33,10 +33,11 @@ static struct {
     unsigned uploads[DC_GPU_CHUNK_SLOTS];
 } g_frame;
 
-bool __wrap_fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
-    const dc_chunk_t *chunk, bool *restored, char *err, uint32_t cap) {
+bool __wrap_fr_gpu_upload_structure_chunk_with_time(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, bool *restored, dc_chunk_time_t *time, char *err, uint32_t cap) {
     (void)gpu; (void)err; (void)cap;
     *restored = g_frame.restore_first_from_checkpoint && slot == 0;
+    *time = (dc_chunk_time_t){0};
     g_frame.material[slot] = *restored ? DC_MATERIAL_STONE : chunk->cells[0].material;
     ++g_frame.uploads[slot];
     return true;

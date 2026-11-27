@@ -1,7 +1,12 @@
+#include <float.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include "reactive_storage_gpu.h"
 #include "structural_store_channels.h"
+
+_Static_assert(sizeof(double) == 8 && FLT_RADIX == 2 && DBL_MANT_DIG == 53 &&
+               DBL_MAX_EXP == 1024, "Structure clocks use IEEE binary64 seconds");
 
 static void put64(uint8_t *p,uint64_t value) {for(uint32_t i=0;i<8;i++) p[i]=(uint8_t)(value>>(8*i));}
 static uint64_t get64(const uint8_t *p) {uint64_t value=0;for(uint32_t i=0;i<8;i++) value|=(uint64_t)p[i]<<(8*i);return value;}
@@ -20,7 +25,8 @@ void dc_checkpoint_channels_discard(dc_gpu_t *g,dc_checkpoint_channels_t *p) {
         free(p->prepared_handles);
     }
     fr_reactive_archive_release(&p->reactive);fr_thermal_checkpoint_release(&p->thermal);
-    free(p->reactive_bytes);free(p->thermal_bytes);free(p->joint_bytes);memset(p,0,sizeof(*p));
+    free(p->reactive_bytes);free(p->thermal_bytes);free(p->joint_bytes);
+    free(p->time_bytes);free(p->chunk_times);memset(p,0,sizeof(*p));
 }
 bool dc_checkpoint_channels_collect(dc_gpu_t *g,const dc_chunk_t *chunks,uint32_t count,
     dc_checkpoint_channels_t *out,char *err,uint32_t cap) {
@@ -33,35 +39,96 @@ bool dc_checkpoint_channels_collect(dc_gpu_t *g,const dc_chunk_t *chunks,uint32_
     if(!okay) {dc_checkpoint_channels_discard(g,&value);return false;}
     *out=value;return true;
 }
+bool dc_checkpoint_channels_set_times(dc_checkpoint_channels_t *p,
+                                      const dc_chunk_time_t *times,uint32_t count) {
+    if (!times) return true;
+    if (count > DC_GPU_CHUNK_SLOTS * 2u) return false;
+    bool known = false;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!times[i].known) continue;
+        if (!isfinite(times[i].seconds) || times[i].seconds < 0.0) return false;
+        known = true;
+    }
+    if (!known) return true;
+    const size_t length = (size_t)count * sizeof(uint64_t);
+    uint8_t *bytes = malloc(length);
+    if (!bytes) return false;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint64_t bits = UINT64_MAX;
+        if (times[i].known) memcpy(&bits, &times[i].seconds, sizeof(bits));
+        put64(bytes + (size_t)i * sizeof(bits), bits);
+    }
+    p->time_bytes = bytes;
+    p->time_length = length;
+    p->version = DC_STRUCTURE_TIME_VERSION;
+    return true;
+}
+
+bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *p,uint32_t count) {
+    if (p->version < DC_STRUCTURE_TIME_VERSION) return true;
+    if (!count || count > DC_GPU_CHUNK_SLOTS * 2u ||
+        p->time_length != (size_t)count * sizeof(uint64_t)) return false;
+    dc_chunk_time_t *times = calloc(count, sizeof(*times));
+    if (!times) return false;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint64_t bits = get64(p->time_bytes + (size_t)i * sizeof(bits));
+        if (bits == UINT64_MAX) continue;
+        double seconds;
+        memcpy(&seconds, &bits, sizeof(seconds));
+        if (!isfinite(seconds) || seconds < 0.0) { free(times); return false; }
+        times[i] = (dc_chunk_time_t){.seconds = seconds, .known = true};
+    }
+    p->chunk_times = times;
+    return true;
+}
+
+static size_t channel_framing(uint32_t version) {
+    if (version >= DC_STRUCTURE_TIME_VERSION) return 32u;
+    return version >= 9u ? 24u : 16u;
+}
+
+static void channel_lengths(uint8_t lengths[32], const dc_checkpoint_channels_t *p) {
+    put64(lengths, p->reactive_length);
+    put64(lengths + 8, p->thermal_length);
+    put64(lengths + 16, p->joint_length);
+    put64(lengths + 24, p->time_length);
+}
+
 uint64_t dc_checkpoint_channels_hash(uint64_t hash,const dc_checkpoint_channels_t *p) {
-    uint8_t lengths[24];put64(lengths,p->reactive_length);put64(lengths+8,p->thermal_length);put64(lengths+16,p->joint_length);
-    hash=hash_bytes(hash,lengths,p->version>=9?24u:16u);
+    uint8_t lengths[32];channel_lengths(lengths,p);
+    hash=hash_bytes(hash,lengths,channel_framing(p->version));
     hash=hash_bytes(hash,p->reactive_bytes,p->reactive_length);
     hash=hash_bytes(hash,p->thermal_bytes,p->thermal_length);
-    return hash_bytes(hash,p->joint_bytes,p->joint_length);
+    hash=hash_bytes(hash,p->joint_bytes,p->joint_length);
+    return hash_bytes(hash,p->time_bytes,p->time_length);
 }
 bool dc_checkpoint_channels_write(FILE *file,const dc_checkpoint_channels_t *p) {
-    uint8_t lengths[24];put64(lengths,p->reactive_length);put64(lengths+8,p->thermal_length);put64(lengths+16,p->joint_length);
-    size_t framing=p->version>=9?24u:16u;
+    uint8_t lengths[32];channel_lengths(lengths,p);
+    size_t framing=channel_framing(p->version);
     return fwrite(lengths,1,framing,file)==framing&&
         (!p->reactive_length||fwrite(p->reactive_bytes,1,p->reactive_length,file)==p->reactive_length)&&
         (!p->thermal_length||fwrite(p->thermal_bytes,1,p->thermal_length,file)==p->thermal_length)&&
-        (!p->joint_length||fwrite(p->joint_bytes,1,p->joint_length,file)==p->joint_length);
+        (!p->joint_length||fwrite(p->joint_bytes,1,p->joint_length,file)==p->joint_length)&&
+        (!p->time_length||fwrite(p->time_bytes,1,p->time_length,file)==p->time_length);
 }
 bool dc_checkpoint_channels_read(FILE *file,uint32_t version,dc_checkpoint_channels_t *out) {
-    uint8_t lengths[24]={0};size_t framing=version>=9?24u:16u;
+    uint8_t lengths[32]={0};size_t framing=channel_framing(version);
     if(fread(lengths,1,framing,file)!=framing) return false;
     uint64_t a=get64(lengths),b=get64(lengths+8),c=get64(lengths+16);
+    uint64_t t=get64(lengths+24);
     if(a>SIZE_MAX||b>SIZE_MAX||c>SIZE_MAX||a>UINT64_MAX-b||a+b>UINT64_MAX-c||(b&&!a)) return false;
+    if(t>(uint64_t)DC_GPU_CHUNK_SLOTS*2u*sizeof(uint64_t)||a+b+c>UINT64_MAX-t) return false;
     long start=ftell(file);if(start<0||fseek(file,0,SEEK_END)!=0) return false;
-    long end=ftell(file);if(end<start||fseek(file,start,SEEK_SET)!=0||(uint64_t)(end-start)!=a+b+c) return false;
-    dc_checkpoint_channels_t value={.version=version,.reactive_length=(size_t)a,.thermal_length=(size_t)b,.joint_length=(size_t)c};
+    long end=ftell(file);if(end<start||fseek(file,start,SEEK_SET)!=0||(uint64_t)(end-start)!=a+b+c+t) return false;
+    dc_checkpoint_channels_t value={.version=version,.reactive_length=(size_t)a,.thermal_length=(size_t)b,.joint_length=(size_t)c,.time_length=(size_t)t};
     value.reactive_bytes=a?malloc((size_t)a):NULL;value.thermal_bytes=b?malloc((size_t)b):NULL;
     value.joint_bytes=c?malloc((size_t)c):NULL;
+    value.time_bytes=t?malloc((size_t)t):NULL;
     bool okay=(!a||(value.reactive_bytes&&fread(value.reactive_bytes,1,(size_t)a,file)==a))&&
         (!b||(value.thermal_bytes&&fread(value.thermal_bytes,1,(size_t)b,file)==b))&&
-        (!c||(value.joint_bytes&&fread(value.joint_bytes,1,(size_t)c,file)==c));
-    if(!okay) {free(value.reactive_bytes);free(value.thermal_bytes);free(value.joint_bytes);return false;}
+        (!c||(value.joint_bytes&&fread(value.joint_bytes,1,(size_t)c,file)==c))&&
+        (!t||(value.time_bytes&&fread(value.time_bytes,1,(size_t)t,file)==t));
+    if(!okay) {free(value.reactive_bytes);free(value.thermal_bytes);free(value.joint_bytes);free(value.time_bytes);return false;}
     *out=value;return true;
 }
 bool dc_checkpoint_channels_prepare(dc_gpu_t *g,dc_checkpoint_channels_t *p,
@@ -81,8 +148,9 @@ bool dc_checkpoint_channels_prepare(dc_gpu_t *g,dc_checkpoint_channels_t *p,
 void dc_checkpoint_channels_publish(dc_gpu_t *g,dc_checkpoint_channels_t *p,
     dc_chunk_t *chunks,dc_chunk_colors_t *colors,uint32_t count) {
     fr_gpu_reactive_checkpoint_clear_pending(g);
-    free(g->checkpoint_chunks);free(g->checkpoint_colors);
+    free(g->checkpoint_chunks);free(g->checkpoint_colors);free(g->checkpoint_times);
     g->checkpoint_chunks=chunks;g->checkpoint_colors=colors;g->checkpoint_chunk_count=count;
+    g->checkpoint_times=p->chunk_times;p->chunk_times=NULL;
     fr_gpu_reactive_checkpoint_publish(g,p->prepared_reactive);p->prepared_reactive=NULL;
     fr_thermal_checkpoint_publish(g,p->prepared_thermal);p->prepared_thermal=NULL;
     fr_gpu_revolute_publish(g,p->prepared_joints);p->prepared_joints=NULL;
