@@ -102,7 +102,8 @@ dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *vie
     dc_chunk_slot_t *resident = &view->table.slots[resident_slot];
     dc_level_offscreen_handoff_t *handoff = dc_level_offscreen_lookup(view, exchange->offscreen);
     if (resident->state != DC_SLOT_ACTIVE || resident->pinned ||
-        resident->generation != exchange->resident_generation || !handoff || !handoff->admitted ||
+        resident->generation != exchange->resident_generation || dc_gpu_liquid_owner_held(view->gpu) ||
+        !handoff || !handoff->admitted || dc_gpu_liquid_owner_held(handoff->workspace->gpu) ||
         handoff->generation != exchange->offscreen_generation || handoff->workspace->failed ||
         handoff->workspace->held_writes || !dc_offscreen_page_at(handoff->workspace, exchange->offscreen,
             &offscreen_slot) || handoff->workspace->generations[offscreen_slot] != handoff->generation) {
