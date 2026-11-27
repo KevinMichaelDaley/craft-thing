@@ -1,6 +1,6 @@
 ---
 id: ctowp-v2rf
-status: in_progress
+status: closed
 deps: [ctowt-o11u]
 links: []
 created: 2026-11-27T06:48:09Z
@@ -20,3 +20,9 @@ Record the pair's private native projection and transport, preflight the entire 
 
 Both live owners agree with monolithic water stock, velocity, pigment and heat. A bad cell leaves all live fields and output plan intact. A lost submission acknowledgement fences both owners until the retained receipt is reconciled.
 
+
+## Notes
+
+**2026-11-27T07:05:09Z**
+
+Both Vulkan configurations publish exact native projected water, pigment, heat, and velocity for the sealed pair. One invalid color rejects the full basin. Loss before submission keeps both owners fenced, lost acknowledgement resolves from either peer, and a surviving owner stays fenced after peer destruction. Four legacy seam cases pass with the shared receipt implementation. All targeted runs used synchronization validation.

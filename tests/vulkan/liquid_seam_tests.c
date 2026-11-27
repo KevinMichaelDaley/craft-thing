@@ -6,6 +6,7 @@
 #include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/renderer/gpu.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass, g_fail;
 static char g_err[256];
@@ -33,6 +34,8 @@ typedef struct {
     fr_bulk_phase_chunk_t *bulk_a, *bulk_b;
 } seam_fixture_t;
 
+static void destroy_fixture(seam_fixture_t *f);
+
 static bool init_fixture(seam_fixture_t *f, dc_liquid_seam_axis_t axis) {
     static const char shader[] = "build/shaders/pattern.comp.spv";
     g_err[0] = '\0';
@@ -40,7 +43,10 @@ static bool init_fixture(seam_fixture_t *f, dc_liquid_seam_axis_t axis) {
     f->b = calloc(1, sizeof(*f->b));
     f->bulk_a = calloc(1, sizeof(*f->bulk_a));
     f->bulk_b = calloc(1, sizeof(*f->bulk_b));
-    if (!f->a || !f->b || !f->bulk_a || !f->bulk_b) return false;
+    if (!f->a || !f->b || !f->bulk_a || !f->bulk_b) {
+        destroy_fixture(f);
+        return false;
+    }
     f->first.tile_x = 1u;
     f->second.tile_y = 1u;
     f->second.slot = 2u;
@@ -50,10 +56,16 @@ static bool init_fixture(seam_fixture_t *f, dc_liquid_seam_axis_t axis) {
     f->first.coord = f->a->coord;
     f->second.coord = f->b->coord;
     const dc_chunk_coord_t other_origin = {f->b->coord.x, f->b->coord.y - 1};
-    return dc_gpu_create(&f->first.gpu, 128, 64, shader, g_err, sizeof(g_err)) &&
-        dc_gpu_create_shared(&f->second.gpu, f->first.gpu, 64, 192, shader, g_err, sizeof(g_err)) &&
+    dc_gpu_t device = {0};
+    const bool ready = dc_gpu_initialize_device(&device, 3u * DC_CHUNK_CELLS * sizeof(dc_cell_t),
+                                                 0, 0, 0, g_err, sizeof(g_err)) &&
+        dc_gpu_create_shared(&f->first.gpu, &device, 128, 64, shader, g_err, sizeof(g_err)) &&
+        dc_gpu_create_shared(&f->second.gpu, &device, 64, 192, shader, g_err, sizeof(g_err)) &&
         dc_gpu_set_body_origin(f->first.gpu, origin, g_err, sizeof(g_err)) &&
         dc_gpu_set_body_origin(f->second.gpu, other_origin, g_err, sizeof(g_err));
+    dc_gpu_release_device(&device);
+    if (!ready) destroy_fixture(f);
+    return ready;
 }
 
 static bool seed_endpoint(dc_liquid_seam_endpoint_t ep, const dc_chunk_t *chunk,
@@ -249,6 +261,10 @@ static void test_lost_submission_receipt_is_distinct_from_a_rejected_plan(void) 
     ASSERT_EQ(dc_gpu_commit_liquid_seam(f.first, f.second, DC_LIQUID_SEAM_X, flux,
         g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
     ASSERT_TRUE(!g_lose_receipt);
+    ASSERT_TRUE(dc_gpu_liquid_seam_pending(f.first.gpu) && dc_gpu_liquid_seam_pending(f.second.gpu));
+    ASSERT_EQ(dc_gpu_resolve_liquid_seam(f.second.gpu, f.first.gpu, g_err, sizeof(g_err)),
+        DC_LIQUID_SEAM_COMMITTED);
+    ASSERT_TRUE(!dc_gpu_liquid_seam_pending(f.first.gpu) && !dc_gpu_liquid_seam_pending(f.second.gpu));
     ASSERT_TRUE(download_endpoint(f.first, f.a, f.bulk_a) && download_endpoint(f.second, f.b, f.bulk_b));
     ASSERT_EQ(f.a->cells[from].fluid_mass, 7000u);
     ASSERT_EQ(f.b->cells[to].fluid_mass, 5000u);

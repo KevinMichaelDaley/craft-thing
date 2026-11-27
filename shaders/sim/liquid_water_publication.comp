@@ -90,6 +90,7 @@ void main() {
     if (!valid) atomicOr(invalid, 1u);
     atomicAdd(stock_before, before);
     atomicAdd(stock_after, after);
+    /* A single workgroup finishes the entire preflight before any owner stores. */
     barrier();
 
     if (invalid != 0u || stock_before != stock_after) {
@@ -117,6 +118,7 @@ void main() {
             if (params.thermal != 0u) first_heat[live] = scratch_heat[atlas];
         }
     }
+    /* The completion receipt follows every lane's live storage writes. */
     memoryBarrierBuffer();
     barrier();
     if (lane == 0u) receipt = DC_LIQUID_RECEIPT_COMMITTED;

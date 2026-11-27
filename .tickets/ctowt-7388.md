@@ -20,3 +20,9 @@ Bind both current generations at the start of the same transport interval. Valid
 
 The live split and monolithic water basins conserve stock and the carried state across repeated camera admission. A stale generation, rejected batch, or missing receipt cannot publish a partial write set or advance only one owner.
 
+
+## Notes
+
+**2026-11-27T07:05:09Z**
+
+The atomic GPU publication operation is available after settled rigid displacement. The level still needs to reserve the connected owner cohort at one interval start, provide the correct native pre-transport and post-transport phases, and publish its completed timestamps through the staged save. The existing explicit face-transfer entry point binds owners at a completed interval and cannot substitute for this schedule.
