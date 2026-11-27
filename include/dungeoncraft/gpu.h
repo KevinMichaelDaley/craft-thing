@@ -127,6 +127,13 @@ typedef struct {
 bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err_buf, uint32_t err_cap);
 
+/** Create an independent headless simulation context on an existing Vulkan device.
+ * Either context can be destroyed first. Serialize access to their shared queue.
+ */
+bool dc_gpu_create_shared(dc_gpu_t **out, const dc_gpu_t *parent,
+                          uint32_t width, uint32_t height,
+                          const char *shader_path, char *err_buf, uint32_t err_cap);
+
 /** Create the same compute context with an SDL Vulkan window for presentation. */
 bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
                           uint32_t window_width, uint32_t window_height,

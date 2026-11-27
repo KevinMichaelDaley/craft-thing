@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <stdatomic.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,12 @@
 #include "thermal_gpu_internal.h"
 #include "gas_gpu_internal.h"
 #include "reactive_checkpoint_gpu.h"
+
+struct dc_gpu_device_lifetime {
+    VkDebugUtilsMessengerEXT validation_messenger;
+    atomic_uint validation_errors;
+    uint32_t references;
+};
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
@@ -145,14 +152,15 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL dc_gpu_validation_callback(
     const VkDebugUtilsMessengerCallbackDataEXT *data, void *user) {
     (void)types;
     (void)data;
-    dc_gpu_t *gpu = user;
-    if (gpu && severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-        ++gpu->validation_errors;
+    struct dc_gpu_device_lifetime *lifetime = user;
+    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        atomic_fetch_add_explicit(&lifetime->validation_errors, 1u, memory_order_relaxed);
     return VK_FALSE;
 }
 
 uint32_t dc_gpu_validation_errors(const dc_gpu_t *gpu) {
-    return gpu ? gpu->validation_errors : 0u;
+    return gpu && gpu->device_lifetime ?
+        atomic_load_explicit(&gpu->device_lifetime->validation_errors, memory_order_relaxed) : 0u;
 }
 
 static void dc_gpu_create_validation_messenger(dc_gpu_t *gpu) {
@@ -165,8 +173,25 @@ static void dc_gpu_create_validation_messenger(dc_gpu_t *gpu) {
         .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
         .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
         .pfnUserCallback = dc_gpu_validation_callback,
-        .pUserData = gpu};
-    create(gpu->instance, &messenger, NULL, &gpu->validation_messenger);
+        .pUserData = gpu->device_lifetime};
+    create(gpu->instance, &messenger, NULL, &gpu->device_lifetime->validation_messenger);
+}
+
+static void release_device(dc_gpu_t *gpu) {
+    struct dc_gpu_device_lifetime *lifetime = gpu->device_lifetime;
+    if (!lifetime || --lifetime->references != 0u) return;
+    if (gpu->device) {
+        pipeline_cache_save(gpu);
+        vkDestroyDevice(gpu->device, NULL);
+    }
+    if (lifetime->validation_messenger) {
+        PFN_vkDestroyDebugUtilsMessengerEXT destroy =
+            (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+                gpu->instance, "vkDestroyDebugUtilsMessengerEXT");
+        if (destroy) destroy(gpu->instance, lifetime->validation_messenger, NULL);
+    }
+    if (gpu->instance) vkDestroyInstance(gpu->instance, NULL);
+    free(lifetime);
 }
 
 void dc_gpu_destroy(dc_gpu_t *gpu) {
@@ -175,7 +200,6 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     free(gpu->checkpoint_chunks);
     free(gpu->checkpoint_times);
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
-    if (gpu->device) pipeline_cache_save(gpu);
     dc_gpu_solver_commands_destroy(gpu);
     if (gpu->device) fr_thermal_gpu_destroy(gpu);
     if (gpu->device) fr_gas_gpu_destroy(gpu);
@@ -208,15 +232,8 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->set_layout) vkDestroyDescriptorSetLayout(gpu->device, gpu->set_layout, NULL);
     if (gpu->cells) vkDestroyBuffer(gpu->device, gpu->cells, NULL);
     if (gpu->memory) vkFreeMemory(gpu->device, gpu->memory, NULL);
-    if (gpu->device) vkDestroyDevice(gpu->device, NULL);
     if (gpu->surface) vkDestroySurfaceKHR(gpu->instance, gpu->surface, NULL);
-    if (gpu->validation_messenger) {
-        PFN_vkDestroyDebugUtilsMessengerEXT destroy =
-            (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-                gpu->instance, "vkDestroyDebugUtilsMessengerEXT");
-        if (destroy) destroy(gpu->instance, gpu->validation_messenger, NULL);
-    }
-    if (gpu->instance) vkDestroyInstance(gpu->instance, NULL);
+    release_device(gpu);
     if (gpu->window) { SDL_DestroyWindow(gpu->window); SDL_QuitSubSystem(SDL_INIT_VIDEO); }
     free(gpu);
 }
@@ -329,32 +346,19 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
     return draw_ready;
 }
 
-static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
-                       uint32_t window_width, uint32_t window_height,
-                       const char *shader_path, char *err, uint32_t cap) {
-    Uint64 started=SDL_GetTicks64();
-    if (out) *out = NULL;
-    if (!out || !width || !height || !shader_path ||
-        (uint64_t)width * height > UINT32_MAX / sizeof(uint32_t))
-        return error(err, cap, "Invalid GPU grid dimensions or arguments");
-    dc_gpu_t *gpu = calloc(1, sizeof(*gpu));
-    if (!gpu) return error(err, cap, "Out of memory creating GPU context");
-    const char *boundary_cache=getenv("DC_CONTACT_BODY_CACHE");
-    gpu->contact_boundary_cache_enabled=boundary_cache&&strcmp(boundary_cache,"1")==0;
-    gpu->width = width; gpu->height = height;
-    gpu->pixel_pool_words=DC_GPU_INITIAL_PIXEL_POOL_WORDS;
-    gpu->view_width = width; gpu->view_height = height;
-    gpu->display_zoom = 1;
-    gpu->fluid_interval = 1;
-    gpu->fluid_step_scale = 1.0f;
-    for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
+static bool initialize_device(dc_gpu_t *gpu, VkDeviceSize bytes, uint32_t window_width,
+                              uint32_t window_height, Uint64 started, char *err, uint32_t cap) {
+    gpu->device_lifetime = calloc(1, sizeof(*gpu->device_lifetime));
+    if (!gpu->device_lifetime) return error(err, cap, "Out of memory creating Vulkan device ownership");
+    gpu->device_lifetime->references = 1u;
+    atomic_init(&gpu->device_lifetime->validation_errors, 0u);
     if (window_width && window_height) {
         const char *wayland=getenv("WAYLAND_DISPLAY");
         if(wayland&&*wayland&&!SDL_GetHint(SDL_HINT_VIDEODRIVER)&&
            !(SDL_WasInit(SDL_INIT_VIDEO)&SDL_INIT_VIDEO))
             SDL_SetHint(SDL_HINT_VIDEODRIVER,"wayland");
         if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
-            error(err, cap, SDL_GetError()); goto fail;
+            return error(err, cap, SDL_GetError());
         }
         uint32_t flags = SDL_WINDOW_VULKAN;
         const char *fullscreen=getenv("DC_FULLSCREEN");
@@ -364,7 +368,11 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
 #endif
         gpu->window = SDL_CreateWindow("Dungeoncraft GPU testbed", SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED, (int)window_width, (int)window_height, flags);
-        if (!gpu->window) { error(err, cap, SDL_GetError()); SDL_QuitSubSystem(SDL_INIT_VIDEO); goto fail; }
+        if (!gpu->window) {
+            error(err, cap, SDL_GetError());
+            SDL_QuitSubSystem(SDL_INIT_VIDEO);
+            return false;
+        }
         gpu_startup_trace("SDL window",started);
     }
     VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -375,11 +383,12 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
     const char **extensions = NULL;
     if (gpu->window) {
         if (!SDL_Vulkan_GetInstanceExtensions(gpu->window, &extension_count, NULL)) {
-            error(err, cap, SDL_GetError()); goto fail;
+            return error(err, cap, SDL_GetError());
         }
         extensions = calloc(extension_count, sizeof(*extensions));
         if (!extensions || !SDL_Vulkan_GetInstanceExtensions(gpu->window, &extension_count, extensions)) {
-            free(extensions); error(err, cap, "Cannot query SDL Vulkan extensions"); goto fail;
+            free(extensions);
+            return error(err, cap, "Cannot query SDL Vulkan extensions");
         }
         instance_info.enabledExtensionCount = extension_count;
         instance_info.ppEnabledExtensionNames = extensions;
@@ -395,33 +404,37 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         uint32_t layer_count = 0;
         vkEnumerateInstanceLayerProperties(&layer_count, NULL);
         VkLayerProperties *layers = calloc(layer_count, sizeof(*layers));
-        if (!layers) { free(extensions); error(err, cap, "Cannot list Vulkan validation layers"); goto fail; }
+        if (!layers) {
+            free(extensions);
+            return error(err, cap, "Cannot list Vulkan validation layers");
+        }
         vkEnumerateInstanceLayerProperties(&layer_count, layers);
         bool present = false;
         for (uint32_t i = 0; i < layer_count; ++i)
             if (strcmp(layers[i].layerName, layer) == 0) present = true;
         free(layers);
-        if (!present) { free(extensions); error(err, cap, "VK_LAYER_KHRONOS_validation is not installed"); goto fail; }
+        if (!present) {
+            free(extensions);
+            return error(err, cap, "VK_LAYER_KHRONOS_validation is not installed");
+        }
         instance_info.enabledLayerCount = 1;
         instance_info.ppEnabledLayerNames = &layer;
     }
     VkResult instance_result = vkCreateInstance(&instance_info, NULL, &gpu->instance);
     free(extensions);
     if (instance_result != VK_SUCCESS) {
-        error(err, cap, "Cannot create Vulkan 1.3 instance"); goto fail;
+        return error(err, cap, "Cannot create Vulkan 1.3 instance");
     }
     if (validation && validation[0] == '1') dc_gpu_create_validation_messenger(gpu);
     gpu_startup_trace("Vulkan instance",started);
     if (gpu->window && !SDL_Vulkan_CreateSurface(gpu->window, gpu->instance, &gpu->surface)) {
-        error(err, cap, SDL_GetError()); goto fail;
+        return error(err, cap, SDL_GetError());
     }
-    VkDeviceSize bytes = (VkDeviceSize)width * height * 4;
-    VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
-    if (!dc_gpu_pick_device(gpu, bytes > atlas_bytes ? bytes : atlas_bytes, err, cap)) goto fail;
+    if (!dc_gpu_pick_device(gpu, bytes, err, cap)) return false;
     printf("Vulkan device: %s (type %d vendor %04x)\n", gpu->device_name,
            gpu->device_type, gpu->vendor_id);
     dc_gpu_body_features_t body_features;
-    if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) goto fail;
+    if (!dc_gpu_body_features_query(gpu->physical, &body_features, err, cap)) return false;
     const char *latency_setting=getenv("DC_LOW_LATENCY_PRESENT");
     bool latest_ready_available=gpu->window&&gpu_supports_latest_ready(gpu->physical);
     gpu->low_latency_present=dc_present_low_latency_requested(latency_setting,latest_ready_available);
@@ -449,11 +462,65 @@ static bool create_gpu(dc_gpu_t **out, uint32_t width, uint32_t height,
         device_info.ppEnabledExtensionNames = swap_extensions;
     }
     if (vkCreateDevice(gpu->physical, &device_info, NULL, &gpu->device) != VK_SUCCESS) {
-        error(err, cap, "Cannot create Vulkan compute device"); goto fail;
+        return error(err, cap, "Cannot create Vulkan compute device");
     }
     vkGetDeviceQueue(gpu->device, gpu->family, 0, &gpu->queue);
     pipeline_cache_load(gpu);
     gpu_startup_trace("Vulkan device",started);
+    return true;
+}
+
+static bool inherit_device(dc_gpu_t *gpu, const dc_gpu_t *parent, VkDeviceSize bytes,
+                           char *err, uint32_t cap) {
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(parent->physical, &properties);
+    if (bytes > properties.limits.maxStorageBufferRange)
+        return error(err, cap, "Shared Vulkan device does not support this grid");
+    struct dc_gpu_device_lifetime *lifetime = parent->device_lifetime;
+    if (lifetime->references == UINT32_MAX)
+        return error(err, cap, "Too many shared Vulkan contexts");
+
+    ++lifetime->references;
+    gpu->device_lifetime = lifetime;
+    gpu->instance = parent->instance;
+    gpu->physical = parent->physical;
+    gpu->device = parent->device;
+    gpu->queue = parent->queue;
+    gpu->family = parent->family;
+    gpu->vendor_id = parent->vendor_id;
+    gpu->device_type = parent->device_type;
+    memcpy(gpu->device_name, parent->device_name, sizeof(gpu->device_name));
+    gpu->pipeline_cache = parent->pipeline_cache;
+    gpu->pipeline_cache_loaded = parent->pipeline_cache_loaded;
+    memcpy(gpu->pipeline_cache_path, parent->pipeline_cache_path, sizeof(gpu->pipeline_cache_path));
+    return true;
+}
+
+static bool create_gpu(dc_gpu_t **out, const dc_gpu_t *parent, uint32_t width, uint32_t height,
+                       uint32_t window_width, uint32_t window_height,
+                       const char *shader_path, char *err, uint32_t cap) {
+    Uint64 started = SDL_GetTicks64();
+    if (out) *out = NULL;
+    if (!out || !width || !height || !shader_path ||
+        (uint64_t)width * height > UINT32_MAX / sizeof(uint32_t))
+        return error(err, cap, "Invalid GPU grid dimensions or arguments");
+    dc_gpu_t *gpu = calloc(1, sizeof(*gpu));
+    if (!gpu) return error(err, cap, "Out of memory creating GPU context");
+    const char *boundary_cache = getenv("DC_CONTACT_BODY_CACHE");
+    gpu->contact_boundary_cache_enabled = boundary_cache && strcmp(boundary_cache, "1") == 0;
+    gpu->width = width; gpu->height = height;
+    gpu->pixel_pool_words = DC_GPU_INITIAL_PIXEL_POOL_WORDS;
+    gpu->view_width = width; gpu->view_height = height;
+    gpu->display_zoom = 1;
+    gpu->fluid_interval = 1;
+    gpu->fluid_step_scale = 1.0f;
+    for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
+    VkDeviceSize bytes = (VkDeviceSize)width * height * sizeof(uint32_t);
+    VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
+    VkDeviceSize required = bytes > atlas_bytes ? bytes : atlas_bytes;
+    bool initialized = parent ? inherit_device(gpu, parent, required, err, cap)
+                              : initialize_device(gpu, required, window_width, window_height, started, err, cap);
+    if (!initialized) goto fail;
     if (!make_cells(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
         !dc_gpu_rigid_buffers_init(gpu, err, cap) ||
         !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
@@ -497,7 +564,16 @@ fail:
 
 bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err, uint32_t cap) {
-    return create_gpu(out, width, height, 0, 0, shader_path, err, cap);
+    return create_gpu(out, NULL, width, height, 0, 0, shader_path, err, cap);
+}
+
+bool dc_gpu_create_shared(dc_gpu_t **out, const dc_gpu_t *parent, uint32_t width, uint32_t height,
+                          const char *shader_path, char *err, uint32_t cap) {
+    if (!parent || !parent->device || !parent->device_lifetime) {
+        if (out) *out = NULL;
+        return error(err, cap, "Invalid shared Vulkan parent");
+    }
+    return create_gpu(out, parent, width, height, 0, 0, shader_path, err, cap);
 }
 
 bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
@@ -505,7 +581,7 @@ bool dc_gpu_create_window(dc_gpu_t **out, uint32_t width, uint32_t height,
                           const char *shader_path, char *err, uint32_t cap) {
     if (!window_width || !window_height)
         return error(err, cap, "Invalid Vulkan window dimensions");
-    return create_gpu(out, width, height, window_width, window_height, shader_path, err, cap);
+    return create_gpu(out, NULL, width, height, window_width, window_height, shader_path, err, cap);
 }
 
 bool dc_gpu_set_viewport(dc_gpu_t *gpu, uint32_t x, uint32_t y,

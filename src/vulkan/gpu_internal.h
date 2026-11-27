@@ -68,8 +68,7 @@ struct dc_gpu {
     struct fr_gas_gpu *gas;
     struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
-    VkDebugUtilsMessengerEXT validation_messenger;
-    uint32_t validation_errors;
+    struct dc_gpu_device_lifetime *device_lifetime;
     char device_name[256];
     uint32_t vendor_id;
     int32_t device_type;

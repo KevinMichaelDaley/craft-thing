@@ -18,17 +18,9 @@ static int g_fail = 0;
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() g_pass++
 
-#if defined(__GNUC__)
-extern bool dc_gpu_create_shared(dc_gpu_t **out, const dc_gpu_t *parent,
-                                 uint32_t width, uint32_t height,
-                                 const char *shader_path, char *err, uint32_t cap)
-    __attribute__((weak));
-#endif
-
 static const char pattern_shader[] = "build/shaders/pattern.comp.spv";
 
 static void test_shared_device_contexts_keep_independent_simulation_state(void) {
-    ASSERT_TRUE(dc_gpu_create_shared != NULL);
     char err[256] = {0};
     dc_gpu_t *parent = NULL, *workspace = NULL;
     ASSERT_TRUE(dc_gpu_create(&parent, 4, 4, pattern_shader, err, sizeof(err)));
@@ -60,7 +52,6 @@ static void test_shared_device_contexts_keep_independent_simulation_state(void) 
 }
 
 static void test_shared_device_survives_destruction_of_parent(void) {
-    ASSERT_TRUE(dc_gpu_create_shared != NULL);
     char err[256] = {0};
     dc_gpu_t *parent = NULL, *workspace = NULL;
     ASSERT_TRUE(dc_gpu_create(&parent, 4, 4, pattern_shader, err, sizeof(err)));
@@ -78,7 +69,6 @@ static void test_shared_device_survives_destruction_of_parent(void) {
 }
 
 static void test_shared_device_failed_construction_preserves_parent(void) {
-    ASSERT_TRUE(dc_gpu_create_shared != NULL);
     char err[256] = {0};
     dc_gpu_t *parent = NULL, *workspace = NULL;
     ASSERT_TRUE(!dc_gpu_create_shared(&workspace, NULL, 4, 4, pattern_shader, err, sizeof(err)));
