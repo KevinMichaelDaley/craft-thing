@@ -223,6 +223,43 @@ static void test_granular_tick_falls_and_reports_gpu_time(void) {
     PASS();
 }
 
+static void test_grain_replay_matches_equal_world_time(void) {
+    char err[256] = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    unsigned cell = 10u * DC_CHUNK_SIDE + 10u;
+    chunk->cells[cell].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    chunk->particles[cell].vy_fp = DC_FLUID_FULL;
+    dc_mpm_particle_t seed = chunk->particles[cell], samples[2] = {0};
+    dc_gpu_t *gpu[2] = {0};
+    for (unsigned i = 0; i < 2; ++i) {
+        ASSERT_TRUE(dc_gpu_create(&gpu[i], 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu[i], 0, chunk, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_page(gpu[i], 0, 0, 0, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu[i], 1.f / 60.f));
+        ASSERT_TRUE(dc_gpu_tick_step(gpu[i], err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_gpu_tick_step(gpu[0], err, sizeof(err)) && dc_gpu_tick_step(gpu[0], err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu[1], 2.f / 60.f) && dc_gpu_tick_step(gpu[1], err, sizeof(err)));
+    for (unsigned i = 0; i < 2; ++i) {
+        ASSERT_TRUE(dc_gpu_download_chunk(gpu[i], 0, chunk, err, sizeof(err)));
+        ASSERT_EQ(chunk->particle_count, 1u);
+        for (unsigned j = 0; j < DC_MPM_PARTICLES_PER_CHUNK; ++j)
+            if (chunk->particles[j].mass_fp) samples[i] = chunk->particles[j];
+        dc_gpu_destroy(gpu[i]);
+        ASSERT_EQ(samples[i].id_lo, seed.id_lo);
+        ASSERT_EQ(samples[i].id_hi, seed.id_hi);
+        ASSERT_EQ(samples[i].mass_fp, seed.mass_fp);
+    }
+    free(chunk);
+    printf("Equal-time grain y %d/%d, vy %d/%d\n", samples[0].y_fp, samples[1].y_fp,
+           samples[0].vy_fp, samples[1].vy_fp);
+    ASSERT_EQ(samples[0].y_fp, samples[1].y_fp);
+    ASSERT_EQ(samples[0].vy_fp, samples[1].vy_fp);
+    PASS();
+}
+
 static void test_granular_motion_crosses_seam_with_stable_mass(void) {
     char err[256] = {0};
     dc_chunk_t *left = calloc(1, sizeof(*left));
@@ -607,7 +644,7 @@ static void test_closed_wet_grain_momentum_balance(void) {
     PASS();
 }
 
-static void test_dirt_binds_small_water_dose_without_losing_mass(void) {
+static void check_dirt_absorption(bool half_tick) {
     char err[256] = {0};
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk != NULL);
@@ -624,6 +661,7 @@ static void test_dirt_binds_small_water_dose_without_losing_mass(void) {
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    if (half_tick) ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.f / 120.f));
     ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_EQ(chunk->particle_count, 1u);
@@ -633,11 +671,20 @@ static void test_dirt_binds_small_water_dose_without_losing_mass(void) {
             moisture = chunk->particles[i].flags & DC_MPM_MOISTURE_MASK;
             ASSERT_TRUE((chunk->particles[i].flags & DC_MPM_FRAGMENT_FLAG) != 0u);
         }
-    ASSERT_TRUE(moisture >= DC_FLUID_FULL / 32u);
+    if (half_tick) ASSERT_EQ(moisture, DC_FLUID_FULL / 32u);
+    else ASSERT_TRUE(moisture >= DC_FLUID_FULL / 32u);
     ASSERT_EQ(chunk->cells[source].fluid_mass + moisture, DC_FLUID_FULL / 16u);
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();
+}
+
+static void test_dirt_binds_small_water_dose_without_losing_mass(void) {
+    check_dirt_absorption(false);
+}
+
+static void test_half_tick_absorbs_half_the_water_dose(void) {
+    check_dirt_absorption(true);
 }
 
 static void test_water_brush_keeps_dirt_particle(void) {
@@ -1113,7 +1160,12 @@ static void test_mixed_column_sifts_small_grains_downward(void) {
     PASS();
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "--elapsed")) {
+        RUN(test_grain_replay_matches_equal_world_time);
+        RUN(test_half_tick_absorbs_half_the_water_dose);
+        return g_fail != 0;
+    }
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
            DC_MPM_PARTICLES_PER_CHUNK, DC_CHUNK_CELLS);
     RUN(test_generated_sand_has_stable_gpu_particles);
@@ -1121,6 +1173,7 @@ int main(void) {
     RUN(test_granular_paint_reuses_and_erases_primary_slot);
     RUN(test_upload_rejects_inconsistent_particle_count);
     RUN(test_granular_tick_falls_and_reports_gpu_time);
+    RUN(test_grain_replay_matches_equal_world_time);
     RUN(test_granular_motion_crosses_seam_with_stable_mass);
     RUN(test_mixed_pile_conserves_mass_and_replays);
     RUN(test_grain_collides_with_gpu_body);
@@ -1131,6 +1184,7 @@ int main(void) {
     RUN(test_coupled_flow_crosses_chunk_seam);
     RUN(test_closed_wet_grain_momentum_balance);
     RUN(test_dirt_binds_small_water_dose_without_losing_mass);
+    RUN(test_half_tick_absorbs_half_the_water_dose);
     RUN(test_water_brush_keeps_dirt_particle);
     RUN(test_drying_returns_bound_water_to_eulerian_cell);
     RUN(test_coupled_materials_conserve_water_across_seam_and_stream);
