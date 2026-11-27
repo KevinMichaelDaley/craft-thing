@@ -61,7 +61,7 @@ bool dc_camera_bond_offer(dc_level_view_t *view, const dc_stream_result_t *sourc
     unsigned i = page_index(&bond->group, source->coord);
     if (camera->phase != DC_CAMERA_OFFSCREEN_SAVING || i == bond->group.page_count) return true;
     if (!dc_camera_bond_page_sealed(&bond->group, source)) {
-        dc_camera_offscreen_discard(view);
+        dc_camera_offscreen_release(&view->camera_offscreen);
         return true;
     }
     bond->receipts[i].owner = owner;
@@ -87,7 +87,7 @@ static void release_source(dc_level_view_t *view, bool retry) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
     dc_offscreen_release_workspace_leases(view, camera->workspace);
     if (retry) dc_camera_offscreen_retry(camera);
-    else dc_camera_offscreen_discard(view);
+    else dc_camera_offscreen_release(&view->camera_offscreen);
 }
 
 static bool return_group(dc_level_view_t *view, char *err, uint32_t cap) {
@@ -120,7 +120,7 @@ bool dc_camera_bond_service(dc_level_view_t *view, bool closing, char *err, uint
     if (camera->phase == DC_CAMERA_OFFSCREEN_SAVING) {
         for (unsigned i = 0; i < bond->group.page_count; ++i)
             if (!bond->receipts[i].save_generation) {
-                dc_camera_offscreen_discard(view);
+                dc_camera_offscreen_release(&view->camera_offscreen);
                 break;
             }
         return true;

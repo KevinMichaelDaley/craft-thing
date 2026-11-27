@@ -4,6 +4,8 @@
 #include "dungeoncraft/stream.h"
 #include "level.h"
 
+enum { DC_CAMERA_WORKSPACE_LIMIT = 16u };
+
 typedef enum {
     DC_CAMERA_OFFSCREEN_IDLE,
     DC_CAMERA_OFFSCREEN_SAVING,
@@ -38,7 +40,9 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
 void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *result);
 /** Step an isolated owner or commit its confirmed state before camera return or shutdown. */
 bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap);
-/** Release the camera-owned workspace after the level has disposed of its leases. */
+/** Release a single camera workspace after detaching its leases. */
+void dc_camera_offscreen_release(dc_camera_offscreen_t *camera);
+/** Release all camera workspaces after detaching the level leases. */
 void dc_camera_offscreen_discard(dc_level_view_t *view);
 /** Retain the durable election for retry after releasing a failed workspace load. */
 void dc_camera_offscreen_retry(dc_camera_offscreen_t *camera);

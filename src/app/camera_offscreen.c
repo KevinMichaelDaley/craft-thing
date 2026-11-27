@@ -208,7 +208,7 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
     if (!view->closing && (camera->bond || camera->phase == DC_CAMERA_OFFSCREEN_IDLE) &&
         dc_camera_bond_offer(view, snapshot, owner, write_generation)) return;
-    if (camera->phase != DC_CAMERA_OFFSCREEN_IDLE || view->closing || !snapshot->chunk ||
+    if (view->closing || !snapshot->chunk ||
         dc_level_chunk_visible(view, snapshot->coord) || !dc_chunk_owner_valid(owner)) return;
     unsigned face = 0;
     if (!dc_camera_offscreen_isolated(view, snapshot)) {
@@ -218,14 +218,29 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
     }
     if (!has_transport_stock(snapshot) && !dc_offscreen_body_island(view->gpu, snapshot->coord) &&
         (!face || !neighbor_has_transport_stock(view, snapshot->coord, face))) return;
+    bool rigid = !face && dc_offscreen_body_island(view->gpu, snapshot->coord);
+    if (camera->phase != DC_CAMERA_OFFSCREEN_IDLE) {
+        dc_camera_offscreen_t *spare = NULL;
+        for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT - 1u; ++i) {
+            if (view->sealed_rooms[i].phase == DC_CAMERA_OFFSCREEN_IDLE) {
+                spare = view->sealed_rooms + i;
+                break;
+            }
+        }
+        if (!spare) return;
+        if (face || rigid) {
+            if (camera->bond || camera->water_face || camera->rigid_group) return;
+            *spare = *camera;
+        } else {
+            camera = spare;
+        }
+    }
     *camera = (dc_camera_offscreen_t){.coord = snapshot->coord, .owner = owner,
         .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING,
-        .water_face = face, .rigid_group = !face && dc_offscreen_body_island(view->gpu, snapshot->coord)};
+        .water_face = face, .rigid_group = rigid};
 }
 
-void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *result) {
-    dc_camera_offscreen_t *camera = &view->camera_offscreen;
-    if (camera->bond) { dc_camera_bond_saved(view, result); return; }
+static void saved_room(dc_camera_offscreen_t *camera, const dc_stream_result_t *result) {
     if (camera->phase != DC_CAMERA_OFFSCREEN_SAVING || camera->generation != result->generation ||
         !same_coord(camera->coord, result->coord)) return;
     if (result->kind == DC_STREAM_FAILED) {
@@ -236,10 +251,23 @@ void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *
     }
 }
 
+void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *result) {
+    if (view->camera_offscreen.bond) dc_camera_bond_saved(view, result);
+    else saved_room(&view->camera_offscreen, result);
+    for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT - 1u; ++i)
+        saved_room(view->sealed_rooms + i, result);
+}
+
+void dc_camera_offscreen_release(dc_camera_offscreen_t *camera) {
+    free(camera->bond);
+    dc_offscreen_destroy(camera->workspace);
+    *camera = (dc_camera_offscreen_t){0};
+}
+
 void dc_camera_offscreen_discard(dc_level_view_t *view) {
-    free(view->camera_offscreen.bond);
-    dc_offscreen_destroy(view->camera_offscreen.workspace);
-    view->camera_offscreen = (dc_camera_offscreen_t){0};
+    dc_camera_offscreen_release(&view->camera_offscreen);
+    for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT - 1u; ++i)
+        dc_camera_offscreen_release(view->sealed_rooms + i);
 }
 
 void dc_camera_offscreen_retry(dc_camera_offscreen_t *camera) {
@@ -253,8 +281,8 @@ static bool camera_needs_chunk(const dc_level_view_t *view, dc_chunk_coord_t coo
         (view->transfer_pending && same_coord(view->transfer_to, coord));
 }
 
-bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap) {
-    dc_camera_offscreen_t *camera = &view->camera_offscreen;
+static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, bool closing,
+    char *err, uint32_t cap) {
     if (camera->bond) return dc_camera_bond_service(view, closing, err, cap);
     if (camera->phase == DC_CAMERA_OFFSCREEN_IDLE || camera->phase == DC_CAMERA_OFFSCREEN_SAVING)
         return true;
@@ -266,7 +294,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
         if (closing || (coupled ? !attached : !independent) || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
             (needed && camera->time.seconds >= view->world_seconds)) {
-            dc_camera_offscreen_discard(view);
+            dc_camera_offscreen_release(camera);
             return true;
         }
         camera->workspace = dc_offscreen_create(view->gpu, camera->coord, required ? err : NULL, required ? cap : 0u);
@@ -276,7 +304,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
                 dc_camera_offscreen_retry(camera);
                 return false;
             }
-            dc_camera_offscreen_discard(view);
+            dc_camera_offscreen_release(camera);
             return true;
         }
         camera->phase = DC_CAMERA_OFFSCREEN_LEASED;
@@ -289,7 +317,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     dc_chunk_time_t time;
     bool writing;
     if (!dc_level_offscreen_progress(view, camera->coord, camera->generation, &time, &writing)) {
-        dc_camera_offscreen_discard(view);
+        dc_camera_offscreen_release(camera);
         return true;
     }
     if (!time.known || writing) return true;
@@ -301,11 +329,18 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     if (!closing && independent && !dc_offscreen_advance(camera->workspace,
         view->world_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
         if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
-            dc_camera_offscreen_discard(view);
+            dc_camera_offscreen_release(camera);
         return false;
     }
     dc_level_offscreen_progress(view, camera->coord, camera->generation, &time, &writing);
     if (closing || !independent || (needed && time.seconds >= view->world_seconds))
         return dc_level_offscreen_publish(view, camera->coord, camera->generation, err, cap);
+    return true;
+}
+
+bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap) {
+    if (!service_room(view, &view->camera_offscreen, closing, err, cap)) return false;
+    for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT - 1u; ++i)
+        if (!service_room(view, view->sealed_rooms + i, closing, err, cap)) return false;
     return true;
 }

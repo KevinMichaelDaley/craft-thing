@@ -47,6 +47,7 @@ struct dc_level_view {
     bool save_color_stale[DC_GPU_CHUNK_SLOTS];
     uint32_t smoke_closed;
     bool gas_admitted[DC_GPU_CHUNK_SLOTS];
+    dc_camera_offscreen_t sealed_rooms[DC_CAMERA_WORKSPACE_LIMIT - 1u];
 };
 
 /** Test whether a chunk is required by the current camera and its solver halo. */
