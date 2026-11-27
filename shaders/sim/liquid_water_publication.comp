@@ -54,6 +54,11 @@ void add_stock(inout uvec2 total, uint mass) {
 bool finite_color(vec4 value) { return !any(isnan(value)) && !any(isinf(value)); }
 bool finite_velocity(vec2 value) { return !any(isnan(value)) && !any(isinf(value)); }
 
+bool valid_carried_word(uint word, uint mass) {
+    float value = uintBitsToFloat(word);
+    return !isnan(value) && !isinf(value) && (mass != 0u || value == 0.);
+}
+
 uint scratch_grid(Location owner, uvec2 local) {
     return (owner.scratch_y + local.y) * params.width + owner.scratch_x + local.x;
 }
@@ -117,18 +122,28 @@ void main() {
         if (params.shared_bulk != 0u) {
             uint base = tile * FR_BULK_CHUNK_CHANNELS * CELLS + local;
             uint live_base = owner.slot * FR_BULK_CHUNK_CHANNELS * CELLS + local;
+            uvec2 initial_stock, final_stock;
             for (uint k = 0u; k < FR_BULK_CHUNK_CHANNELS; ++k) {
                 uint word = bulk[base + k * CELLS];
+                uint live = live_base + k * CELLS;
+                uint old = owner.context == 0u ? first_bulk[live] : second_bulk[live];
                 if (k < 2u) {
-                    uint live = live_base + k * CELLS;
-                    add_stock(old_bulk[k], owner.context == 0u ? first_bulk[live] : second_bulk[live]);
+                    initial_stock[k] = old;
+                    final_stock[k] = word;
+                    add_stock(old_bulk[k], old);
                     add_stock(new_bulk[k], word);
-                    valid = valid && word <= FULL && bulk[base + (k+2u) * CELLS] <= word;
-                } else if (k >= FR_BULK_VOLUME_CHANNELS) {
-                    float value = uintBitsToFloat(word);
-                    valid = valid && !isnan(value) && !isinf(value);
+                    valid = valid && word <= FULL && old <= FULL;
+                } else if (k < FR_BULK_VOLUME_CHANNELS) {
+                    valid = valid && old <= initial_stock[k-2u] && word <= final_stock[k-2u];
+                } else {
+                    uint phase = k < FR_BULK_THERMAL_CHANNELS ? k - FR_BULK_VOLUME_CHANNELS :
+                                                                  (k - FR_BULK_THERMAL_CHANNELS) / 2u;
+                    valid = valid && valid_carried_word(old, initial_stock[phase]) &&
+                                     valid_carried_word(word, final_stock[phase]);
                 }
             }
+            valid = valid && initial_stock.x + initial_stock.y + initial_cells[atlas].y <= FULL &&
+                             final_stock.x + final_stock.y + final_cells[atlas].y <= FULL;
         }
         add_stock(before, min(FULL, initial_cells[atlas].y));
         add_stock(after, min(FULL, final_cells[atlas].y));
