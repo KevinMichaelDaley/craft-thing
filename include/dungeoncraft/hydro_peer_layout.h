@@ -1,7 +1,8 @@
 #ifndef DC_HYDRO_PEER_LAYOUT_H
 #define DC_HYDRO_PEER_LAYOUT_H
 
-/* The upper half of the simulation control buffer is live only during paired rigid work. */
+/* Control words from 16 onward are live only during paired rigid work.
+ * Words 30 and 31 retain the local bulk address between the peer fields. */
 #define DC_HYDRO_PEER_RASTER 1024u
 #define DC_HYDRO_MPM_OCCUPANCY_PLANE 5u
 #define DC_HYDRO_PEER_WIDTH 16u

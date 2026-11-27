@@ -342,7 +342,7 @@ typedef struct {
      * vertex in bits 0..2, and the support-edge marker in bit 31. */
     /* For MPM contacts, reserved holds the particle index plus one in bits 0..30.
        Bit 31 identifies a particle in the paired neighbor.
-       it is zero for terrain, boundary and body contacts. */
+       The field is zero for terrain, boundary and body contacts. */
     uint32_t body_a, body_b, kind, feature_a, feature_b, material_a, material_b, reserved;
     float normal_x, normal_y, depth, friction, restitution, compliance;
     uint32_t flags, reserved2;

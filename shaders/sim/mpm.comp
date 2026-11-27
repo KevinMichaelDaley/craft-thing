@@ -48,7 +48,7 @@ layout(push_constant) uniform Params {
     uint mode;
     uint unused0;
     uint unused1;
-    uint unused2;
+    uint peer_occupancy_offset;
     uint unused3;
 } params;
 
@@ -156,7 +156,7 @@ bool solid_at(ivec2 cell) {
     return (material == 1u || (material != 0u && material != 2u &&
             material != 4u && material != 5u && material != 6u && material != 10u && material != 13u)) ||
            occupancy[cell_index] != 0u ||
-           (params.unused2!=0u && occupancy[params.unused2+cell_index]!=0u);
+           (params.peer_occupancy_offset!=0u && occupancy[params.peer_occupancy_offset+cell_index]!=0u);
 }
 
 bool blocked_destination(ivec2 cell) {

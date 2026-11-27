@@ -639,7 +639,7 @@ static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_b
 static void test_reverse_bulk_flow_conducts_heat_across_the_west_face(void) { check_bulk_crossing(false, true, false); }
 static void test_moving_body_receives_shared_liquid_feedback(void) { check_bulk_crossing(false, true, true); }
 
-static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void) {
+static void check_peer_grain_contact(bool grain_owner_first) {
     const char *shader = "build/shaders/pattern.comp.spv";
     dc_gpu_t *owner[2] = {0}, *mono = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *expected = calloc(1, sizeof(*expected));
@@ -680,6 +680,11 @@ static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void)
     ASSERT_TRUE(boundary);
     const float dt = 1.f / 60.f;
     ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, dt) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
+    if (grain_owner_first) {
+        dc_liquid_seam_endpoint_t first = tiles[0];
+        tiles[0] = tiles[1];
+        tiles[1] = first;
+    }
     ASSERT_EQ(dc_gpu_tick_water_cohort(tiles, 2, dt, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
     dc_gpu_world_body_t split, native;
     ASSERT_TRUE(dc_gpu_read_world_body(owner[0], 403u, &split, g_err, sizeof(g_err)) &&
@@ -691,6 +696,7 @@ static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void)
         dc_gpu_read_contacts(owner[0], &stats, contacts, 128, g_err, sizeof(g_err)));
     ASSERT_EQ(stats.count, native_stats.count);
     ASSERT_TRUE(stats.count > 0);
+    bool used[128] = {false};
     for (unsigned i = 0; i < stats.count; ++i) {
         ASSERT_EQ(contacts[i].kind, DC_GPU_CONTACT_MPM);
         ASSERT_TRUE((contacts[i].reserved >> 31u) == 1u);
@@ -698,7 +704,11 @@ static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void)
         for (unsigned j = 0; j < native_stats.count; ++j) {
             dc_gpu_contact_t counterpart = native_contacts[j];
             counterpart.reserved = contacts[i].reserved;
-            matched |= memcmp(&counterpart, &contacts[i], sizeof(counterpart)) == 0;
+            if (!used[j] && memcmp(&counterpart, &contacts[i], sizeof(counterpart)) == 0) {
+                used[j] = true;
+                matched = true;
+                break;
+            }
         }
         ASSERT_TRUE(matched);
     }
@@ -721,6 +731,14 @@ cleanup:
     free(expected);
 }
 
+static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void) {
+    check_peer_grain_contact(false);
+}
+
+static void test_grain_owner_can_submit_first(void) {
+    check_peer_grain_contact(true);
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
@@ -734,8 +752,10 @@ int main(int argc, char **argv) {
         RUN(test_reverse_bulk_flow_conducts_heat_across_the_west_face);
     } else if (argc == 2 && strcmp(argv[1], "--peer-grain") == 0) {
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
+        RUN(test_grain_owner_can_submit_first);
     } else if (argc == 1) {
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
+        RUN(test_grain_owner_can_submit_first);
         RUN(test_moving_body_receives_shared_liquid_feedback);
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);

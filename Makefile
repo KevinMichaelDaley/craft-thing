@@ -164,6 +164,8 @@ build/sprite_gpu.o: src/vulkan/sprite_gpu.c include/ferrum/renderer/sprite_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
 $(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h include/dungeoncraft/hydro_peer_layout.h
+build/shaders/rigid.comp.spv build/shaders/runtime/rigid.comp.spv build/diagnostics/rigid_prepare_probe.spv \
+build/diagnostics/raster_team_profile.spv build/diagnostics/raster_team_reference.spv: include/dungeoncraft/hydro_peer_layout.h
 build/shaders/rigid_solver.comp.spv build/shaders/runtime/rigid_solver.comp.spv \
 build/shaders/pixel_hydro.comp.spv build/shaders/runtime/pixel_hydro.comp.spv \
 build/diagnostics/solver_motion_profile.comp.spv: include/dungeoncraft/hydro_peer_layout.h shaders/sim/rigid_peer.glsl shaders/sim/rigid_grain_storage.glsl
