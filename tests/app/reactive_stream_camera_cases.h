@@ -138,6 +138,32 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
     const float elapsed = 1.f / 60.f;
     for (unsigned cycle = 0; cycle < 2u; ++cycle) {
         ASSERT_TRUE(dc_level_view_move(view, 1, 0));
+        if (cycle == 0u) {
+            uint32_t departing;
+            ASSERT_TRUE(dc_chunk_table_find(&view->table, first, &departing));
+            ASSERT_TRUE(dc_chunk_table_set_active(&view->table, departing, false) &&
+                        schedule_saves(view, err, sizeof(err)));
+            const uint64_t deadline = SDL_GetTicks64() + 5000u;
+            while (view->camera_offscreen.phase == DC_CAMERA_OFFSCREEN_SAVING && SDL_GetTicks64() < deadline) {
+                ASSERT_TRUE(process_results(view, err, sizeof(err)));
+                SDL_Delay(1);
+            }
+            ASSERT_EQ(view->camera_offscreen.phase, DC_CAMERA_OFFSCREEN_STORED);
+            ASSERT_TRUE(dc_chunk_table_evict(&view->table, departing, UINT64_MAX));
+            const uint64_t next = view->table.next_generation;
+            view->table.next_generation = UINT64_MAX;
+            ASSERT_TRUE(!dc_camera_offscreen_service(view, false, err, sizeof(err)));
+            ASSERT_EQ(view->camera_offscreen.phase, DC_CAMERA_OFFSCREEN_STORED);
+            ASSERT_TRUE(!view->camera_offscreen.workspace);
+            ASSERT_EQ(view->world_seconds, 2.);
+            view->table.next_generation = next;
+            ASSERT_TRUE(dc_camera_offscreen_service(view, false, err, sizeof(err)));
+            dc_stream_result_t failure = {.kind = DC_STREAM_FAILED, .coord = first,
+                .generation = view->camera_offscreen.generation};
+            ASSERT_EQ(dc_level_offscreen_result(view, &failure, err, sizeof(err)), DC_LEVEL_OFFSCREEN_FAILED);
+            ASSERT_EQ(view->camera_offscreen.phase, DC_CAMERA_OFFSCREEN_STORED);
+            ASSERT_TRUE(!dc_level_offscreen_owns(view, first));
+        }
         ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(dc_level_offscreen_owns(view, first));
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
