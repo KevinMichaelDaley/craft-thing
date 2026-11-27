@@ -244,6 +244,32 @@ static void test_unequal_ticks_reach_solver_in_requested_order(void) {
     PASS();
 }
 
+static void check_resident_batch_with_handoff(bool disk_source) {
+    dc_level_view_t *view = ready_view(false);
+    dc_offscreen_t workspace = {.time = {1., true}};
+    dc_level_offscreen_handoff_t lease = {.coord = {20, 30}, .workspace = &workspace,
+        .admitted = true, .disk_source = disk_source};
+    ASSERT_TRUE(view);
+    view->world_seconds = 1.;
+    view->offscreen_handoffs = &lease;
+    ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, NULL, 0) &&
+        dc_level_view_step_timed(view, .03125f, NULL, 0) && dc_level_view_tick(view, NULL, 0));
+    ASSERT_EQ(g_frame.presented_steps, disk_source ? 2u : 0u);
+    ASSERT_EQ(view->world_seconds, 1.0625);
+    ASSERT_EQ(workspace.time.seconds, 1.);
+    view->offscreen_handoffs = NULL;
+    dc_level_view_discard(view);
+    PASS();
+}
+
+static void test_resident_batch_with_independent_disk_owner(void) {
+    check_resident_batch_with_handoff(true);
+}
+
+static void test_resident_steps_with_potential_seam_owner(void) {
+    check_resident_batch_with_handoff(false);
+}
+
 static void test_equal_ticks_share_one_presentation_batch(void) {
     dc_level_view_t *view = ready_view(false);
     ASSERT_TRUE(view);
@@ -910,6 +936,8 @@ int main(void) {
     RUN(test_level_water_settings_change_all_owners_together);
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
+    RUN(test_resident_batch_with_independent_disk_owner);
+    RUN(test_resident_steps_with_potential_seam_owner);
     RUN(test_equal_ticks_completed_before_present_failure_are_not_replayed);
     RUN(test_partial_equal_batch_retries_only_its_unfinished_suffix);
     RUN(test_failed_present_before_simulation_keeps_the_equal_batch);
