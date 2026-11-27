@@ -69,6 +69,8 @@ struct dc_gpu {
     struct fr_thermal_gpu *thermal;
     struct fr_gas_gpu *gas;
     struct dc_gpu_liquid_seam *liquid_seam;
+    struct dc_gpu *liquid_seam_pending_owner;
+    bool liquid_seam_orphaned;
     struct dc_gpu_seam_projection *seam_projection;
     struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;

@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dungeoncraft/liquid_seam.h"
 #include "dungeoncraft/liquid_seam_layout.h"
 #include "gas_gpu_internal.h"
-#include "renderer_internal.h"
+#include "liquid_seam_gpu_internal.h"
 
 enum { SEAM_BUFFER_COUNT = 11u };
 
@@ -14,27 +13,19 @@ typedef struct {
     uint32_t receipt;
 } seam_plan_t;
 
-typedef struct {
-    uint32_t slot, x, y, width, height;
-} seam_location_t;
-
-typedef struct {
-    seam_location_t first, second;
-    uint32_t axis;
-} seam_push_t;
-
 struct dc_gpu_liquid_seam {
     fr_renderer_compute_t compute;
     VkBuffer plan;
     VkDeviceMemory memory;
     void *mapped;
     dc_gpu_t *pending_peer;
+    const uint32_t *pending_receipt;
     bool pending_bulk;
 };
 
 _Static_assert(sizeof(dc_liquid_seam_flux_t) == 3u * sizeof(int32_t), "Liquid lane layout mismatch");
 _Static_assert(sizeof(seam_plan_t) == (3u * DC_CHUNK_SIDE + 1u) * sizeof(uint32_t), "Liquid plan layout mismatch");
-_Static_assert(sizeof(seam_push_t) == 11u * sizeof(uint32_t), "Liquid face push layout mismatch");
+_Static_assert(sizeof(dc_gpu_seam_push_t) == 11u * sizeof(uint32_t), "Liquid face push layout mismatch");
 
 static dc_liquid_seam_result_t report(dc_liquid_seam_result_t result, char *err,
                                     uint32_t cap, const char *message) {
@@ -69,30 +60,60 @@ static bool valid_flux(int32_t units) {
     return units >= -(int32_t)DC_FLUID_FULL && units <= (int32_t)DC_FLUID_FULL;
 }
 
-static void release_resources(dc_gpu_t *gpu, struct dc_gpu_liquid_seam *seam) {
-    if (!seam) return;
+bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu) {
+    return gpu && (gpu->liquid_seam_orphaned || gpu->liquid_seam_pending_owner ||
+                   (gpu->liquid_seam && gpu->liquid_seam->pending_peer));
+}
+
+bool dc_gpu_prepare_liquid_receipt(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if (!gpu->liquid_seam) gpu->liquid_seam = calloc(1, sizeof(*gpu->liquid_seam));
+    if (gpu->liquid_seam) return true;
+    report(DC_LIQUID_SEAM_REJECTED, err, cap, "Cannot allocate liquid seam receipt state");
+    return false;
+}
+
+static void clear_pending(struct dc_gpu_liquid_seam *seam) {
+    if (seam->pending_peer) seam->pending_peer->liquid_seam_pending_owner = NULL;
+    seam->pending_peer = NULL;
+    seam->pending_receipt = NULL;
+}
+
+static void release_explicit_plan(dc_gpu_t *gpu, struct dc_gpu_liquid_seam *seam) {
     fr_renderer_compute_destroy(gpu, &seam->compute);
     if (seam->mapped) vkUnmapMemory(gpu->device, seam->memory);
     if (seam->plan) vkDestroyBuffer(gpu->device, seam->plan, NULL);
     if (seam->memory) vkFreeMemory(gpu->device, seam->memory, NULL);
-    free(seam);
+    seam->compute = (fr_renderer_compute_t){0};
+    seam->plan = VK_NULL_HANDLE;
+    seam->memory = VK_NULL_HANDLE;
+    seam->mapped = NULL;
 }
 
 void dc_gpu_liquid_seam_destroy(dc_gpu_t *gpu) {
-    release_resources(gpu, gpu->liquid_seam);
+    dc_gpu_t *owner = gpu->liquid_seam_pending_owner;
+    if (owner) {
+        clear_pending(owner->liquid_seam);
+        owner->liquid_seam_orphaned = true;
+    }
+    struct dc_gpu_liquid_seam *seam = gpu->liquid_seam;
+    if (!seam) return;
+    if (seam->pending_peer) {
+        seam->pending_peer->liquid_seam_orphaned = true;
+        clear_pending(seam);
+    }
+    release_explicit_plan(gpu, seam);
+    free(seam);
     gpu->liquid_seam = NULL;
 }
 
 static struct dc_gpu_liquid_seam *prepare_resources(dc_gpu_t *first, const dc_gpu_t *second,
                                                    char *err, uint32_t cap) {
+    if (!dc_gpu_prepare_liquid_receipt(first, err, cap)) return NULL;
     struct dc_gpu_liquid_seam *seam = first->liquid_seam;
-    if (!seam) {
-        seam = calloc(1, sizeof(*seam));
-        if (!seam || !dc_gpu_make_mapped_buffer(first, sizeof(seam_plan_t), &seam->plan,
-            &seam->memory, &seam->mapped, err, cap)) {
-            release_resources(first, seam);
-            return NULL;
-        }
+    if (!seam->plan && !dc_gpu_make_mapped_buffer(first, sizeof(seam_plan_t), &seam->plan,
+        &seam->memory, &seam->mapped, err, cap)) {
+        release_explicit_plan(first, seam);
+        return NULL;
     }
 
     const VkDescriptorBufferInfo buffers[SEAM_BUFFER_COUNT] = {
@@ -103,32 +124,42 @@ static struct dc_gpu_liquid_seam *prepare_resources(dc_gpu_t *first, const dc_gp
         {first->water_color_buffer, 0, VK_WHOLE_SIZE}, {second->water_color_buffer, 0, VK_WHOLE_SIZE},
         {first->thermal_control_buffer, 0, VK_WHOLE_SIZE}, {second->thermal_control_buffer, 0, VK_WHOLE_SIZE}
     };
-    if (!first->liquid_seam) {
+    if (!seam->compute.pipeline) {
         if (!fr_renderer_compute_init(first, &seam->compute, buffers, SEAM_BUFFER_COUNT,
-            sizeof(seam_push_t), "build/shaders/liquid_seam.comp.spv", err, cap)) {
-            release_resources(first, seam);
+            sizeof(dc_gpu_seam_push_t), "build/shaders/liquid_seam.comp.spv", err, cap)) {
+            release_explicit_plan(first, seam);
             return NULL;
         }
-        first->liquid_seam = seam;
         return seam;
     }
 
-    VkWriteDescriptorSet writes[SEAM_BUFFER_COUNT];
-    for (uint32_t i = 0; i < SEAM_BUFFER_COUNT; ++i) {
-        writes[i] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = seam->compute.descriptor, .dstBinding = i, .descriptorCount = 1u,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = buffers + i};
-    }
-    vkUpdateDescriptorSets(first->device, SEAM_BUFFER_COUNT, writes, 0, NULL);
+    dc_gpu_seam_bind_buffers(first, seam->compute.descriptor, buffers, SEAM_BUFFER_COUNT);
     return seam;
 }
 
-static seam_location_t location(dc_liquid_seam_endpoint_t endpoint) {
-    return (seam_location_t){endpoint.slot, endpoint.tile_x * DC_CHUNK_SIDE,
+void dc_gpu_seam_bind_buffers(dc_gpu_t *gpu, VkDescriptorSet set,
+    const VkDescriptorBufferInfo *buffers, uint32_t count) {
+    VkWriteDescriptorSet writes[DC_GPU_DESCRIPTOR_BINDINGS];
+    for (uint32_t i = 0; i < count; ++i) {
+        writes[i] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set, .dstBinding = i, .descriptorCount = 1u,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &buffers[i]};
+    }
+    vkUpdateDescriptorSets(gpu->device, count, writes, 0, NULL);
+}
+
+static dc_gpu_seam_location_t location(dc_liquid_seam_endpoint_t endpoint) {
+    return (dc_gpu_seam_location_t){endpoint.slot, endpoint.tile_x * DC_CHUNK_SIDE,
         endpoint.tile_y * DC_CHUNK_SIDE, endpoint.gpu->width, endpoint.gpu->height};
 }
 
+dc_gpu_seam_push_t dc_gpu_seam_push(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis) {
+    return (dc_gpu_seam_push_t){location(first), location(second), axis};
+}
+
 static void activate_liquid_work(dc_gpu_t *gpu, bool bulk) {
+    dc_gpu_fluid_uploads_invalidate(gpu);
     gpu->fluid_snapshot_valid = false;
     gpu->fluid_work_possible = true;
     gpu->bulk_phase_work_possible |= bulk;
@@ -137,17 +168,29 @@ static void activate_liquid_work(dc_gpu_t *gpu, bool bulk) {
 
 static dc_liquid_seam_result_t complete_dispatch(dc_gpu_t *gpu, struct dc_gpu_liquid_seam *seam,
                                                  char *err, uint32_t cap) {
-    const seam_plan_t *plan = seam->mapped;
-    if (plan->receipt == DC_LIQUID_RECEIPT_REJECTED) {
-        seam->pending_peer = NULL;
-        return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam plan exceeds donor stock or face capacity");
+    const uint32_t receipt = *seam->pending_receipt;
+    if (receipt == DC_LIQUID_RECEIPT_REJECTED) {
+        clear_pending(seam);
+        return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam preflight rejected stock or carried fields");
     }
-    if (plan->receipt != DC_LIQUID_RECEIPT_COMMITTED)
+    if (receipt != DC_LIQUID_RECEIPT_COMMITTED)
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam completion receipt is missing");
     activate_liquid_work(gpu, seam->pending_bulk);
     activate_liquid_work(seam->pending_peer, seam->pending_bulk);
-    seam->pending_peer = NULL;
+    clear_pending(seam);
     return DC_LIQUID_SEAM_COMMITTED;
+}
+
+dc_liquid_seam_result_t dc_gpu_submit_liquid_seam(dc_gpu_t *gpu, dc_gpu_t *peer,
+    const uint32_t *receipt, bool bulk, char *err, uint32_t cap) {
+    struct dc_gpu_liquid_seam *seam = gpu->liquid_seam;
+    seam->pending_peer = peer;
+    seam->pending_receipt = receipt;
+    seam->pending_bulk = bulk;
+    peer->liquid_seam_pending_owner = gpu;
+    if (!fr_renderer_submit(gpu))
+        return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam submission was not confirmed");
+    return complete_dispatch(gpu, seam, err, cap);
 }
 
 dc_liquid_seam_result_t dc_gpu_resolve_liquid_seam(dc_gpu_t *first, dc_gpu_t *second,
@@ -164,7 +207,7 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     if (!flux || !dc_gpu_liquid_seam_mapped(first, second, axis))
         return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam endpoints do not share a mapped face");
     dc_gpu_t *gpu = first.gpu;
-    if (gpu->liquid_seam && gpu->liquid_seam->pending_peer)
+    if (dc_gpu_liquid_seam_pending(gpu) || dc_gpu_liquid_seam_pending(second.gpu))
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "A liquid seam receipt is still pending");
     bool water = false, bulk = false;
     for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
@@ -185,7 +228,7 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     seam_plan_t *plan = seam->mapped;
     memcpy(plan->flux, flux, sizeof(plan->flux));
     plan->receipt = 0u;
-    const seam_push_t push = {location(first), location(second), axis};
+    const dc_gpu_seam_push_t push = dc_gpu_seam_push(first, second, axis);
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
@@ -198,14 +241,5 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_READ_BIT);
-    seam->pending_peer = second.gpu;
-    seam->pending_bulk = bulk;
-    if (!fr_renderer_submit(gpu))
-        return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam submission was not confirmed");
-    return complete_dispatch(gpu, seam, err, cap);
-}
-
-bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu) {
-    (void)gpu;
-    return false;
+    return dc_gpu_submit_liquid_seam(gpu, second.gpu, &plan->receipt, bulk, err, cap);
 }

@@ -1,0 +1,123 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/bulk_phase_layout.h"
+#include "../../include/dungeoncraft/liquid_seam_layout.h"
+
+const uint SIDE = DC_WATER_SEAM_SIDE;
+const uint CELLS = SIDE * SIDE;
+const uint PAIR_CELLS = 2u * CELLS;
+const uint FULL = 65536u;
+
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) buffer Receipt { uint receipt; };
+layout(set = 0, binding = 1, std430) readonly buffer InitialCells { uvec2 initial_cells[]; };
+layout(set = 0, binding = 2, std430) readonly buffer FinalCells { uvec2 final_cells[]; };
+layout(set = 0, binding = 3, std430) readonly buffer InitialColor { vec4 initial_color[]; };
+layout(set = 0, binding = 4, std430) readonly buffer FinalColor { vec4 final_color[]; };
+layout(set = 0, binding = 5, std430) readonly buffer FinalVelocity { vec2 final_velocity[]; };
+layout(set = 0, binding = 6, std430) readonly buffer Occupancy { uint occupancy[]; };
+layout(set = 0, binding = 7, std430) readonly buffer Bulk { uint bulk[]; };
+layout(set = 0, binding = 8, std430) readonly buffer ScratchHeat { float scratch_heat[]; };
+layout(set = 0, binding = 9, std430) buffer FirstCells { uvec2 first_cells[]; };
+layout(set = 0, binding = 10, std430) buffer FirstColor { vec4 first_color[]; };
+layout(set = 0, binding = 11, std430) buffer FirstVelocity { vec2 first_velocity[]; };
+layout(set = 0, binding = 12, std430) buffer FirstHeat { float first_heat[]; };
+layout(set = 0, binding = 13, std430) buffer SecondCells { uvec2 second_cells[]; };
+layout(set = 0, binding = 14, std430) buffer SecondColor { vec4 second_color[]; };
+layout(set = 0, binding = 15, std430) buffer SecondVelocity { vec2 second_velocity[]; };
+layout(set = 0, binding = 16, std430) buffer SecondHeat { float second_heat[]; };
+
+struct Location { uint slot, x, y, width, height; };
+layout(push_constant) uniform Params { Location first, second; uint axis, thermal; } params;
+
+shared uint invalid, stock_before, stock_after;
+
+bool finite_color(vec4 value) { return !any(isnan(value)) && !any(isinf(value)); }
+bool finite_velocity(vec2 value) { return !any(isnan(value)) && !any(isinf(value)); }
+
+uint scratch_grid(bool second, uvec2 local) {
+    if (params.axis == 0u) return local.y * 2u * SIDE + local.x + (second ? SIDE : 0u);
+    return (local.y + (second ? SIDE : 0u)) * SIDE + local.x;
+}
+
+uint owner_grid(Location owner, uvec2 local) {
+    return (owner.y + local.y) * owner.width + owner.x + local.x;
+}
+
+bool valid_cell(uint atlas, bool second, uint local, Location owner, uint grid) {
+    const uint live = owner.slot * CELLS + local;
+    const uvec2 before = initial_cells[atlas], after = final_cells[atlas];
+    const uvec2 current = second ? second_cells[live] : first_cells[live];
+    const vec4 current_color = second ? second_color[live] : first_color[live];
+    const uint bulk_base = (second ? FR_BULK_CHUNK_CHANNELS * CELLS : 0u) + local;
+    const uint occupied = min(FULL, occupancy[2u * PAIR_CELLS + grid]) +
+                          min(FULL, bulk[bulk_base]) + min(FULL, bulk[bulk_base + CELLS]);
+    if (any(notEqual(before, current)) || before.x != after.x ||
+        before.y > FULL || after.y > FULL - min(FULL, occupied) ||
+        !finite_color(initial_color[atlas]) || !finite_color(final_color[atlas]) ||
+        !finite_velocity(final_velocity[grid]) ||
+        any(notEqual(floatBitsToUint(current_color), floatBitsToUint(initial_color[atlas]))))
+        return false;
+    if (params.thermal != 0u) {
+        const float old = scratch_heat[PAIR_CELLS + atlas], next = scratch_heat[atlas];
+        const float current_heat = second ? second_heat[live] : first_heat[live];
+        if (isnan(old) || isinf(old) || isnan(next) || isinf(next) ||
+            floatBitsToUint(old) != floatBitsToUint(current_heat)) return false;
+    }
+    return true;
+}
+
+void main() {
+    const uint lane = gl_LocalInvocationID.x;
+    if (lane == 0u) {
+        invalid = 0u;
+        stock_before = 0u;
+        stock_after = 0u;
+    }
+    barrier();
+
+    uint before = 0u, after = 0u;
+    bool valid = true;
+    for (uint atlas = lane; atlas < PAIR_CELLS; atlas += gl_WorkGroupSize.x) {
+        const bool second = atlas >= CELLS;
+        const uint local = atlas % CELLS;
+        const Location owner = second ? params.second : params.first;
+        const uint grid = scratch_grid(second, uvec2(local % SIDE, local / SIDE));
+        valid = valid_cell(atlas, second, local, owner, grid) && valid;
+        before += min(FULL, initial_cells[atlas].y);
+        after += min(FULL, final_cells[atlas].y);
+    }
+    if (!valid) atomicOr(invalid, 1u);
+    atomicAdd(stock_before, before);
+    atomicAdd(stock_after, after);
+    barrier();
+
+    if (invalid != 0u || stock_before != stock_after) {
+        if (lane == 0u) receipt = DC_LIQUID_RECEIPT_REJECTED;
+        return;
+    }
+
+    for (uint atlas = lane; atlas < PAIR_CELLS; atlas += gl_WorkGroupSize.x) {
+        const bool second = atlas >= CELLS;
+        const uint local = atlas % CELLS;
+        const uvec2 point = uvec2(local % SIDE, local / SIDE);
+        const Location owner = second ? params.second : params.first;
+        const uint live = owner.slot * CELLS + local;
+        const uint live_grid = owner_grid(owner, point);
+        const uint grid = scratch_grid(second, point);
+        if (second) {
+            second_cells[live].y = final_cells[atlas].y;
+            second_color[live] = final_color[atlas];
+            second_velocity[live_grid] = final_velocity[grid];
+            if (params.thermal != 0u) second_heat[live] = scratch_heat[atlas];
+        } else {
+            first_cells[live].y = final_cells[atlas].y;
+            first_color[live] = final_color[atlas];
+            first_velocity[live_grid] = final_velocity[grid];
+            if (params.thermal != 0u) first_heat[live] = scratch_heat[atlas];
+        }
+    }
+    memoryBarrierBuffer();
+    barrier();
+    if (lane == 0u) receipt = DC_LIQUID_RECEIPT_COMMITTED;
+}

@@ -103,10 +103,12 @@ GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_addr
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
-GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o
-build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c include/dungeoncraft/fluid_aperture_layout.h include/dungeoncraft/liquid_seam_layout.h include/ferrum/fire/bulk_phase.h include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/thermal_water_layout.h src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/thermal_gpu_internal.h
+GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o build/liquid_seam_publication_gpu.o
+build/liquid_seam_publication_gpu.o: src/vulkan/liquid_seam_publication_gpu.c src/vulkan/liquid_seam_gpu_internal.h src/vulkan/renderer_internal.h src/vulkan/thermal_gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/liquid_seam_layout.h src/vulkan/gas_gpu_internal.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
+build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c src/vulkan/liquid_seam_gpu_internal.h include/dungeoncraft/fluid_aperture_layout.h include/dungeoncraft/liquid_seam_layout.h include/ferrum/fire/bulk_phase.h include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/thermal_water_layout.h src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/thermal_gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c src/vulkan/liquid_seam_gpu_internal.h include/dungeoncraft/liquid_seam.h include/dungeoncraft/liquid_seam_layout.h src/vulkan/gas_gpu_internal.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 GPU_OBJ += build/structural_store_fluids.o
@@ -280,7 +282,7 @@ FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_
 WATER_SEAM_SHADERS = build/shaders/fluid_water_seam.comp.spv build/shaders/fluid_water_seam_16.comp.spv
 WATER_SEAM_SHADERS += build/shaders/fluid_water_seam_recompute.comp.spv build/shaders/fluid_water_seam_recompute_16.comp.spv
 FLUID_SHADER += $(WATER_SEAM_SHADERS)
-FLUID_SHADER += build/shaders/liquid_seam.comp.spv
+FLUID_SHADER += build/shaders/liquid_seam.comp.spv build/shaders/liquid_water_publication.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
@@ -720,6 +722,10 @@ build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c src/fire/bulk_phase_inte
 build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/fire/bulk_phase_internal.h src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/shaders/liquid_water_publication.comp.spv: shaders/sim/liquid_water_publication.comp include/dungeoncraft/bulk_phase_layout.h include/dungeoncraft/liquid_seam_layout.h
+	@mkdir -p $(@D)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+
 build/shaders/liquid_seam.comp.spv: shaders/sim/liquid_seam.comp include/dungeoncraft/bulk_phase_layout.h include/dungeoncraft/liquid_seam_layout.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/thermal_water_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
