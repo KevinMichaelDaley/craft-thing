@@ -100,6 +100,13 @@ dc_liquid_seam_result_t dc_gpu_execute_water_seam(dc_liquid_seam_endpoint_t firs
 /** Whether this context participates in a seam write with an unresolved receipt. */
 bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu);
 
+/** Run one native water cycle over connected mapped tiles in two shared-device contexts.
+ * The caller holds all mappings and generations at the same interval start.
+ * The returned receipt applies to both contexts and every supplied tile.
+ */
+dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.

@@ -500,3 +500,14 @@ dc_liquid_seam_result_t dc_gpu_execute_water_seam(dc_liquid_seam_endpoint_t firs
     char *err, uint32_t cap) {
     return run_seam(first, second, axis, seconds, previous_normal, NULL, plan, true, err, cap);
 }
+
+dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap) {
+    if (tiles && count == SEAM_TILES) {
+        const dc_liquid_seam_axis_t axis = tiles[0].coord.y == tiles[1].coord.y ?
+            DC_LIQUID_SEAM_X : DC_LIQUID_SEAM_Y;
+        return dc_gpu_execute_water_seam(tiles[0], tiles[1], axis, seconds, NULL, NULL, err, cap);
+    }
+    error(err, cap, "Liquid seam requires two mapped tiles");
+    return DC_LIQUID_SEAM_REJECTED;
+}
