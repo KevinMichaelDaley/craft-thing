@@ -11,13 +11,18 @@ static bool error(char *err, uint32_t cap, const char *message) {
     return false;
 }
 
-static int nearby_delta(const uint32_t words[2], int64_t origin) {
+static int64_t chunk_coordinate(const uint32_t words[2]) {
     uint64_t bits = words[0] | ((uint64_t)words[1] << 32);
     int64_t chunk;
     memcpy(&chunk, &bits, sizeof(chunk));
+    return chunk;
+}
+
+static int nearby_delta(const uint32_t words[2], int64_t origin) {
+    int64_t chunk = chunk_coordinate(words);
     if (chunk == origin) return 0;
-    if (chunk > origin) return bits - (uint64_t)origin == 1u ? 1 : 2;
-    return (uint64_t)origin - bits == 1u ? -1 : -2;
+    if (chunk > origin) return chunk - 1 == origin ? 1 : 2;
+    return chunk + 1 == origin ? -1 : -2;
 }
 
 typedef enum { OUTSIDE_ROOM, INSIDE_ROOM, SPANS_ROOM } room_relation_t;
@@ -74,11 +79,60 @@ static bool free_slot(const dc_gpu_t *gpu, uint32_t i) {
         owner->state != DC_BODY_OWNER_RETIRED && owner->state != DC_BODY_OWNER_RESERVED;
 }
 
+static bool add_page(dc_offscreen_bond_group_t *group, dc_chunk_coord_t page) {
+    for (uint32_t i = 0; i < group->page_count; ++i) {
+        dc_chunk_coord_t p = group->pages[i];
+        if (p.x == page.x && p.y == page.y) return true;
+        uint64_t dx = p.x > page.x ? (uint64_t)p.x - page.x : (uint64_t)page.x - p.x;
+        uint64_t dy = p.y > page.y ? (uint64_t)p.y - page.y : (uint64_t)page.y - p.y;
+        if (dx >= OFFSCREEN_SIDE || dy >= OFFSCREEN_SIDE) return false;
+    }
+    if (group->page_count == OFFSCREEN_SLOTS) return false;
+    group->pages[group->page_count++] = page;
+    return true;
+}
+
+static bool add_member(dc_gpu_t *gpu, dc_offscreen_bond_group_t *group, uint32_t slot, uint32_t id) {
+    if (slot >= dc_gpu_body_capacity(gpu)) return false;
+    const dc_gpu_body_record_t *body = dc_gpu_body_record(gpu, slot);
+    if (body->body.id != id || !body->body.active || body->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG ||
+        !body->reserved[1] || body->piece_count > DC_GPU_BODY_PIECES) return false;
+    for (uint32_t i = 0; i < group->member_count; ++i)
+        if (group->members[i].id == id) return group->members[i].slot == slot;
+    if (group->member_count == 2u * DC_OFFSCREEN_BOND_CAPACITY) return false;
+    group->members[group->member_count++] = (dc_offscreen_bond_member_t){slot, id, body->reserved[1]};
+    int64_t x = chunk_coordinate(body->chunk_x), y = chunk_coordinate(body->chunk_y);
+    for (int dy = -1; dy <= 1; ++dy) {
+        if ((dy < 0 && y == INT64_MIN) || (dy > 0 && y == INT64_MAX)) continue;
+        for (int dx = -1; dx <= 1; ++dx) {
+            if ((dx < 0 && x == INT64_MIN) || (dx > 0 && x == INT64_MAX)) continue;
+            dc_chunk_coord_t page = {x + dx, y + dy};
+            if (room_relation(body, page) != OUTSIDE_ROOM && !add_page(group, page)) return false;
+        }
+    }
+    return true;
+}
+
 bool dc_offscreen_collect_bond_group(dc_gpu_t *gpu, uint32_t id, dc_offscreen_bond_group_t *group) {
-    (void)gpu;
-    (void)id;
-    (void)group;
-    return false;
+    if (!gpu || !id || !group || !gpu->structural_graph_possible) return false;
+    dc_offscreen_bond_group_t found = {0};
+    const uint32_t *bonds = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu) + 30000u;
+    uint32_t slot = 0;
+    while (slot < gpu->body_count && gpu->body_ids[slot] != id) ++slot;
+    if (slot == gpu->body_count || !add_member(gpu, &found, slot, id)) return false;
+    for (uint32_t i = 0; i < found.member_count; ++i) {
+        dc_offscreen_bond_member_t member = found.members[i];
+        for (uint32_t j = 0; j < DC_OFFSCREEN_BOND_CAPACITY; ++j) {
+            const uint32_t *bond = bonds + j * 20u;
+            if (!bond[0] || (bond[3] != member.id && bond[4] != member.id)) continue;
+            unsigned end = bond[3] == member.id ? 0u : 1u;
+            if (bond[1u + end] != member.slot || bond[3] == bond[4] ||
+                !add_member(gpu, &found, bond[2u - end], bond[4u - end])) return false;
+        }
+    }
+    if (found.member_count < 2u || !found.page_count) return false;
+    *group = found;
+    return true;
 }
 
 bool dc_offscreen_move_bodies(dc_gpu_t *from, dc_gpu_t *to, dc_chunk_coord_t coord, char *err, uint32_t cap) {
