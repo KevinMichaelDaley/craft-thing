@@ -309,7 +309,7 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
         bind_fluid_mode(gpu, push[2]);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, dc_gpu_slot_capacity(gpu));
+        vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, dc_gpu_water_slot_extent(gpu));
         gpu->fluid_snapshot_valid = true;
         fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
@@ -325,7 +325,7 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
             bind_fluid_mode(gpu, mode);
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
                 VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-            vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, dc_gpu_slot_capacity(gpu));
+            vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, dc_gpu_water_slot_extent(gpu));
         }
     }
 }
@@ -361,7 +361,7 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
     dc_gpu_record_markers(gpu);
     uint32_t push[8] = {gpu->width, gpu->height, 0u, gpu->fluid_tick & 1u, 0u,
                         dc_gpu_float_bits(gpu->fluid_step_scale)};
-    record_mass_relaxation(gpu, gpu->descriptor, VK_NULL_HANDLE, dc_gpu_slot_capacity(gpu), push);
+    record_mass_relaxation(gpu, gpu->descriptor, VK_NULL_HANDLE, dc_gpu_water_slot_extent(gpu), push);
     ++gpu->fluid_tick;
 }
 

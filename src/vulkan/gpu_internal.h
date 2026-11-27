@@ -352,6 +352,14 @@ static inline uint32_t dc_gpu_slot_capacity(const dc_gpu_t *gpu) {
     return gpu->workspace_slots ? gpu->workspace_slots : DC_GPU_CHUNK_SLOTS;
 }
 
+/** Dispatch depth for water shaders that ignore slots with no mapped page. */
+static inline uint32_t dc_gpu_water_slot_extent(const dc_gpu_t *gpu) {
+    if (!gpu->workspace_slots) return dc_gpu_slot_capacity(gpu);
+    uint32_t slots = gpu->workspace_slots;
+    while (slots && gpu->slot_page[slots - 1] == UINT32_MAX) --slots;
+    return slots;
+}
+
 static inline uint32_t dc_gpu_broadphase_buckets(const dc_gpu_t *gpu) {
     return (gpu->page_width + 2u) * (gpu->page_height + 2u);
 }

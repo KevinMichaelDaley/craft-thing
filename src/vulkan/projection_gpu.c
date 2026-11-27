@@ -71,7 +71,7 @@ void dc_gpu_record_projection_fields(dc_gpu_t *gpu) {
     const VkDescriptorSet sets[] = {gpu->descriptor, gpu->pressure_work_descriptor};
     const uint32_t push[7] = {gpu->width, gpu->height, 5u, 1u, 0u,
                               dc_gpu_float_bits(gpu->fluid_step_scale), 0u};
-    record_projection_pass(gpu, sets, push, dc_gpu_slot_capacity(gpu));
+    record_projection_pass(gpu, sets, push, dc_gpu_water_slot_extent(gpu));
     record_hydro_head(gpu, gpu->descriptor, gpu->width, gpu->height);
 }
 
@@ -108,7 +108,7 @@ void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
         push[3] = !sparse;
         push[4] = sparse;
         push[6] = sparse;
-        record_projection_pass(gpu, sets, push, dc_gpu_slot_capacity(gpu));
+        record_projection_pass(gpu, sets, push, dc_gpu_water_slot_extent(gpu));
         if (gpu->pressure_work_enabled && pass == 0u) record_pressure_stencil(gpu);
     }
 }

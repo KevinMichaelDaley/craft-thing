@@ -13,7 +13,7 @@ typedef struct {
     VkDescriptorSet descriptor;
     VkPipelineLayout layout;
     uint64_t structural,structural_graph,runtime,fused_grain,apply_overlap,mpm_fused_grid;
-    uint64_t fluid_scale,fluid_timed,fluid_occupancy,pressure_work;
+    uint64_t fluid_scale,fluid_timed,fluid_occupancy,pressure_work,water_slot_extent;
     uint64_t joints,mpm_gas_force;
 } solver_command_key_t;
 enum { RIGID_PROGRAM, MPM_PROGRAM, FLUID_PROGRAM, COMMAND_PROGRAM_COUNT=FLUID_PROGRAM+10 };
@@ -45,6 +45,7 @@ static solver_command_key_t command_key(const dc_gpu_t *g,unsigned program) {
         key.fluid_scale=dc_gpu_float_bits(g->fluid_step_scale);
         key.fluid_timed=g->timed_fluid;key.fluid_occupancy=g->rigid_occupancy_present;
         key.pressure_work=g->pressure_work_enabled;
+        key.water_slot_extent=dc_gpu_water_slot_extent(g);
     }
     return key;
 }

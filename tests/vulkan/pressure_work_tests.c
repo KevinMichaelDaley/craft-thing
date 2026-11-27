@@ -199,6 +199,7 @@ static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
         memset(chunks, 0, sizeof(*chunks));
         chunks->cells[32 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
         chunks->face_velocity[32 * DC_CHUNK_SIDE + 32].x = .5f;
+        chunks->coord.x = tile;
         chunks->marker_count = 1;
         chunks->markers[0] = (dc_marker_t){32 * DC_FLUID_FULL, 32 * DC_FLUID_FULL, 33 + slot, DC_MARKER_INSIDE};
         for (unsigned owner = 0; owner < 2; ++owner) {
@@ -220,6 +221,8 @@ static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
             ASSERT_EQ(memcmp(chunks[0].cells, chunks[1].cells, sizeof(chunks[0].cells)), 0);
             ASSERT_EQ(memcmp(chunks[0].face_velocity, chunks[1].face_velocity, sizeof(chunks[0].face_velocity)), 0);
             ASSERT_EQ(chunks[0].marker_count, chunks[1].marker_count);
+            for (unsigned owner = 0; owner < 2; ++owner)
+                qsort(chunks[owner].markers, chunks[owner].marker_count, sizeof(dc_marker_t), marker_compare);
             ASSERT_EQ(memcmp(chunks[0].markers, chunks[1].markers,
                              chunks[0].marker_count * sizeof(*chunks[0].markers)), 0);
         }
