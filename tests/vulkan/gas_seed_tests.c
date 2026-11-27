@@ -22,6 +22,9 @@ static struct {
     struct fr_gas_gpu gas;
     gas_packet_t packets[DC_CHUNK_CELLS];
     gas_packet_t before[DC_CHUNK_CELLS];
+    fr_gas_checkpoint_chunk_t saved;
+    uint32_t parameters[FR_GAS_MODEL_WORDS + 1u];
+    uint32_t gates[DC_CHUNK_CELLS];
     fr_gas_state_t input[DC_CHUNK_CELLS];
     fr_gas_state_t output[DC_CHUNK_CELLS];
     double volumes[DC_CHUNK_CELLS];
@@ -39,6 +42,8 @@ static void reset_fixture(void) {
     g_error[0] = '\0';
     fixture.gpu.gas = &fixture.gas;
     fixture.gas.state[0].mapped = fixture.packets;
+    fixture.gas.parameters.mapped = fixture.parameters;
+    fixture.gas.gates.mapped = fixture.gates;
     fixture.gas.model = (fr_gas_model_t){.kinetic_scale = 1.,
         .gas_constant = {1., 1., 1., 1., 0.}, .heat_capacity_cv = {1., 1., 1., 1., 1.}};
     for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) fixture.volumes[i] = 1.;
@@ -91,9 +96,32 @@ static void test_over_capacity_input_cannot_publish_even_when_it_rounds_the_same
     PASS();
 }
 
+static void test_checkpoint_round_trip_preserves_bounded_pigment_and_rejects_corruption(void) {
+    reset_fixture();
+    fixture.input[0] = (fr_gas_state_t){.species = {[FR_GAS_EXHAUST] = .1},
+                                      .energy = 30., .pigment = {.1}};
+    ASSERT_TRUE(seed());
+    memcpy(fixture.before, fixture.packets, sizeof(fixture.before));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(&fixture.gpu, 0, &fixture.saved,
+                                             g_error, sizeof(g_error)));
+    memset(fixture.packets, 0, sizeof(fixture.packets));
+    ASSERT_TRUE(fr_gas_gpu_import_checkpoint(&fixture.gpu, 0, &fixture.saved,
+                                             g_error, sizeof(g_error)));
+    ASSERT_INT_EQ(memcmp(fixture.packets, fixture.before, sizeof(fixture.before)), 0);
+
+    fixture.saved.cells[0][8] = .1f;
+    ASSERT_TRUE(!fr_gas_gpu_import_checkpoint(&fixture.gpu, 0, &fixture.saved,
+                                              g_error, sizeof(g_error)));
+    ASSERT_TRUE(strstr(g_error, "Gas pigment has no admitted carrier"));
+    ASSERT_INT_EQ(g_waits, 3u);
+    ASSERT_INT_EQ(memcmp(fixture.packets, fixture.before, sizeof(fixture.before)), 0);
+    PASS();
+}
+
 int main(void) {
     RUN(test_equal_pigment_uses_highest_float_within_compensated_carriers);
     RUN(test_over_capacity_input_cannot_publish_even_when_it_rounds_the_same);
+    RUN(test_checkpoint_round_trip_preserves_bounded_pigment_and_rejects_corruption);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

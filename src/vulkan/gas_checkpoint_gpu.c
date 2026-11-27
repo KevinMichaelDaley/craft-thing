@@ -1,3 +1,4 @@
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,10 +101,15 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *state
         p[12]=p[13]=(float)volumes[i];fr_gas_state_t rounded=unpack(packets+i);
         /* Compensated carrier stock can lie below the nearest pigment float. */
         double carrier = rounded.species[FR_GAS_EXHAUST] + rounded.species[FR_GAS_SOOT];
-        float pigment_limit = (float)carrier;
-        if ((double)pigment_limit > carrier) pigment_limit = nextafterf(pigment_limit, 0.f);
-        for (uint32_t k = 0; k < 3u; ++k) {
-            if (rounded.pigment[k] > carrier) rounded.pigment[k] = p[8 + k] = pigment_limit;
+        if (carrier < FLT_MAX) {
+            float pigment_limit = (float)carrier;
+            if ((double)pigment_limit > carrier) pigment_limit = nextafterf(pigment_limit, 0.f);
+            for (uint32_t k = 0; k < 3u; ++k) {
+                if (rounded.pigment[k] > carrier) {
+                    p[8 + k] = pigment_limit;
+                    rounded.pigment[k] = pigment_limit;
+                }
+            }
         }
         okay=import_thermodynamics(&g->gas->model,&rounded,p[12],&t,err,cap);
     }
