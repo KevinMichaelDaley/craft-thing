@@ -1,7 +1,7 @@
 ---
 id: ctcdo-rcs9
 status: in_progress
-deps: [ctdot-kbys, ctols-xhuy, ctols-vhg9, ctopo-yhkb]
+deps: [ctdot-kbys, ctols-xhuy, ctols-vhg9, ctopo-yhkb, ctowpe-boo0, ctowpe-vzz1]
 links: []
 created: 2026-11-27T04:17:01Z
 type: task
