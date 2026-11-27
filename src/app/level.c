@@ -780,7 +780,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     bool offscreen_ready = dc_camera_offscreen_ready(view);
     if (all_resident && offscreen_ready && !dc_level_offscreen_restore_camera_pair(view, err, cap)) return false;
     uint32_t ready_steps = all_resident && offscreen_ready ? view->pending_steps : 0u;
-    if (ready_steps && (view->players || view->offscreen_handoffs || view->end_run - view->first_run > 1u)) {
+    if (ready_steps && (view->players || view->end_run - view->first_run > 1u ||
+                        dc_level_offscreen_requires_paired_steps(view))) {
         /* A mixed frame publishes each completed step before trying to present. */
         if (view->players && !dc_players_present(view, err, cap)) return false;
         if (!execute_level_steps(view, err, cap)) return false;

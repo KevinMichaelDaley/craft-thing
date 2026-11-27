@@ -11,6 +11,9 @@ typedef enum {
     DC_LEVEL_OFFSCREEN_FAILED
 } dc_level_offscreen_result_t;
 
+/** Whether foreground ticks need an ownership check at each step boundary. */
+bool dc_level_offscreen_requires_paired_steps(const dc_level_view_t *view);
+
 /** Run a native tick for an adjacent admitted workspace sharing the resident interval start. */
 dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
     char *err, uint32_t cap);

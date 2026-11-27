@@ -255,6 +255,18 @@ stale:
     return DC_LEVEL_OFFSCREEN_FAILED;
 }
 
+bool dc_level_offscreen_requires_paired_steps(const dc_level_view_t *view) {
+    if (!view->offscreen_handoffs) return false;
+    if (view->camera_offscreen.rigid_group || view->camera_offscreen.water_face ||
+        view->camera_offscreen.bond || (view->save && !view->water_checkpoint_checked) ||
+        (view->gpu && view->gpu->water_cycle_peer)) return true;
+    for (const dc_level_offscreen_handoff_t *lease = view->offscreen_handoffs; lease; lease = lease->next) {
+        if (!lease->disk_source || lease->owns_bodies || lease->liquid_paired ||
+            lease->workspace->water_coupled) return true;
+    }
+    return false;
+}
+
 dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
     char *err, uint32_t cap) {
     if (view->camera_offscreen.rigid_group) {
