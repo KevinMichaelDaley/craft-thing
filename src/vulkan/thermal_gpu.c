@@ -6,6 +6,7 @@
 #include "dungeoncraft/thermal_water_layout.h"
 #include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/combustion_gpu.h"
+#include "ferrum/fire/gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "reactive_storage_gpu.h"
 #include "renderer_internal.h"
@@ -444,6 +445,12 @@ void fr_thermal_clear_water_chunk(dc_gpu_t *g,uint32_t slot) {
         memset((float *)g->thermal->water.mapped+slot*4096u,0,4096u*sizeof(float));
 }
 bool fr_thermal_gpu_enabled(const dc_gpu_t *g) {return g&&g->thermal;}
+bool fr_thermal_water_only(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if (!gpu->thermal) return true;
+    fr_gpu_reactive_stats_t stats;
+    return !gpu->thermal->probe_active && !gpu->thermal->combustion.pipeline &&
+        fr_gpu_reactive_read_stats(gpu, &stats, err, cap) && !stats.live;
+}
 bool fr_thermal_gpu_import_water_chunk(dc_gpu_t *g,uint32_t slot,
     const dc_chunk_t *chunk,const float *energy,char *err,uint32_t cap) {
     if(!g||!g->thermal||slot>=dc_gpu_slot_capacity(g)||!chunk||!energy)

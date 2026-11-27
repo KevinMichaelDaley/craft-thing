@@ -5,6 +5,7 @@
 #include "dungeoncraft/liquid_seam.h"
 #include "dungeoncraft/terrain_flags.h"
 #include "../vulkan/gpu_internal.h"
+#include "../vulkan/thermal_gpu_internal.h"
 #include "level_internal.h"
 #include "offscreen_internal.h"
 
@@ -138,8 +139,9 @@ static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_s
     uint32_t queue[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS];
     for (uint32_t t = 0; t < count; ++t) {
         dc_gpu_t *gpu = tiles[t].gpu;
-        if ((t == 0 || t == residents) && (!dc_gpu_chunk_physics_isolated(gpu) || gpu->gas ||
-            gpu->tick_water_source || !dc_gpu_copy_chunk_state(gpu, UINT32_MAX, false, false, err, cap)))
+        if ((t == 0 || t == residents) && (gpu->body_count || gpu->structural_graph_possible ||
+            gpu->gas || gpu->tick_water_source || !fr_thermal_water_only(gpu, err, cap) ||
+            !dc_gpu_copy_chunk_state(gpu, UINT32_MAX, false, false, err, cap)))
             return false;
         regions[t].active = t >= residents;
         if (!inspect_water_region(tiles[t], &regions[t])) return false;

@@ -11,6 +11,8 @@ void fr_thermal_record_overlay(dc_gpu_t *gpu);
 void fr_thermal_gpu_destroy(dc_gpu_t *gpu);
 /** Borrow the live per-cell water excess buffer while holding this owner. */
 VkBuffer fr_thermal_gpu_water_buffer(const dc_gpu_t *gpu);
+/** Check whether thermal work can only exchange energy between wet cells. */
+bool fr_thermal_water_only(dc_gpu_t *gpu, char *err, uint32_t cap);
 /** Cold physical-slot replacement after validation and completed upload. */
 void fr_thermal_clear_water_chunk(dc_gpu_t *gpu,uint32_t slot);
 /** Cold validated gas replacement invalidates its derived emission cache. */
