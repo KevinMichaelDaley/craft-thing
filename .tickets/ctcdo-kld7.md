@@ -1,6 +1,6 @@
 ---
 id: ctcdo-kld7
-status: in_progress
+status: closed
 deps: [ctdot-kbys]
 links: []
 created: 2026-11-27T04:17:01Z
@@ -31,3 +31,7 @@ Native RTX tests now cover a two-page bonded camera pan, remapped runtime slots,
 **2026-11-27T13:00:02Z**
 
 The floor-contact camera case preserves the complete world-space terrain contact records. Bonded member position, velocity, mass, inertia, angle and angular velocity also match an independently authored uninterrupted native solver after a fractional tick before eviction and a timed tick offscreen. Both camera paths passed, including cold recovery after a failed return.
+
+**2026-11-27T13:18:57Z**
+
+Mixed authored component graphs retain resident joints, member generations and clocks while a bonded pair transfers, returns and reopens. Eight native contact, camera, failure/retry and partition scenarios passed with Vulkan synchronization validation on persistent Xephyr :93.
