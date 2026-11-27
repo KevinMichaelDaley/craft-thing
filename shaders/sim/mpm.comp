@@ -69,6 +69,9 @@ const float WATER_DRAG = 0.5;
 const uint CELL_REST_VOLUME_LIMIT_FP=98304u;
 const uint MODE_WATER_FEEDBACK = 6u;
 const uint MODE_MOISTURE = 7u;
+#ifdef DC_MPM_DOMAIN
+const uint MODE_INITIAL_DOMAIN_MOISTURE = 8u;
+#endif
 const uint MOISTURE_MASK = 0x00ffffffu;
 const uint MUD_FLAG = 0x80000000u;
 const uint FRAGMENT_FLAG = 0x40000000u;
@@ -617,14 +620,17 @@ void main() {
     if(mode==5u) {coalesced_commit(tile,tiles_x);return;}
 #endif
     if (!in_grid(cell)) return;
-    if (mode == MODE_MOISTURE) {
 #ifdef DC_MPM_DOMAIN
+    if (mode == MODE_INITIAL_DOMAIN_MOISTURE) {
         if (page_at(cell)!=0u) {
             uint primary=particle_index(cell,0u);
             grain_sources[primary]=primary+1u;
             grain_sources[primary+CELLS]=primary+CELLS+1u;
         }
+        mode = MODE_MOISTURE;
+    }
 #endif
+    if (mode == MODE_MOISTURE) {
         exchange_moisture(cell);
         return;
     }

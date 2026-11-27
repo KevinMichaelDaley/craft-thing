@@ -14,7 +14,7 @@ typedef struct {
     VkPipelineLayout layout;
     uint64_t structural,structural_graph,runtime,fused_grain,apply_overlap,mpm_fused_grid;
     uint64_t fluid_scale,fluid_timed,fluid_occupancy,pressure_work;
-    uint64_t joints;
+    uint64_t joints,mpm_gas_force;
 } solver_command_key_t;
 enum { RIGID_PROGRAM, MPM_PROGRAM, FLUID_PROGRAM, COMMAND_PROGRAM_COUNT=FLUID_PROGRAM+10 };
 typedef struct {
@@ -40,6 +40,7 @@ static solver_command_key_t command_key(const dc_gpu_t *g,unsigned program) {
     key.apply_overlap=g->solver_apply_overlap;
     key.joints=fr_gpu_revolute_span(g);
     key.mpm_fused_grid=g->mpm_fused_grid;
+    key.mpm_gas_force=program==MPM_PROGRAM && g->gas!=NULL;
     if(program>=FLUID_PROGRAM) {
         key.fluid_scale=dc_gpu_float_bits(g->fluid_step_scale);
         key.fluid_timed=g->timed_fluid;key.fluid_occupancy=g->rigid_occupancy_present;
@@ -130,7 +131,8 @@ void dc_gpu_record_mpm(dc_gpu_t *g) {
     bool gas_force = g->gas != NULL;
     while (remaining > 0.f) {
         float scale = remaining < 1.f ? remaining : 1.f;
-        if (scale != 1.f || gas_force != (g->gas != NULL) || !execute_cached(g, MPM_PROGRAM))
+        bool cacheable = scale == 1.f && gas_force == (g->gas != NULL);
+        if (!cacheable || !execute_cached(g, MPM_PROGRAM))
             dc_gpu_record_mpm_interval(g, scale, gas_force);
         remaining -= scale;
         gas_force = false;

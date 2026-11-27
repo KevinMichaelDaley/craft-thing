@@ -405,6 +405,7 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
 /** Spread one Eulerian update across six ticks, or run it every tick (1). */
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval);
+/** Set the simulation time advanced per tick, in seconds, up to 0.25. */
 bool dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds);
 
 /** Read the first active completed body, or a zero body when the pool is empty. */

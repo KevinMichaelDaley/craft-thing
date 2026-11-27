@@ -870,7 +870,7 @@ static void test_dry_and_saturated_dirt_yield_differently(void) {
     PASS();
 }
 
-static void test_free_sand_horizontal_velocity_has_tiny_decay(void) {
+static void check_free_sand_horizontal_motion(bool half_tick) {
     char err[256] = {0};
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(chunk != NULL);
@@ -878,22 +878,37 @@ static void test_free_sand_horizontal_velocity_has_tiny_decay(void) {
     chunk->cells[source].material = DC_MATERIAL_SAND;
     dc_chunk_seed_particles(chunk);
     chunk->particles[source].vx_fp = DC_FLUID_FULL;
+    int32_t start_x = chunk->particles[source].x_fp;
     dc_gpu_t *gpu = NULL;
     ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv",
                               err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    if (half_tick) ASSERT_TRUE(dc_gpu_set_tick_seconds(gpu, 1.f / 120.f));
     ASSERT_TRUE(dc_gpu_tick_step(gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(gpu, 0, chunk, err, sizeof(err)));
     ASSERT_EQ(chunk->particle_count, 1u);
-    int32_t vx = 0;
+    int32_t vx = 0, travel = 0;
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
-        if (chunk->particles[i].mass_fp) vx = chunk->particles[i].vx_fp;
+        if (chunk->particles[i].mass_fp) {
+            vx = chunk->particles[i].vx_fp;
+            travel = chunk->particles[i].x_fp - start_x;
+        }
     ASSERT_TRUE(vx > (int32_t)(0.99 * DC_FLUID_FULL));
     ASSERT_TRUE(vx < (int32_t)(0.9995 * DC_FLUID_FULL));
+    int32_t expected = half_tick ? DC_FLUID_FULL / 2 : DC_FLUID_FULL;
+    ASSERT_TRUE(travel > expected * 99 / 100 && travel <= expected);
     dc_gpu_destroy(gpu);
     free(chunk);
     PASS();
+}
+
+static void test_free_sand_horizontal_velocity_has_tiny_decay(void) {
+    check_free_sand_horizontal_motion(false);
+}
+
+static void test_half_tick_advances_a_free_grain_half_a_cell(void) {
+    check_free_sand_horizontal_motion(true);
 }
 
 static void test_sand_settles_and_binds_pore_water(void) {
@@ -1164,6 +1179,7 @@ int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "--elapsed")) {
         RUN(test_grain_replay_matches_equal_world_time);
         RUN(test_half_tick_absorbs_half_the_water_dose);
+        RUN(test_half_tick_advances_a_free_grain_half_a_cell);
         return g_fail != 0;
     }
     printf("GPU particle capacity: %u records per chunk, %u primary cell slots\n",
@@ -1190,6 +1206,7 @@ int main(int argc, char **argv) {
     RUN(test_coupled_materials_conserve_water_across_seam_and_stream);
     RUN(test_dry_and_saturated_dirt_yield_differently);
     RUN(test_free_sand_horizontal_velocity_has_tiny_decay);
+    RUN(test_half_tick_advances_a_free_grain_half_a_cell);
     RUN(test_sand_settles_and_binds_pore_water);
     RUN(test_small_wet_dirt_patch_does_not_become_mud);
     RUN(test_large_wet_dirt_component_crosses_seam_as_mud);

@@ -5,13 +5,6 @@
 #include "gpu_internal.h"
 #include "authored_rigid_gpu_internal.h"
 
-enum {
-    DC_MPM_SUBSTEPS = 2,
-    DC_MPM_MODES = 6,
-    DC_MPM_WATER_FEEDBACK_MODE = 6,
-    DC_MPM_MOISTURE_MODE = 7
-};
-
 static uint32_t component_round_limit(uint32_t width, uint32_t height) {
     uint64_t cells = (uint64_t)width * height;
     uint32_t rounds = 1u;

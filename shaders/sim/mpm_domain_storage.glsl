@@ -3,7 +3,7 @@ layout(set=0,binding=4,std430) buffer DomainSupport { uint domain_dirty[]; };
 layout(set=0,binding=5,std430) buffer GrainSources { uint grain_sources[]; };
 layout(set=0,binding=6,std430) buffer NextGrainSources { uint next_grain_sources[]; };
 
-/* Keep the original particle slot through both gathers. Paired owners use
+/* Keep the original particle slot through every substep. Paired owners use
    this correspondence when moving a reactive parcel between their arenas. */
 void reactive_particle_gather(uint pool,uint source,uint target,bool occupied) {
     next_grain_sources[target]=occupied?grain_sources[source]:0u;

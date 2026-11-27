@@ -741,7 +741,7 @@ static void test_grain_owner_can_submit_first(void) {
     check_peer_grain_contact(true);
 }
 
-static void test_grains_cross_the_owner_face_in_both_directions(void) {
+static void check_grains_cross_the_owner_face(float dt) {
     const char *shader = "build/shaders/pattern.comp.spv";
     dc_gpu_t *owner[2] = {0}, *mono = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *expected = calloc(1, sizeof(*expected));
@@ -771,7 +771,6 @@ static void test_grains_cross_the_owner_face_in_both_directions(void) {
             fr_gpu_reactive_seed_particle(owner[i],cell,&states[i],g_err,sizeof(g_err)) &&
             fr_gpu_reactive_seed_particle(mono,i*DC_MPM_PARTICLES_PER_CHUNK+cell,&states[i],g_err,sizeof(g_err)));
     }
-    const float dt = 1.f / 60.f;
     ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, dt) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
     ASSERT_EQ(dc_gpu_tick_water_cohort(tiles, 2, dt, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
     for (unsigned i = 0; i < 2; ++i) {
@@ -804,6 +803,14 @@ cleanup:
     dc_gpu_destroy(owner[0]);
     free(chunk);
     free(expected);
+}
+
+static void test_grains_cross_the_owner_face_in_both_directions(void) {
+    check_grains_cross_the_owner_face(1.f / 60.f);
+}
+
+static void test_shared_grains_match_multiple_and_fractional_ticks(void) {
+    check_grains_cross_the_owner_face(2.5f / 60.f);
 }
 
 static void test_unmapped_neighbor_contains_the_edge_grain(void) {
@@ -850,6 +857,7 @@ int main(int argc, char **argv) {
         RUN(test_grain_owner_can_submit_first);
     } else if (argc == 2 && strcmp(argv[1], "--grain-crossing") == 0) {
         RUN(test_grains_cross_the_owner_face_in_both_directions);
+        RUN(test_shared_grains_match_multiple_and_fractional_ticks);
         RUN(test_unmapped_neighbor_contains_the_edge_grain);
     } else if (argc == 2 && strcmp(argv[1], "--gas-hole") == 0) {
         RUN(test_gas_domain_preserves_the_unmapped_corner);
@@ -864,6 +872,7 @@ int main(int argc, char **argv) {
         RUN(test_practical_gas_transport_matches_across_the_owner_face);
         RUN(test_gas_domain_preserves_the_unmapped_corner);
         RUN(test_grains_cross_the_owner_face_in_both_directions);
+        RUN(test_shared_grains_match_multiple_and_fractional_ticks);
         RUN(test_unmapped_neighbor_contains_the_edge_grain);
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
         RUN(test_grain_owner_can_submit_first);
