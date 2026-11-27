@@ -585,6 +585,8 @@ void dc_gpu_record_dense_projection(dc_gpu_t *gpu, const VkDescriptorSet sets[2]
 void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 bool dc_gpu_make_water_seam_pipeline(dc_gpu_t *gpu, uint32_t mode, VkPipeline *pipeline,
                                      char *err, uint32_t cap);
+void dc_gpu_record_transport_sweep(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
+                                   uint32_t *push, uint32_t push_bytes, bool occupancy);
 void dc_gpu_record_water_seam_transport(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     const VkPipeline pipelines[4], uint32_t width, uint32_t height, float step_scale,
     bool occupancy, uint32_t axis);

@@ -129,7 +129,7 @@ void record_water_crossing(ivec2 source, ivec2 target, uint amount) {
     uint axis = vertical ? DC_WATER_SEAM_VERTICAL : DC_WATER_SEAM_HORIZONTAL;
     if (amount == 0u || params.seam_axis != axis) return;
     int from = vertical ? source.y : source.x, to = vertical ? target.y : target.x;
-    if ((from < int(DC_WATER_SEAM_COLUMN)) == (to < int(DC_WATER_SEAM_COLUMN))) return;
+    if ((from < int(DC_WATER_SEAM_SIDE)) == (to < int(DC_WATER_SEAM_SIDE))) return;
     atomicAdd(crossings[atlas_index(source, page_at(source))].x, amount);
     atomicAdd(crossings[atlas_index(target, page_at(target))].y, amount);
 #endif

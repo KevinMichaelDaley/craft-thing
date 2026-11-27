@@ -55,3 +55,11 @@ The ancestor gas-pigment full make test run exited 2 at tests/app/forest_bonfire
 **2026-11-27T05:15:29Z**
 
 The pinned stream-transactions suite at 531a2f4eebe5808643b0ab1694c076c1751a1f13 reached the forest checks and exited 2. The west crosswind case failed tests/app/forest_bonfire_tests.c:580 (!run.timed_out), while the other four forest cases passed. Other Vulkan workloads were active. This records a second timeout variant for the isolated reproduction, with the cause still unconfirmed.
+
+**2026-11-27T06:20:17Z**
+
+The queued full run at 5451860205ee63bab7c22c118e61f36218eb5651 exited 2. Still-air, east-crosswind, and west-crosswind forest cases exceeded their existing deadlines while other GPU workloads were active. The sealed-pit recovery case passed. This run provides no isolated performance measurement.
+
+**2026-11-27T06:25:46Z**
+
+The offscreen-active full run at 2375074c1df21f8e180948a3710476b23a41a934 also exited 2 with the same three forest deadline failures. The paired-owner pressure regression retry subsequently passed all eight targeted Vulkan checks.

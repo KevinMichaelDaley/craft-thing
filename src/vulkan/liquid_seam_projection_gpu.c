@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 #include "dungeoncraft/fluid_aperture_layout.h"
-
 #include "dungeoncraft/liquid_seam.h"
 #include "dungeoncraft/liquid_seam_layout.h"
 #include "dungeoncraft/terrain_flags.h"
@@ -21,7 +20,12 @@ enum {
     Y_FACE_COVERAGE = 4
 };
 
-_Static_assert(DC_CHUNK_SIDE == DC_WATER_SEAM_COLUMN, "Water seam column differs from the chunk side");
+typedef struct {
+    uint32_t sent, received;
+} seam_crossing_t;
+
+_Static_assert(DC_CHUNK_SIDE == DC_WATER_SEAM_SIDE, "Water seam differs from the chunk side");
+_Static_assert(sizeof(seam_crossing_t) == 2u * sizeof(uint32_t), "Water seam crossing layout mismatch");
 
 enum {
     CELLS, PAGES, OCCUPANCY, PREVIOUS_VERTICAL, HEAD, VELOCITY, PRESSURE, SLOT_PAGES,
@@ -47,7 +51,7 @@ static const struct {
     [APERTURE_PREFIX] = {0, 28, 2u * SEAM_CELLS * sizeof(uint32_t)},
     [APERTURE_TREE] = {0, 29, (DC_FLUID_APERTURE_TREE_BASE +
         2u * SEAM_CELLS / DC_FLUID_APERTURE_TILE_CELLS) * sizeof(uint32_t)},
-    [CROSSINGS] = {0, DC_WATER_SEAM_CROSSING_BINDING, 2u * SEAM_CELLS * sizeof(uint32_t)},
+    [CROSSINGS] = {0, DC_WATER_SEAM_CROSSING_BINDING, SEAM_CELLS * sizeof(seam_crossing_t)},
     [INACTIVE_COLOR] = {0, 32, 4u * sizeof(float)},
     [INACTIVE_THERMAL] = {0, 36, sizeof(uint32_t)},
     [BULK_PHASE] = {0, 37, SEAM_TILES * sizeof(fr_bulk_phase_chunk_t)},
@@ -240,14 +244,14 @@ static void read_water_plan(const struct dc_gpu_seam_projection *scratch, dc_liq
                             uint32_t width, dc_water_seam_plan_t *plan) {
     const dc_cell_t *initial = projection_field(scratch, INITIAL_CELLS);
     const dc_cell_t *final = projection_field(scratch, CELLS);
-    const uint32_t (*crossings)[2] = projection_field(scratch, CROSSINGS);
+    const seam_crossing_t *crossings = projection_field(scratch, CROSSINGS);
     read_face(scratch, axis, width, plan->projection);
     for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane)
         plan->crossing_fp[lane] = 0;
     for (uint32_t tile = 0; tile < SEAM_TILES; ++tile)
         for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
             uint32_t atlas = tile * DC_CHUNK_CELLS + i;
-            uint32_t sent = crossings[atlas][0], received = crossings[atlas][1];
+            uint32_t sent = crossings[atlas].sent, received = crossings[atlas].received;
             plan->cells[tile][i] = (dc_water_seam_cell_t){initial[atlas].fluid_mass,
                 final[atlas].fluid_mass, sent, received};
             if (tile == 0) {

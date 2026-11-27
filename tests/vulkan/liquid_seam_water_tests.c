@@ -19,7 +19,7 @@ static char g_err[256];
 #define ASSERT_INT_EQ(a, b) ASSERT_EQ((int)(a), (int)(b))
 #define PASS() ++g_pass
 
-enum { FORWARD = 12, REVERSE = 16, SHALLOW = 21, BLOCKED = 26, BACKPRESSURE = 31 };
+enum { FORWARD = 12, REVERSE = 16, SHALLOW = 21, BLOCKED = 26, BACKPRESSURE = 31, DONORS = 4 };
 static const uint32_t donor_stock = 49152u;
 
 static uint32_t index_on_line(bool y_axis, uint32_t normal, uint32_t lane, uint32_t width) {
@@ -46,8 +46,12 @@ static void seed_basin(dc_chunk_t *first, dc_chunk_t *second, fr_bulk_phase_chun
         }
         const uint32_t donor = lane == REVERSE ? 65u :
                                (lane == FORWARD || lane == BLOCKED ? 62u : 63u);
-        chunks[donor / DC_CHUNK_SIDE]->cells[
-            index_on_line(y_axis, donor % DC_CHUNK_SIDE, lane, DC_CHUNK_SIDE)].fluid_mass = donor_stock;
+        const uint32_t count = lane == FORWARD || lane == REVERSE ? DONORS : 1u;
+        for (uint32_t i = 0; i < count; ++i) {
+            const uint32_t source = lane == REVERSE ? donor + i : donor - i;
+            chunks[source / DC_CHUNK_SIDE]->cells[
+                index_on_line(y_axis, source % DC_CHUNK_SIDE, lane, DC_CHUNK_SIDE)].fluid_mass = donor_stock;
+        }
     }
 }
 
@@ -95,6 +99,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     dc_chunk_t *download = calloc(1, sizeof(*download));
     fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
     dc_water_seam_plan_t *plan = calloc(1, sizeof(*plan));
+    dc_water_seam_plan_t *saved = malloc(sizeof(*saved));
     dc_gpu_t device = {0}, *mono = NULL;
     dc_liquid_seam_endpoint_t owners[2] = {
         {.coord = {-2, 3}, .tile_x = 1, .slot = 1},
@@ -105,7 +110,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     void *mapped = NULL;
     g_err[0] = '\0';
 
-    ASSERT_TRUE(chunks[0] && chunks[1] && download && bulk && plan);
+    ASSERT_TRUE(chunks[0] && chunks[1] && download && bulk && plan && saved);
     seed_basin(chunks[0], chunks[1], bulk, y_axis);
     ASSERT_TRUE(dc_gpu_initialize_device(&device, 3u * DC_CHUNK_CELLS * sizeof(dc_cell_t),
                                         0, 0, 0, g_err, sizeof(g_err)));
@@ -123,10 +128,12 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
                                       plan, g_err, sizeof(g_err)));
 
-    const uint32_t first_donor = index_on_line(y_axis, 62, FORWARD, DC_CHUNK_SIDE);
-    const uint32_t second_donor = index_on_line(y_axis, 1, REVERSE, DC_CHUNK_SIDE);
-    ASSERT_TRUE(plan->cells[0][first_donor].crossing_out_fp > 0);
-    ASSERT_TRUE(plan->cells[1][second_donor].crossing_out_fp > 0);
+    for (uint32_t i = 0; i < DONORS; ++i) {
+        uint32_t first_donor = index_on_line(y_axis, 62u - i, FORWARD, DC_CHUNK_SIDE);
+        uint32_t second_donor = index_on_line(y_axis, 1u + i, REVERSE, DC_CHUNK_SIDE);
+        ASSERT_TRUE(plan->cells[0][first_donor].crossing_out_fp > 0);
+        ASSERT_TRUE(plan->cells[1][second_donor].crossing_out_fp > 0);
+    }
     uint32_t far_forward = 0, far_reverse = 0;
     for (uint32_t i = 1; i < DC_CHUNK_SIDE; ++i) {
         far_forward += plan->cells[1][index_on_line(y_axis, i, FORWARD, DC_CHUNK_SIDE)].crossing_in_fp;
@@ -143,12 +150,15 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     ASSERT_INT_EQ(plan->crossing_fp[BLOCKED], 0);
     ASSERT_INT_EQ(plan->crossing_fp[BACKPRESSURE], 0);
 
+    memcpy(saved, plan, sizeof(*saved));
+    ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
+                                      plan, g_err, sizeof(g_err)));
+    ASSERT_INT_EQ(memcmp(saved, plan, sizeof(*saved)), 0);
     dc_liquid_seam_endpoint_t stale = owners[1];
     stale.slot = stale.slot + 1u;
-    const int32_t saved = plan->crossing_fp[FORWARD];
     ASSERT_TRUE(!dc_gpu_plan_water_seam(owners[0], stale, axis, step_seconds, NULL,
                                        plan, g_err, sizeof(g_err)));
-    ASSERT_INT_EQ(plan->crossing_fp[FORWARD], saved);
+    ASSERT_INT_EQ(memcmp(saved, plan, sizeof(*saved)), 0);
     for (unsigned owner = 0; owner < 2; ++owner) {
         ASSERT_TRUE(dc_gpu_download_chunk(owners[owner].gpu, owners[owner].slot, download,
                                           g_err, sizeof(g_err)));
@@ -204,6 +214,7 @@ cleanup:
     dc_gpu_destroy(owners[1].gpu);
     dc_gpu_destroy(owners[0].gpu);
     dc_gpu_release_device(&device);
+    free(saved);
     free(plan);
     free(bulk);
     free(download);
