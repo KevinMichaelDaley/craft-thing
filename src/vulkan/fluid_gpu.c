@@ -343,7 +343,8 @@ static void record_mass_pass(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeli
     }
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
         VK_SHADER_STAGE_COMPUTE_BIT, 0, (pipeline ? 8u : 7u) * sizeof(uint32_t), push);
-    vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, slots);
+    uint32_t invocations = push[2] >= 6u && push[2] <= 9u ? DC_CHUNK_CELLS / 2u : DC_CHUNK_CELLS;
+    vkCmdDispatch(gpu->command, invocations / 64u, 1u, slots);
 }
 
 static void record_mass_relaxation(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,

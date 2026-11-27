@@ -8,7 +8,6 @@ layout(set = 0, binding = 1, std430) buffer ChunkCells { uvec2 chunk_cells[]; };
 layout(set = 0, binding = 2, std430) readonly buffer PageTable { uint pages[]; };
 layout(set = 0, binding = 3, std430) readonly buffer Occupancy { uint occupancy[]; };
 layout(set = 0, binding = 8, std430) buffer FluidA { uint fluid_a[]; };
-layout(set = 0, binding = 9, std430) buffer FluidB { int fluid_b[]; };
 layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]; };
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
@@ -54,16 +53,6 @@ uint atlas_index(ivec2 p, uint page) {
 #include "hydraulic_face.glsl"
 #include "water_color.glsl"
 #include "water_seam_crossing.glsl"
-
-uint source_mass(uint index) {
-    return dispatch_mode() == 6u || dispatch_mode() == 8u ?
-           fluid_a[index] : uint(fluid_b[index]);
-}
-
-void write_mass(uint index, uint mass) {
-    if (dispatch_mode() == 6u || dispatch_mode() == 8u) fluid_b[index] = int(mass);
-    else fluid_a[index] = mass;
-}
 
 bool permeable_material(uint material) {
     return material == 0u || material == 2u || material == 4u || material == 5u || material == 6u || material == 10u || material == 13u;
@@ -242,58 +231,39 @@ void displace_row(uint y) {
     }
 }
 
-void correct_pair(ivec2 p) {
-    uint index = uint(p.y) * params.width + uint(p.x);
-    uint own = source_mass(index);
-    bool vertical = dispatch_mode() <= 7u;
-    int parity = int(((dispatch_mode() - 6u) & 1u) ^ params.tick_parity);
-    int coordinate = vertical ? p.y : p.x;
-    int delta = (coordinate & 1) == parity ? 1 : -1;
-    ivec2 neighbor = p + (vertical ? ivec2(0, delta) : ivec2(delta, 0));
-    uint own_page = page_at(p);
-    uint other_page = page_at(neighbor);
-    if (own_page == 0u || other_page == 0u ||
-        !open_cell(p) || !open_cell(neighbor)) {
-        write_mass(index, own);
-        return;
-    }
-    uint other_index = uint(neighbor.y) * params.width + uint(neighbor.x);
-    uint other = source_mass(other_index);
-    ivec2 first = vertical ? (p.y < neighbor.y ? p : neighbor) :
-                              (p.x < neighbor.x ? p : neighbor);
-    ivec2 second = first == p ? neighbor : p;
-    uint first_page = page_at(first);
+/* Each parity sweep is a matching. A single invocation owns both endpoints,
+   including pairs crossing an atlas page, until the next dispatch barrier. */
+void correct_pair(ivec2 first, ivec2 direction, uint first_page) {
+    uint first_atlas = atlas_index(first, first_page);
+    uint first_guide = marker_grid[first_atlas];
+    if ((first_guide & 3u) == 0u) return;
+    ivec2 second = first + direction;
     uint second_page = page_at(second);
-    uint first_guide = marker_grid[atlas_index(first, first_page)];
-    uint second_guide = marker_grid[atlas_index(second, second_page)];
-    uint first_mass = first == p ? own : other;
-    uint second_mass = first == p ? other : own;
-    int request = 0;
-    if ((first_guide & 1u) != 0u && (second_guide & 1u) == 0u &&
-        (second_guide & 2u) != 0u &&
-        first_mass >= second_mass) request = -8192;
-    else if ((first_guide & 1u) == 0u && (first_guide & 2u) != 0u &&
-             (second_guide & 1u) != 0u &&
-             second_mass >= first_mass) request = 8192;
-    if (request == 0) {
-        write_mass(index, own);
-        return;
-    }
-    bool sender = (p == first) == (request > 0);
-    uint available = sender ? own : other;
-    uint receiving = sender ? other : own;
-    uint capacity=receiving_capacity(sender?neighbor:p);
-    float aperture=face_aperture(p,neighbor-p);
-    uint flux = min(min(min(uint(abs(request)),uint(aperture*float(FULL))), available),
-                    receiving < capacity ? capacity - receiving : 0u);
-    if(sender) {
-        uint source=atlas_index(p,own_page),target=atlas_index(neighbor,other_page);
-        record_water_crossing(p, neighbor, flux);
-        water_color_move(source,target,receiving,flux,own);
-        thermal_water_resize(source,own,own-flux);
-        water_color_clear(source,own-flux);
-    }
-    write_mass(index, sender ? own - flux : own + flux);
+    if (second_page == 0u) return;
+    uint second_atlas = atlas_index(second, second_page);
+    uint second_guide = marker_grid[second_atlas];
+    bool forward = (first_guide & 3u) == 2u && (second_guide & 1u) != 0u;
+    bool backward = (first_guide & 1u) != 0u && (second_guide & 3u) == 2u;
+    if ((!forward && !backward) || !open_cell(first) || !open_cell(second)) return;
+
+    uint first_index = uint(first.y) * params.width + uint(first.x);
+    uint second_index = uint(second.y) * params.width + uint(second.x);
+    uint source_index = forward ? first_index : second_index;
+    uint target_index = forward ? second_index : first_index;
+    uint available = fluid_a[source_index], receiving = fluid_a[target_index];
+    if (available > receiving) return;
+    ivec2 source = forward ? first : second, target = forward ? second : first;
+    uint source_atlas = forward ? first_atlas : second_atlas;
+    uint target_atlas = forward ? second_atlas : first_atlas;
+    uint capacity = receiving_capacity(target);
+    uint flux = min(min(8192u, uint(face_aperture(first, direction) * float(FULL))),
+                    min(available, receiving < capacity ? capacity - receiving : 0u));
+    record_water_crossing(source, target, flux);
+    water_color_move(source_atlas, target_atlas, receiving, flux, available);
+    thermal_water_resize(source_atlas, available, available - flux);
+    water_color_clear(source_atlas, available - flux);
+    fluid_a[source_index] = available - flux;
+    fluid_a[target_index] = receiving + flux;
 }
 
 void main() {
@@ -313,8 +283,18 @@ void main() {
     uint tile = slot_pages[gl_WorkGroupID.z];
     if (tile == 0xffffffffu) return;
     uint stride = (params.width + SIDE - 1u) / SIDE;
-    ivec2 position = ivec2(int((tile % stride) * SIDE + linear % SIDE),
-                           int((tile / stride) * SIDE + linear / SIDE));
+    ivec2 origin = ivec2(tile % stride, tile / stride) * int(SIDE);
+    if (dispatch_mode() >= 6u && dispatch_mode() <= 9u) {
+        uint parity = ((dispatch_mode() - 6u) & 1u) ^ params.tick_parity;
+        bool vertical = dispatch_mode() <= 7u;
+        uvec2 local = vertical ? uvec2(linear % SIDE, 2u * (linear / SIDE) + parity)
+                               : uvec2(2u * (linear % (SIDE / 2u)) + parity, linear / (SIDE / 2u));
+        ivec2 first = origin + ivec2(local);
+        if (first.x < int(params.width) && first.y < int(params.height))
+            correct_pair(first, vertical ? ivec2(0, 1) : ivec2(1, 0), gl_WorkGroupID.z + 1u);
+        return;
+    }
+    ivec2 position = origin + ivec2(linear % SIDE, linear / SIDE);
     if (position.x >= int(params.width) || position.y >= int(params.height)) return;
     uint index = uint(position.y) * params.width + uint(position.x);
     uint page = page_at(position);
@@ -328,7 +308,5 @@ void main() {
         if (page != 0u) chunk_cells[atlas_index(position, page)].y = fluid_a[index];
         face_velocity[index] *= pow(VELOCITY_DAMPING,
                                     uintBitsToFloat(params.step_scale_bits));
-    } else if (dispatch_mode() >= 6u && dispatch_mode() <= 9u) {
-        correct_pair(position);
     }
 }
