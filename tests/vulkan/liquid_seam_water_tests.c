@@ -550,9 +550,32 @@ static void test_vertical_water_crossings_match_native_sweeps(void) {
     compare_plan(DC_LIQUID_SEAM_Y);
 }
 
+static void test_native_apertures_preserve_terrain_component_labels(void) {
+    dc_gpu_t *gpu = NULL;
+    ASSERT_TRUE(dc_gpu_create(&gpu, 65u, 77u, "build/shaders/pattern.comp.spv", g_err, sizeof(g_err)));
+    size_t bytes = dc_gpu_component_storage_bytes(gpu);
+    memset(gpu->mpm_label_a_mapped, 0xa5, bytes);
+    memset(gpu->mpm_label_b_mapped, 0x5a, bytes);
+    gpu->rigid_occupancy_present = true;
+    ASSERT_TRUE(fr_renderer_begin(gpu));
+    dc_gpu_record_fluid_transport(gpu, 0u, 4u);
+    fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+    ASSERT_TRUE(fr_renderer_submit(gpu));
+    size_t changed = 0;
+    for (size_t i = 0; i < bytes; ++i)
+        changed += ((uint8_t *)gpu->mpm_label_a_mapped)[i] != 0xa5 ||
+                   ((uint8_t *)gpu->mpm_label_b_mapped)[i] != 0x5a;
+    ASSERT_EQ(changed, 0u);
+    PASS();
+cleanup:
+    dc_gpu_destroy(gpu);
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--without-marker-correction") == 0) g_marker_correction = false;
     else if (argc != 1) return 2;
+    RUN(test_native_apertures_preserve_terrain_component_labels);
     RUN(test_horizontal_water_crossings_match_native_sweeps);
     RUN(test_vertical_water_crossings_match_native_sweeps);
     printf("%d passed, %d failed\n", g_pass, g_fail);
