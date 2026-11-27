@@ -21,3 +21,9 @@ Reuse the existing chunk coordinate and generation checks during ownership hando
 ## Acceptance Criteria
 
 Vulkan tests cover workspace creation and teardown, exact elapsed stepping without duplicate retries, idle and unknown chunk handling, and unchanged physical stock for an isolated tile across a cold save and return. Track cross-workspace conservation and production enablement in the parent.
+
+## Notes
+
+**2026-11-27T01:55:00Z**
+
+The device lifetime prerequisite now supports independent contexts on one Vulkan device and queue. The foreground still uses a 64-slot default atlas or 70 slots in the quarter-native build. Before allocating offscreen rings, make workspace buffer bounds and dispatches use the workspace slot count and verify the foreground defaults against existing tests.
