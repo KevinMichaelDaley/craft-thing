@@ -1,6 +1,6 @@
 ---
 id: ctowpe-o3hx
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T20:35:47Z
@@ -23,3 +23,7 @@ Initialize, replace and unmap compact reverse-page tables without touching trail
 **2026-11-27T20:37:36Z**
 
 Both compact cases originally failed and the resident table passed. Bounded both copies to the allocated slot count and verified all three page-table cases, including an unaffected third mapped slot through replacement and removal. Both fluid recording tests and make test_tools passed. The aggregate uses the hidden Xephyr display.
+
+**2026-11-27T20:49:03Z**
+
+The full native phase trace on 469573d1 also completed all 180 presented frames after the compact table fix. It retained 16 confirmed owners and advanced 2.000000104 s in every band. The two compact allocation tests and resident control pass; full-suite status remains tracked by ctfm-w80b.

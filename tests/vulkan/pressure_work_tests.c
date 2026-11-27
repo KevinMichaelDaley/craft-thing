@@ -376,7 +376,74 @@ static void test_scheduled_pressure_runs_match_independent_phases(void) {
     PASS();
 }
 
+static uint32_t atlas_cell(uint32_t x, uint32_t y) {
+    return (x / DC_CHUNK_SIDE) * DC_CHUNK_CELLS + y * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE;
+}
+
+static void test_marker_pairs_match_serial_mass_across_pages(void) {
+    enum { WIDTH = 2 * DC_CHUNK_SIDE, HEIGHT = DC_CHUNK_SIDE, COUNT = WIDTH * HEIGHT };
+    dc_chunk_t *chunks = calloc(2, sizeof(*chunks));
+    uint32_t *mass = calloc(COUNT, sizeof(*mass));
+    ASSERT_TRUE(chunks && mass);
+    uint32_t seed = 92731u;
+    for (unsigned i = 0; i < COUNT; ++i) {
+        seed = 1664525u * seed + 1013904223u;
+        chunks[i / DC_CHUNK_CELLS].cells[i % DC_CHUNK_CELLS].fluid_mass = seed >> 16;
+    }
+    chunks[1].coord.x = 1;
+    char err[256] = {0};
+    for (unsigned parity = 0; parity < 2; ++parity) {
+        dc_gpu_t *gpu = make_grid(chunks, chunks + 1, err, sizeof(err));
+        ASSERT_TRUE(gpu);
+        gpu->fluid_tick = parity;
+        ASSERT_TRUE(phase(gpu, 5));
+        const uint32_t *guide = gpu->marker_grid_mapped;
+        for (unsigned i = 0; i < COUNT; ++i)
+            mass[i] = chunks[i / DC_CHUNK_CELLS].cells[i % DC_CHUNK_CELLS].fluid_mass;
+        unsigned transfers[4] = {0}, crossings = 0;
+        for (unsigned sweep = 0; sweep < 4; ++sweep) {
+            bool vertical = sweep < 2;
+            unsigned offset = (sweep & 1u) ^ parity;
+            unsigned dx = vertical ? 0u : 1u, dy = vertical ? 1u : 0u;
+            for (unsigned y = dy * offset; y + dy < HEIGHT; y += 1u + dy) {
+                for (unsigned x = dx * offset; x + dx < WIDTH; x += 1u + dx) {
+                    unsigned first = atlas_cell(x, y), second = atlas_cell(x + dx, y + dy);
+                    unsigned source, target;
+                    if ((guide[first] & 1u) && guide[second] == 2u) {
+                        source = second; target = first;
+                    } else if (guide[first] == 2u && (guide[second] & 1u)) {
+                        source = first; target = second;
+                    } else continue;
+                    if (mass[source] > mass[target]) continue;
+                    uint32_t flux = mass[source] < 8192u ? mass[source] : 8192u;
+                    if (flux > DC_FLUID_FULL - mass[target]) flux = DC_FLUID_FULL - mass[target];
+                    mass[source] -= flux;
+                    mass[target] += flux;
+                    if (flux) {
+                        ++transfers[sweep];
+                        crossings += first / DC_CHUNK_CELLS != second / DC_CHUNK_CELLS;
+                    }
+                }
+            }
+        }
+        ASSERT_TRUE(dc_gpu_copy_chunk_state(gpu, UINT32_MAX, false, false, err, sizeof(err)));
+        const dc_cell_t *actual = gpu->chunk_mapped;
+        for (unsigned i = 0; i < COUNT; ++i) ASSERT_EQ(actual[i].fluid_mass, mass[i]);
+        for (unsigned i = 0; i < 4; ++i) ASSERT_TRUE(transfers[i] > 0u);
+        ASSERT_TRUE(crossings > 0u);
+        ASSERT_EQ(dc_gpu_validation_errors(gpu), 0u);
+        dc_gpu_destroy(gpu);
+    }
+    free(mass);
+    free(chunks);
+    PASS();
+}
+
 int main(int argc, char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "--marker-pairs")) {
+        RUN(test_marker_pairs_match_serial_mass_across_pages);
+        return g_fail != 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "--runs")) {
         RUN(test_scheduled_pressure_runs_match_independent_phases);
         return g_fail != 0;
@@ -389,6 +456,7 @@ int main(int argc, char **argv) {
     RUN(test_pressure_work_is_empty_then_wakes_for_local_water);
     RUN(test_water_inserted_between_pressure_batches_matches_dense_solver);
     RUN(test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terrain);
+    RUN(test_marker_pairs_match_serial_mass_across_pages);
     printf("Results: %d passed, %d failed\n",g_pass,g_fail);
     return g_fail!=0;
 }
