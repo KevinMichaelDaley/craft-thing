@@ -1,6 +1,6 @@
 ---
 id: ctowpe-bs8y
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T10:57:05Z
@@ -26,3 +26,7 @@ After spending simulation time in both camera positions, a restored far-edge til
 **2026-11-27T11:14:41Z**
 
 On Xephyr :93 the third round trip now matches the monolithic basin cell by cell. A separate older pool advances its own clock and transports its own stock on the same dispatch. An old connected participant and a stale pinned generation both reject the interval before consumption.
+
+**2026-11-27T11:18:15Z**
+
+Both ambient and thermal camera runs passed three round trips. Verified actual marker identity and local coordinates and per-cell pigment, velocity, stock and excess heat against a separate native GPU context. Mixed-clock admission excludes live reactive parcels, active probes, gas, bodies and nonwater bulk.
