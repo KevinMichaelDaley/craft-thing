@@ -1,6 +1,6 @@
 ---
 id: ctowpe-o0i2
-status: in_progress
+status: closed
 deps: [ctowpe-ysgp]
 links: []
 created: 2026-11-27T16:08:21Z
@@ -47,3 +47,7 @@ Isolated two-device diagnostic keeps RTX physics, rendering, blitting and compos
 **2026-11-27T17:40:56Z**
 
 Same-format 1920x1080 BGRA8_UNORM FIFO transfer control with a different full-frame pattern every frame: RTX WSI mean/p95 56.643/68.968 ms and llvmpipe WSI 1.424/1.805 ms. ctowpe-ysgp tracks production integration of the verified two-device experiment. Corrected 720 concave passes the frame budget with byte-exact readback; full native and half-native diagnostic verification is queued.
+
+**2026-11-27T18:03:14Z**
+
+The same camera and full-size FIFO swapchain on :93 at 1abdfaa8 and integrated presenter 47e99db4 confirm the improvement on moving, populated native camera frames. Near p95 fell from 105.561 to 53.560 ms, middle from 114.442 to 57.824 and far from 112.518 to 58.815. All six camera modes retain full owner count, cadence and confirmed world time. The regression suite for swapchain and visible pixel reads, swapchain creation fallback, multiple windows and recreation passed. The remaining frame budget is tracked under ctowpe-vtlh.

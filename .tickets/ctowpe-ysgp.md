@@ -1,6 +1,6 @@
 ---
 id: ctowpe-ysgp
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T17:40:40Z
@@ -27,3 +27,7 @@ The corrected diagnostic at 1abdfaa8 used the RTX A2000 for the complete 1280x72
 **2026-11-27T17:58:19Z**
 
 Runtime 47e99db4 passed all five presenter cases under synchronization validation on persistent hidden Xephyr :93, including two independently owned windows, full swapchain readback, mapped-window pixels and two partial-initialization failures. All three existing acquisition, physics-progress and recreation regressions passed. Automatic selection used llvmpipe for presentation and RTX A2000 for rendering and physics. The 1280x720 gate passed for all scenes over 30 measured frames. Mean/p95 in ms: dry 3.107/4.214, dense 10.103/13.648, exact concave 18.253/23.474. Both saturated camera runs retain the 1920x1080 swapchain.
+
+**2026-11-27T18:03:14Z**
+
+Both 47e99db4 production camera runs selected llvmpipe presentation automatically on hidden :93 and retained the RTX A2000 render device, 1920x1080 swapchain, 16 owners, 12 warmups and two 60 Hz steps per frame. Half-native near/middle/far mean/p95 in ms: 31.031/49.009, 28.629/55.250, 28.260/54.259. Native: 34.050/53.560, 33.169/57.824, 32.354/58.815. Each 60-frame band advanced 2.000000104 seconds. All six p95 results exceed 33.333 ms and remain tracked by ctowpe-vtlh.
