@@ -1,5 +1,9 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../include/dungeoncraft/hydro_peer_layout.h"
+layout(buffer_reference,std430,buffer_reference_align=4) buffer PeerOccupancy { uint words[]; };
 #define DC_RUNTIME_ROOT_READONLY 1
 layout(constant_id = 1) const bool RIGID_PIXEL_ONLY = false;
 #define DC_RIGID_PIXEL_ONLY RIGID_PIXEL_ONLY
@@ -188,6 +192,8 @@ void main() {
         if (index < params.body_count) integrate_body(index);
         return;
     }
+    bool peer_raster=(params.mode & DC_HYDRO_PEER_RASTER)!=0u;
+    ivec2 offset=peer_raster?ivec2(params.origin_y):ivec2(0);
     bool valid_cell=p.x<params.width&&p.y<params.height;
     uint current = 0u, swept = 0u;float volume=0;vec2 face_covered=vec2(0);
     /* A fixed team compacts each batch in parallel, retaining slot order.
@@ -196,7 +202,7 @@ void main() {
         uint lane=gl_LocalInvocationIndex,slot=first+lane;bool selected=false;
         if(lane<64u) {
             if(slot<params.body_count&&DC_BODY(slot).enabled!=0u&&DC_BODY(slot).visible!=0u) {
-                ivec2 tile_low=ivec2(gl_WorkGroupID.xy*gl_WorkGroupSize.xy);
+                ivec2 tile_low=ivec2(gl_WorkGroupID.xy*gl_WorkGroupSize.xy)+offset;
                 ivec2 tile_high=tile_low+ivec2(gl_WorkGroupSize.xy);
                 ivec2 low=min(DC_BODY(slot).bounds_low-ivec2(1),DC_BODY(slot).swept_low);
                 ivec2 high=max(DC_BODY(slot).bounds_high,DC_BODY(slot).swept_high);
@@ -206,7 +212,7 @@ void main() {
         select_raster_team(lane,slot,selected);
     for (uint ordinal_id = 0u; valid_cell&&ordinal_id < raster_count; ++ordinal_id) {
         uint i = raster_ids[ordinal_id];
-        ivec2 cell = ivec2(p);
+        ivec2 cell = ivec2(p)+offset;
         bool potential = all(greaterThanEqual(cell,DC_BODY(i).bounds_low)) &&
                          all(lessThan(cell,DC_BODY(i).bounds_high));
         bool face_potential=all(greaterThanEqual(cell+ivec2(1),DC_BODY(i).bounds_low)) &&
@@ -223,6 +229,7 @@ void main() {
             inside = potential && convex_cell_overlap(body,cell);
         if ((params.mode & PHYSICAL_MASK) != 0u) crossed = crossed || potential;
         if (inside && (current == 0u || body.id < current)) current = body.id;
+        if(peer_raster) continue;
         vec2 query_low=vec2(cell)-vec2(body.x_fp,body.y_fp)/65536.;
         uvec4 query=body_piece_query(body,query_low,query_low+1);
         if (inside) for(uint ordinal=0u;ordinal<query.z*query.w;ordinal++) {
@@ -240,6 +247,10 @@ void main() {
     }
     if(!valid_cell) return;
     uint index = p.y * params.width + p.x;
+    if(peer_raster) {
+        PeerOccupancy(params.origin_x).words[index]=current;
+        return;
+    }
     if (!resident_at(int(p.x), int(p.y))) { current = 0u; swept = 0u; volume=0; face_covered=vec2(0); }
     occupancy[index] = current;
     occupancy[params.width * params.height + index] = swept;

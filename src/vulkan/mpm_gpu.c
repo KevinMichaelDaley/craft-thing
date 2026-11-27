@@ -38,8 +38,8 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize component_bytes=dc_gpu_component_storage_bytes(gpu);
     if(!dc_gpu_mpm_scan_layout(gpu->width,gpu->height,&gpu->mpm_scan_layout))
         return error(err,cap,"Cannot size MPM activity scan scratch");
-    return dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_proposal_buffer,
-                                     &gpu->mpm_proposal_memory, err, cap) &&
+    return dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_GRAIN_SCRATCH, particles, &gpu->mpm_proposal_buffer,
+                                     &gpu->mpm_proposal_memory, NULL, err, cap) &&
            dc_gpu_make_device_buffer(gpu, particles, &gpu->mpm_output_buffer,
                                      &gpu->mpm_output_memory, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, grid * 16u, &gpu->mpm_grid_buffer,
@@ -371,10 +371,11 @@ static void bind_mpm_phase(dc_gpu_t *gpu,uint32_t phase,VkPipeline *bound) {
     *bound=pipeline;
 }
 
-void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
+void dc_gpu_record_mpm_with_peer_occupancy(dc_gpu_t *gpu, bool use_peer) {
     dc_gpu_mpm_swap_descriptors(gpu);
     dc_gpu_record_components(gpu, false);
-    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
+    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u,
+        use_peer ? DC_HYDRO_MPM_OCCUPANCY_PLANE*gpu->width*gpu->height : 0u, 0u};
     VkPipeline bound=VK_NULL_HANDLE;
     bind_mpm_phase(gpu,DC_MPM_MOISTURE_MODE,&bound);
     push[2] = DC_MPM_MOISTURE_MODE;
@@ -420,4 +421,8 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
             }
         }
     }
+}
+
+void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
+    dc_gpu_record_mpm_with_peer_occupancy(gpu,false);
 }

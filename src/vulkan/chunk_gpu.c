@@ -162,8 +162,8 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->chunk_memory, NULL, err, cap) &&
            dc_gpu_make_staging_buffer(gpu, chunk_bytes, &gpu->chunk_staging_buffer,
                &gpu->chunk_staging_memory, &gpu->chunk_mapped, err, cap) &&
-           dc_gpu_make_device_buffer(gpu, particle_bytes, &gpu->particle_buffer,
-               &gpu->particle_memory, err, cap) &&
+           dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_PARTICLES, particle_bytes, &gpu->particle_buffer,
+               &gpu->particle_memory, NULL, err, cap) &&
            dc_gpu_make_staging_buffer(gpu, particle_bytes, &gpu->particle_staging_buffer,
                &gpu->particle_staging_memory, &gpu->particle_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t),

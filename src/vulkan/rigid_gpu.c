@@ -132,7 +132,7 @@ uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu) {
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     bool okay = dc_gpu_runtime_bodies_init(gpu,err,cap) &&
            dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_OCCUPANCY,
-               (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 5,
+               (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * (DC_HYDRO_MPM_OCCUPANCY_PLANE+1u),
                &gpu->occupancy_buffer, &gpu->occupancy_memory,
                &gpu->occupancy_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, 3 * sizeof(uint32_t),
@@ -428,6 +428,22 @@ void dc_gpu_record_rigid(dc_gpu_t *gpu) {
 
 void dc_gpu_record_rigid_refresh(dc_gpu_t *gpu) {
     record_rigid(gpu, false);
+}
+
+void dc_gpu_record_peer_grain_occupancy(dc_gpu_t *gpu,const dc_gpu_t *peer) {
+    if(!gpu->body_count) return;
+    const uint32_t *control=gpu->thermal_control_mapped;
+    VkDeviceAddress address=peer->hydro_addresses[DC_HYDRO_OCCUPANCY]+
+        (VkDeviceSize)DC_HYDRO_MPM_OCCUPANCY_PLANE*peer->width*peer->height*sizeof(uint32_t);
+    uint32_t push[8]={peer->width,peer->height,DC_HYDRO_PEER_RASTER|
+        (gpu->rigid_solver_enabled?RIGID_PHYSICAL_MASK:0u),dc_gpu_runtime_body_count(gpu),
+        (uint32_t)address,(uint32_t)(address>>32),0u-control[DC_HYDRO_PEER_OFFSET],
+        0u-control[DC_HYDRO_PEER_OFFSET+1u]};
+    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->rigid_pipeline);
+    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->pipeline_layout,
+        0,1,&gpu->descriptor,0,NULL);
+    vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
+    vkCmdDispatch(gpu->command,(peer->width+15u)/16u,(peer->height+15u)/16u,1);
 }
 
 static void record_raster(dc_gpu_t *gpu,uint32_t push[8],bool conditional) {

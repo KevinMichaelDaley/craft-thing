@@ -340,7 +340,8 @@ typedef struct {
     /* MPM feature_b stores the owner cell in bits 0..11 and layer in bit 12.
      * Pixel features preserve the tile-cell ordinal in bits 3..30, the local
      * vertex in bits 0..2, and the support-edge marker in bit 31. */
-    /* For MPM contacts, reserved is the resident particle index plus one;
+    /* For MPM contacts, reserved holds the particle index plus one in bits 0..30.
+       Bit 31 identifies a particle in the paired neighbor.
        it is zero for terrain, boundary and body contacts. */
     uint32_t body_a, body_b, kind, feature_a, feature_b, material_a, material_b, reserved;
     float normal_x, normal_y, depth, friction, restitution, compliance;

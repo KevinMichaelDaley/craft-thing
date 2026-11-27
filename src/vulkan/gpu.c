@@ -107,7 +107,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->cells, 0, bytes },
         { gpu->chunk_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
-        { gpu->occupancy_buffer, 0, bytes * 5 },
+        { gpu->occupancy_buffer, 0, bytes * (DC_HYDRO_MPM_OCCUPANCY_PLANE+1u) },
         dc_gpu_runtime_bodies_binding(gpu),
         { gpu->trace_buffer, 0, 3 * sizeof(uint32_t) },
         { gpu->halo_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
@@ -140,7 +140,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         { gpu->shape_color_buffer,0,terrain_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors,gpu->runtime_body_consumers?16:bank_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors+bank_colors,gpu->runtime_body_consumers?16:bank_colors },
-        { gpu->thermal_control_buffer,0,128 },
+        { gpu->thermal_control_buffer,0,DC_HYDRO_CONTROL_BYTES },
         { gpu->bulk_phase_buffer,0,(VkDeviceSize)dc_gpu_slot_capacity(gpu)*sizeof(fr_bulk_phase_chunk_t) }
     };
     VkWriteDescriptorSet writes[DC_GPU_DESCRIPTOR_BINDINGS] = {0};

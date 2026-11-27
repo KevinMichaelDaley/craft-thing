@@ -217,7 +217,7 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     dc_gpu_address_buffer_destroy(g,&t->radiation_scratch);free(t->pending_water);free(t);
 }
 void fr_thermal_gpu_destroy(dc_gpu_t *g) {
-    if(g) {if(g->thermal_control_mapped) memset(g->thermal_control_mapped,0,128);destroy(g,g->thermal);g->thermal=NULL;}
+    if(g) {if(g->thermal_control_mapped) memset(g->thermal_control_mapped,0,DC_HYDRO_CONTROL_BYTES);destroy(g,g->thermal);g->thermal=NULL;}
 }
 static bool specialize_phases(dc_gpu_t *g,struct fr_thermal_gpu *t,char *err,uint32_t cap) {
     const char *setting=getenv("DC_THERMAL_SPECIALIZED_PHASES");
@@ -268,7 +268,7 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
     *out=t;return true;
 }
 static void bind_control(dc_gpu_t *g,const struct fr_thermal_gpu *t) {
-    uint32_t *control=g->thermal_control_mapped;memset(control,0,128);
+    uint32_t *control=g->thermal_control_mapped;memset(control,0,DC_HYDRO_CONTROL_BYTES);
     if(!t) return;
     control[2]=(uint32_t)t->water.address;control[3]=(uint32_t)(t->water.address>>32);
     control[4]=dc_gpu_slot_capacity(g)*4096u;control[0]=DC_THERMAL_WATER_MAGIC;

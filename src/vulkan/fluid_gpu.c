@@ -47,9 +47,9 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(!dc_gpu_make_hydro_buffer(gpu,DC_HYDRO_BULK,bulk_bytes,&gpu->bulk_phase_buffer,
         &gpu->bulk_phase_memory,&gpu->bulk_phase_mapped,err,cap)) return false;
     memset(gpu->bulk_phase_mapped,0,(size_t)bulk_bytes);
-    if(!dc_gpu_make_mapped_buffer(gpu,128,&gpu->thermal_control_buffer,
+    if(!dc_gpu_make_mapped_buffer(gpu,DC_HYDRO_CONTROL_BYTES,&gpu->thermal_control_buffer,
         &gpu->thermal_control_memory,&gpu->thermal_control_mapped,err,cap)) return false;
-    memset(gpu->thermal_control_mapped,0,128);
+    memset(gpu->thermal_control_mapped,0,DC_HYDRO_CONTROL_BYTES);
     if(!dc_gpu_colors_init(gpu,err,cap)) return false;
     return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
                &gpu->fluid_a_memory, err, cap) &&

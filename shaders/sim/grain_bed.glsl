@@ -105,11 +105,44 @@ void grain_bed_phase(uint i) {
         if(moving_node) bed_indices[1u+bed_first+ordinal]=i;
     }
 }
+/* Across owners, follow the same downward support links used by the local
+   pointer-doubling pass. Each step descends one row, even at a tile seam. */
+vec4 paired_bed_support(ivec2 cell) {
+    vec4 support=vec4(-1,0,0,0);
+    for (;;) {
+        uint page=hydro_page(cell);
+        if(page==0u) break;
+        uint atlas=hydro_atlas(cell,page);
+        uint material=hydro_cell(atlas).x & 65535u;
+        if(material==1u||material==7u||material==8u||material==9u) {
+            support.w=1.0;
+            break;
+        }
+        if(material!=2u&&material!=4u&&material!=5u&&material!=6u&&material!=10u) break;
+        uint index=(page & HYDRO_PEER)|(((page & ~HYDRO_PEER)-1u)*8192u+atlas%4096u);
+        uint mass=read_grain(index).mass_fp+read_grain(index+4096u).mass_fp;
+        if(mass==0u) break;
+        support.y+=float(mass)/65536.0;
+        support.z+=1.0;
+        bool found=false;
+        for(int side=0;side<3;side++) {
+            ivec2 below=cell+ivec2(side==0?0:side==1?-1:1,1);
+            uint next=hydro_page(below);
+            if(next!=0u&&bed_solid(hydro_cell(hydro_atlas(below,next)).x & 65535u)) {
+                cell=below;
+                found=true;
+                break;
+            }
+        }
+        if(!found) break;
+    }
+    return support;
+}
 /* Drained frictional bearing capacity scales with loaded width and supported
    depth. Exceeding yield introduces bounded viscoplastic settlement, rather
    than turning the entire bed into disconnected free particles. */
 float grain_bed_creep(Body body,uint c,uint reference) {
-    Particle p=particles[reference-1u];
+    Particle p=read_grain(reference-1u);
     /* Thin leaf flakes bend and evacuate; they are not a mineral bearing bed. */
     if(p.material==10u) return -1.0;
     vec2 center=grain_position(c,reference-1u);
@@ -131,8 +164,12 @@ float grain_bed_creep(Body body,uint c,uint reference) {
     uint local=(reference-1u)%4096u;
     vec2 point=center-vec2(p.x_fp,p.y_fp)/65536.0+vec2(local%64u,local/64u)+vec2(0.5);
     ivec2 cell=ivec2(floor(point));
-    if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) return -1.0;
-    vec4 support=bed_read(uint(cell.y)*params.width+uint(cell.x));
+    vec4 support;
+    if(hydro_control[DC_HYDRO_PEER_WIDTH]!=0u) support=paired_bed_support(cell);
+    else {
+        if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) return -1.0;
+        support=bed_read(uint(cell.y)*params.width+uint(cell.x));
+    }
     if(support.w==0.0||support.z<1.0) return -1.0;
     float friction=p.material==5u?0.75:p.material==4u?0.65:p.material==2u?0.58:0.3;
     float width=max(1.0,float(body.width)*abs(cos(body.angle))+float(body.height)*abs(sin(body.angle)));

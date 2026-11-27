@@ -4,7 +4,7 @@ layout(set=0,binding=36,std430) readonly buffer HydroControl {uint hydro_control
 layout(buffer_reference,std430,buffer_reference_align=4) buffer HydroWords {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer HydroPairs {uvec2 pairs[];};
 uvec2 hydro_address(uint field) {
-    uint i=DC_HYDRO_PEER_ADDRESSES+2u*field;
+    uint i=DC_HYDRO_ADDRESS_WORD(field);
     return uvec2(hydro_control[i],hydro_control[i+1u]);
 }
 ivec2 hydro_offset() {return ivec2(hydro_control[DC_HYDRO_PEER_OFFSET],hydro_control[DC_HYDRO_PEER_OFFSET+1u]);}

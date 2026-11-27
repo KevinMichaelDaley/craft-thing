@@ -475,7 +475,8 @@ static void bind_hydro_peer(dc_gpu_t *gpu, const dc_gpu_t *peer, int32_t dx, int
     control[DC_HYDRO_PEER_HEIGHT] = peer->height;
     control[DC_HYDRO_PEER_OFFSET] = (uint32_t)dx;
     control[DC_HYDRO_PEER_OFFSET+1u] = (uint32_t)dy;
-    memcpy(control + DC_HYDRO_PEER_ADDRESSES, peer->hydro_addresses, sizeof(peer->hydro_addresses));
+    for (unsigned field = 0; field < DC_HYDRO_BUFFERS; ++field)
+        memcpy(control + DC_HYDRO_ADDRESS_WORD(field), &peer->hydro_addresses[field], sizeof(VkDeviceAddress));
     if (bulk) {
         memcpy(control + DC_HYDRO_PEER_ADDRESSES + 2u*DC_HYDRO_BULK,
                &dc_gpu_hydro_bulk_stage(peer)->address, sizeof(VkDeviceAddress));

@@ -12,7 +12,7 @@ void solve_contact(uint i, bool impulse) {
     float creep=contact_getf(s+12u);
     float mb = 0.0, ib = 0.0;
     if(grain_ref!=0u) {
-        Particle p=particles[grain_ref-1u];
+        Particle p=read_grain(grain_ref-1u);
         pb=grain_position(c,grain_ref-1u)+rb;
         vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
         mb=p.mass_fp!=0u?65536.0/float(p.mass_fp):0.0;
@@ -38,7 +38,7 @@ void solve_contact(uint i, bool impulse) {
     if (wn <= 0.0)
         return;
     float scale = weight(a, b,(grain_ref!=0u&&creep<0.0)||DC_CONTACT_DATA(s+11u)==0u), dn = 0.0, dt = 0.0;
-    if(grain_ref!=0u) scale=min(scale,0.8/float(max(grain_scratch[(grain_ref-1u)*4u+3u],1u)));
+    if(grain_ref!=0u) scale=min(scale,0.8/float(max(grain_scratch_read(grain_ref-1u,3u),1u)));
     if (impulse) {
         if (dot(pa - pb, n) > 1.0 / 65536.0 && contact_getf(s) == 0.0)
             return;

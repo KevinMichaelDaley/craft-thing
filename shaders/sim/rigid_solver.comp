@@ -270,10 +270,10 @@ void main() {
         }
         bool moving=grain_ref!=0u&&creep<0.0;
         if(grain_ref!=0u) {
-            Particle p=particles[grain_ref-1u];
+            Particle p=read_grain(grain_ref-1u);
             contact_putv(s+6u,pb-grain_position(c,grain_ref-1u));
             vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
-            atomicAdd(grain_scratch[(grain_ref-1u)*4u+3u],1u);
+            grain_scratch_add(grain_ref-1u,3u,1u);
         }
         /* Loose grains receive most of their own correction. Count their
            body mobility fraction, and exclude nonbinding speculative rows
@@ -282,7 +282,7 @@ void main() {
         if(grain_ref!=0u&&creep<0.0) {
             float arm=body_cross(ra,normal);
             float body_weight=ba.inverse_mass+ba.inverse_inertia*arm*arm;
-            float grain_weight=65536.0/float(particles[grain_ref-1u].mass_fp);
+            float grain_weight=65536.0/float(read_grain(grain_ref-1u).mass_fp);
             degree=body_weight/(body_weight+grain_weight);
         } else if(DC_CONTACT_DATA(s+11u)==0u) degree=0.0;
         atomicAdd(SOLVER_BODY_WORD(a,12u),1u);

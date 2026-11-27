@@ -152,11 +152,15 @@ bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float se
             !dc_gpu_runtime_bodies_service(gpu, err, cap))) return false;
         if (!fr_renderer_begin(gpu)) return error(err, cap, "Cannot record paired owner physics");
         if (before_water && i == 0) dc_gpu_record_hydro_bulk_stages(first, second);
-        if (before_water) record_before_water(gpu);
-        else {
+        if (before_water) {
+            record_before_water(gpu);
+            stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+            dc_gpu_record_peer_grain_occupancy(gpu,owners[1u-i]);
+        } else {
             stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                           VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-            dc_gpu_record_mpm(gpu);
+            if (owners[1u-i]->body_count) dc_gpu_record_mpm_with_peer_occupancy(gpu,true);
+            else dc_gpu_record_mpm(gpu);
             fr_thermal_record_face_fluxes(gpu, seconds);
         }
         stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);

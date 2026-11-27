@@ -140,21 +140,23 @@ ivec2 tile_origin(ivec2 cell) {
     return (cell / int(SIDE)) * int(SIDE);
 }
 
-vec2 position_of(Particle particle, ivec2 owner) {
-    return vec2(tile_origin(owner)) + vec2(particle.x_fp, particle.y_fp) / 65536.0;
+vec2 local_position_of(Particle particle) {
+    return vec2(particle.x_fp, particle.y_fp) / 65536.0;
 }
 
 ivec2 target_of(Particle particle, ivec2 owner) {
-    return ivec2(floor(position_of(particle, owner)));
+    return tile_origin(owner)+ivec2(floor(local_position_of(particle)));
 }
 
 bool solid_at(ivec2 cell) {
     if (page_at(cell) == 0u) return true;
     uint index = (page_at(cell) - 1u) * CELLS + local_cell(cell);
     uint material = chunk_cells[index].x & 0xffffu;
+    uint cell_index=uint(cell.y)*params.width+uint(cell.x);
     return (material == 1u || (material != 0u && material != 2u &&
             material != 4u && material != 5u && material != 6u && material != 10u && material != 13u)) ||
-           occupancy[uint(cell.y) * params.width + uint(cell.x)] != 0u;
+           occupancy[cell_index] != 0u ||
+           (params.unused2!=0u && occupancy[params.unused2+cell_index]!=0u);
 }
 
 bool blocked_destination(ivec2 cell) {
@@ -219,14 +221,14 @@ bool load_p2g_particle(ivec2 owner,uint layer,vec2 node_position,
                        out Particle particle,out vec2 delta,out float weight) {
     if(!EARLY_PARTICLE_LOADS) {
         if(!load_particle(owner,layer,particle)) return false;
-        delta=node_position-position_of(particle,owner);weight=kernel(delta);
+        delta=(node_position-vec2(tile_origin(owner)))-local_position_of(particle);weight=kernel(delta);
         return weight>0.0;
     }
     if(!grain_at(owner)) return false;
     uint index=particle_index(owner,layer);
     if(particles[index].mass_fp==0u) return false;
-    vec2 position=vec2(tile_origin(owner))+vec2(particles[index].x_fp,particles[index].y_fp)/65536.0;
-    delta=node_position-position;weight=kernel(delta);
+    vec2 position=vec2(particles[index].x_fp,particles[index].y_fp)/65536.0;
+    delta=(node_position-vec2(tile_origin(owner)))-position;weight=kernel(delta);
     if(weight<=0.0) return false;
     particle=particles[index];
 #ifdef DC_MPM_GATHER_PROFILE
@@ -336,7 +338,7 @@ vec2 granular_contact_velocity(Particle particle, uint index, ivec2 owner,
                 if (!load_particle(neighbor, layer, other)) continue;
                 uint other_index = particle_index(neighbor, layer);
                 if (other_index == index) continue;
-                vec2 separation = position - position_of(other, neighbor);
+                vec2 separation = vec2(tile_origin(owner)-tile_origin(neighbor)) + (position-local_position_of(other));
                 float distance = length(separation);
                 if (distance >= 1.5) continue;
                 float other_radius = float(other.grain_fp) / 65536.0;
@@ -371,8 +373,9 @@ void g2p_one(ivec2 owner, uint layer) {
         proposals[index] = particle;
         return;
     }
-    vec2 position = position_of(particle, owner);
-    ivec2 base = ivec2(floor(position));
+    vec2 position = local_position_of(particle);
+    ivec2 origin = tile_origin(owner);
+    ivec2 base = origin + ivec2(floor(position));
     vec2 velocity = vec2(0.0);
     mat2 gradient = mat2(0.0);
     float weights = 0.0;
@@ -382,7 +385,7 @@ void g2p_one(ivec2 owner, uint layer) {
             if (!in_grid(node)) continue;
             uint grid_index = uint(node.y) * params.width + uint(node.x);
             if (!EARLY_PARTICLE_LOADS&&grid[grid_index].x <= 0.000001) continue;
-            vec2 delta = vec2(node) + vec2(0.5) - position;
+            vec2 delta = vec2(node-origin) + vec2(0.5) - position;
             float weight = kernel(delta);
             if (weight <= 0.0) continue;
             if (EARLY_PARTICLE_LOADS&&grid[grid_index].x <= 0.000001) continue;
@@ -410,15 +413,14 @@ void g2p_one(ivec2 owner, uint layer) {
     /* Rigid contact corrections can already move a grain across its owner's
        edge. Keep the combined movement inside the gather's one-cell halo. */
     vec2 next_position = clamp(position + DT * velocity,
-        vec2(owner)-vec2(0.999),vec2(owner)+vec2(1.999));
-    ivec2 target = ivec2(floor(next_position));
+        vec2(owner-origin)-vec2(0.999),vec2(owner-origin)+vec2(1.999));
+    ivec2 target = origin+ivec2(floor(next_position));
     if (blocked_destination(target)) {
         next_position = position;
         velocity = vec2(0.0);
     }
-    vec2 local_position = next_position - vec2(tile_origin(owner));
-    particle.x_fp = int(round(local_position.x * 65536.0));
-    particle.y_fp = int(round(local_position.y * 65536.0));
+    particle.x_fp = int(round(next_position.x * 65536.0));
+    particle.y_fp = int(round(next_position.y * 65536.0));
     particle.vx_fp = int(round(velocity.x * 65536.0));
     particle.vy_fp = int(round(velocity.y * 65536.0));
     proposals[index] = particle;

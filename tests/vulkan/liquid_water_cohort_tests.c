@@ -685,11 +685,32 @@ static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void)
     ASSERT_TRUE(dc_gpu_read_world_body(owner[0], 403u, &split, g_err, sizeof(g_err)) &&
         dc_gpu_read_world_body(mono, 403u, &native, g_err, sizeof(g_err)));
     ASSERT_EQ(memcmp(&split, &native, sizeof(split)), 0);
+    dc_gpu_contact_t native_contacts[128];
+    dc_gpu_contact_stats_t native_stats;
+    ASSERT_TRUE(dc_gpu_read_contacts(mono, &native_stats, native_contacts, 128, g_err, sizeof(g_err)) &&
+        dc_gpu_read_contacts(owner[0], &stats, contacts, 128, g_err, sizeof(g_err)));
+    ASSERT_EQ(stats.count, native_stats.count);
+    ASSERT_TRUE(stats.count > 0);
+    for (unsigned i = 0; i < stats.count; ++i) {
+        ASSERT_EQ(contacts[i].kind, DC_GPU_CONTACT_MPM);
+        ASSERT_TRUE((contacts[i].reserved >> 31u) == 1u);
+        bool matched = false;
+        for (unsigned j = 0; j < native_stats.count; ++j) {
+            dc_gpu_contact_t counterpart = native_contacts[j];
+            counterpart.reserved = contacts[i].reserved;
+            matched |= memcmp(&counterpart, &contacts[i], sizeof(counterpart)) == 0;
+        }
+        ASSERT_TRUE(matched);
+    }
     ASSERT_TRUE(dc_gpu_download_chunk(owner[1], 0, chunk, g_err, sizeof(g_err)) &&
         dc_gpu_download_chunk(mono, 1, expected, g_err, sizeof(g_err)));
     ASSERT_EQ(chunk->particle_count, 1u);
     ASSERT_EQ(expected->particle_count, chunk->particle_count);
     ASSERT_EQ(memcmp(expected->particles, chunk->particles, sizeof(chunk->particles)), 0);
+    bool horizontal_impulse = false;
+    for (unsigned i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
+        horizontal_impulse |= chunk->particles[i].mass_fp && chunk->particles[i].vx_fp != 0;
+    ASSERT_TRUE(horizontal_impulse);
     ASSERT_EQ(dc_gpu_validation_errors(owner[0]), 0u);
     PASS();
 cleanup:
