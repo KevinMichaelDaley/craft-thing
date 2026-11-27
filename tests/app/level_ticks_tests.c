@@ -699,6 +699,38 @@ static void test_duplicate_load_reply_cannot_overwrite_a_live_slot(void) {
     PASS();
 }
 
+static void check_transfer_against_sleeping_receipt(bool sleeping_source) {
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    dc_chunk_slot_t *sleeping = view->table.slots;
+    dc_chunk_coord_t coord = sleeping->coord;
+    ASSERT_TRUE(dc_chunk_table_set_active(&view->table, 0u, false));
+    sleeping->checkpoint_owner = (dc_chunk_owner_t){7u, 3u};
+    sleeping->time = (dc_chunk_time_t){1., true};
+    view->world_seconds = 2.;
+    view->camera_offscreen = (dc_camera_offscreen_t){.coord=coord,
+        .phase=DC_CAMERA_OFFSCREEN_STORED,.time=sleeping->time,.owner=sleeping->checkpoint_owner};
+    int64_t boundary = (coord.x + 1) * DC_CHUNK_SIDE, y = coord.y * DC_CHUNK_SIDE;
+    int64_t from = sleeping_source ? boundary - 1 : boundary;
+    int64_t to = sleeping_source ? boundary : boundary - 1;
+    bool queued = dc_level_view_queue_transfer(view, from, y, to, y, 1u,
+        DC_GPU_TRANSFER_SCALAR, NULL, 0);
+    ASSERT_EQ(queued, !sleeping_source);
+    ASSERT_EQ(view->transfer_pending, queued);
+    ASSERT_EQ(view->table.slots[1].pinned, queued);
+    ASSERT_TRUE(!sleeping->pinned && !view->destination_bound);
+    dc_level_view_discard(view);
+    PASS();
+}
+
+static void test_transfer_rejects_a_sleeping_source_awaiting_replay(void) {
+    check_transfer_against_sleeping_receipt(true);
+}
+
+static void test_transfer_waits_for_a_sleeping_destination_to_replay(void) {
+    check_transfer_against_sleeping_receipt(false);
+}
+
 static void test_transfer_releases_rejected_request_and_rebinds_failed_worker_destination(void) {
     char directory[] = "build/retry_transfer_XXXXXX";
     ASSERT_TRUE(mkdtemp(directory));
@@ -894,6 +926,8 @@ int main(void) {
     RUN(test_failed_disk_write_preserves_the_previous_file_and_dirty_owner);
     RUN(test_corrupt_disk_load_allows_camera_retry_after_repair);
     RUN(test_duplicate_load_reply_cannot_overwrite_a_live_slot);
+    RUN(test_transfer_rejects_a_sleeping_source_awaiting_replay);
+    RUN(test_transfer_waits_for_a_sleeping_destination_to_replay);
     RUN(test_transfer_releases_rejected_request_and_rebinds_failed_worker_destination);
     RUN(test_camera_workspace_requires_a_closed_stationary_rim);
     RUN(test_camera_move_before_shutdown_preserves_sleeping_owner);
