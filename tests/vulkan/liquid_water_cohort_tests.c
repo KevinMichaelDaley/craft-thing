@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dungeoncraft/liquid_seam.h"
+#include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
@@ -466,12 +467,72 @@ cleanup:
     free(identity);
 }
 
+static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) {
+    const char shader[] = "build/shaders/pattern.comp.spv";
+    dc_gpu_t *owners[2] = {0}, *mono = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_bulk_phase_chunk_t *phase = calloc(1, sizeof(*phase));
+    fr_bulk_phase_chunk_t *expected = calloc(1, sizeof(*expected));
+    dc_liquid_seam_endpoint_t endpoints[2] = {0};
+    ASSERT_TRUE(chunk && phase && expected);
+    ASSERT_TRUE(dc_gpu_create(&owners[0], 64, 64, shader, g_err, sizeof(g_err)) &&
+                dc_gpu_create_shared(&owners[1], owners[0], 64, 64, shader, g_err, sizeof(g_err)) &&
+                dc_gpu_create(&mono, 128, 64, shader, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(mono, 6u));
+    for (unsigned i = 0; i < 2; ++i) {
+        chunk->coord.x = i;
+        endpoints[i] = (dc_liquid_seam_endpoint_t){.gpu = owners[i], .coord = chunk->coord};
+        ASSERT_TRUE(dc_gpu_set_body_origin(owners[i], chunk->coord, g_err, sizeof(g_err)) &&
+                    dc_gpu_set_fluid_interval(owners[i], 6u) &&
+                    dc_gpu_upload_chunk(owners[i], 0, chunk, g_err, sizeof(g_err)) &&
+                    dc_gpu_set_page(owners[i], 0, 0, 0, g_err, sizeof(g_err)) &&
+                    dc_gpu_upload_chunk(mono, i, chunk, g_err, sizeof(g_err)) &&
+                    dc_gpu_set_page(mono, i, 0, i, g_err, sizeof(g_err)));
+        if (i) continue;
+        uint32_t at = 30u * DC_CHUNK_SIDE + 63u;
+        phase->oil_fp[at] = DC_FLUID_FULL;
+        phase->oil_momentum_x[at] = 10.f;
+        phase->oil_excess[at] = 3.f;
+        at += 4u * DC_CHUNK_SIDE;
+        phase->slime_fp[at] = DC_FLUID_FULL;
+        phase->slime_momentum_x[at] = 100.f;
+        phase->slime_excess[at] = 6.f;
+        ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(owners[0], 0, chunk, phase, g_err, sizeof(g_err)) &&
+                    fr_bulk_phase_gpu_import_chunk(mono, 0, chunk, phase, g_err, sizeof(g_err)));
+    }
+    const float elapsed[] = {1.f/240.f, 1.f/60.f, 1.f/60.f};
+    for (unsigned tick = 0; tick < sizeof(elapsed)/sizeof(*elapsed); ++tick) {
+        ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, elapsed[tick]) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
+        ASSERT_EQ(dc_gpu_tick_water_cohort(endpoints, 2, elapsed[tick], g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(mono, i, expected, g_err, sizeof(g_err)) &&
+                        fr_bulk_phase_gpu_export_chunk(owners[i], 0, phase, g_err, sizeof(g_err)));
+            ASSERT_EQ(memcmp(phase, expected, sizeof(*phase)), 0);
+        }
+    }
+    uint64_t oil = 0, slime = 0;
+    for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
+        oil += expected->oil_fp[i];
+        slime += expected->slime_fp[i];
+    }
+    ASSERT_TRUE(oil && slime);
+    PASS();
+cleanup:
+    dc_gpu_destroy(mono);
+    dc_gpu_destroy(owners[1]);
+    dc_gpu_destroy(owners[0]);
+    free(chunk); free(phase); free(expected);
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
     } else if (argc == 2 && strcmp(argv[1], "--cadence-clock") == 0) {
         RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
+    } else if (argc == 2 && strcmp(argv[1], "--bulk") == 0) {
+        RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
     } else if (argc == 1) {
+        RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
         RUN(test_connected_tiles_match_monolithic_water_and_share_one_receipt);
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
