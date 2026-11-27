@@ -1,7 +1,7 @@
 ---
 id: ctswc-xr49
 status: open
-deps: [ctsct-a986, ctosd-silg]
+deps: [ctsct-a986, ctosd-silg, ctowa-0j6g]
 links: []
 created: 2026-11-27T01:29:57Z
 type: task

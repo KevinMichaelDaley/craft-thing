@@ -20,6 +20,48 @@ static int g_fail = 0;
 
 static const char pattern_shader[] = "build/shaders/pattern.comp.spv";
 
+static VkDeviceSize buffer_allocation(const dc_gpu_t *gpu, VkBuffer buffer) {
+    VkMemoryRequirements requirements;
+    vkGetBufferMemoryRequirements(gpu->device, buffer, &requirements);
+    return requirements.size;
+}
+
+static void test_shared_workspace_allocates_only_its_rounded_pages(void) {
+    char err[256] = {0};
+    dc_gpu_t *foreground = NULL, *workspace = NULL;
+    ASSERT_TRUE(dc_gpu_create(&foreground, 64, 64, pattern_shader, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&workspace, foreground, 65, 64, pattern_shader, err, sizeof(err)));
+    const uint32_t last_slot = 1u;
+    dc_chunk_t chunk = {.coord = {1, 0}};
+    chunk.cells[64].material = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_upload_chunk(foreground, DC_GPU_CHUNK_SLOTS - 1u, &chunk, err, sizeof(err)));
+    const VkDeviceSize foreground_bytes = buffer_allocation(foreground, foreground->chunk_buffer);
+    const VkDeviceSize workspace_bytes = buffer_allocation(workspace, workspace->chunk_buffer);
+    if (workspace_bytes * 4u > foreground_bytes) {
+        printf("Workspace cell buffer %llu bytes, foreground %llu bytes\n",
+               (unsigned long long)workspace_bytes, (unsigned long long)foreground_bytes);
+        dc_gpu_destroy(workspace);
+        dc_gpu_destroy(foreground);
+        ASSERT_TRUE(workspace_bytes * 4u <= foreground_bytes);
+    }
+
+    ASSERT_TRUE(buffer_allocation(workspace, workspace->particle_buffer) * 4u <=
+                buffer_allocation(foreground, foreground->particle_buffer));
+    ASSERT_TRUE(buffer_allocation(workspace, workspace->water_color_buffer) * 4u <=
+                buffer_allocation(foreground, foreground->water_color_buffer));
+    ASSERT_TRUE(!dc_gpu_set_page(workspace, 1, 0, last_slot + 1u, err, sizeof(err)));
+    ASSERT_TRUE(!dc_gpu_upload_chunk(workspace, last_slot + 1u, &chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(workspace, last_slot, &chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(workspace, 1, 0, last_slot, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(workspace, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(workspace, last_slot, &chunk, err, sizeof(err)));
+    ASSERT_EQ(chunk.cells[64].material, DC_MATERIAL_STONE);
+    ASSERT_EQ(dc_gpu_validation_errors(workspace), 0u);
+    dc_gpu_destroy(workspace);
+    dc_gpu_destroy(foreground);
+    PASS();
+}
+
 static void test_shared_device_contexts_keep_independent_simulation_state(void) {
     char err[256] = {0};
     dc_gpu_t *parent = NULL, *workspace = NULL;
@@ -391,6 +433,11 @@ static void test_tick_capture_orders_gpu_stages_and_handoffs(void) {
 }
 
 int main(int argc,char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--workspace-atlas") == 0) {
+        RUN(test_shared_workspace_allocates_only_its_rounded_pages);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
+    }
     if(argc==2&&strcmp(argv[1],"--pipeline-cache")==0) {
         RUN(test_pipeline_cache_persists_across_contexts);
         return g_fail?1:0;
@@ -402,6 +449,7 @@ int main(int argc,char **argv) {
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
+    RUN(test_shared_workspace_allocates_only_its_rounded_pages);
     RUN(test_gpu_pattern_readback);
     RUN(test_pipeline_cache_persists_across_contexts);
     RUN(test_rejects_invalid_dimensions);
