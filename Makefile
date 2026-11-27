@@ -2365,7 +2365,7 @@ test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reac
 build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_submit -Wl,--wrap=vkQueueWaitIdle
 .PHONY: test_level_structure_snapshots
-build/reactive_stream_view_display_tests: tests/app/reactive_stream_takeover_cases.h tests/app/reactive_stream_camera_cases.h tests/app/reactive_stream_seam_cases.h src/app/level_offscreen.h
+build/reactive_stream_view_display_tests: tests/app/reactive_stream_takeover_cases.h tests/app/reactive_stream_camera_cases.h tests/app/reactive_stream_bond_cases.h tests/app/reactive_stream_seam_cases.h src/app/level_offscreen.h
 test: test_level_structure_snapshots
 test_level_structure_snapshots: build/reactive_stream_view_display_tests
 	DC_TEST_STRUCTURE_TIME_ONLY=1 ./build/reactive_stream_view_display_tests
