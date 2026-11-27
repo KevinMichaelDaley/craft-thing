@@ -3,6 +3,9 @@
 #include "structural_store_internal.h"
 #include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/gas_gpu.h"
+#include "ferrum/fire/gpu.h"
+#include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/renderer/gpu.h"
 #include "reactive_checkpoint_gpu.h"
 #include "structural_store_fluids.h"
 #include "thermal_gpu_internal.h"
@@ -42,60 +45,89 @@ static bool import_chunk_fluids(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *
     return true;
 }
 
+uint32_t dc_gpu_pending_chunk_index(const dc_gpu_t *gpu, dc_chunk_coord_t coord) {
+    for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; ++i) {
+        dc_chunk_coord_t saved = gpu->checkpoint_chunks[i].coord;
+        if (saved.x == coord.x && saved.y == coord.y) return i;
+    }
+    return UINT32_MAX;
+}
+
+static void remove_pending(dc_gpu_t *gpu, uint32_t index) {
+    uint32_t last = gpu->checkpoint_chunk_count - 1u;
+    if (gpu->checkpoint_times) gpu->checkpoint_times[index] = gpu->checkpoint_times[last];
+    if (gpu->checkpoint_owners) gpu->checkpoint_owners[index] = gpu->checkpoint_owners[last];
+    if (gpu->checkpoint_fluids) {
+        dc_checkpoint_fluid_release(gpu->checkpoint_fluids + index);
+        if (index != last) {
+            gpu->checkpoint_fluids[index] = gpu->checkpoint_fluids[last];
+            gpu->checkpoint_fluids[last] = (dc_checkpoint_fluid_t){0};
+        }
+    }
+    fr_gpu_reactive_checkpoint_remove_pending(gpu, index, last);
+    fr_thermal_checkpoint_remove_pending(gpu, index, last);
+    gpu->checkpoint_chunks[index] = gpu->checkpoint_chunks[last];
+    if (gpu->checkpoint_colors) gpu->checkpoint_colors[index] = gpu->checkpoint_colors[last];
+    gpu->checkpoint_chunk_count = last;
+}
+
+static bool upload_streamed(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk, bool seed,
+    const dc_gpu_stream_channels_t *stream, uint32_t pending, bool *gas_admitted,
+    char *err, uint32_t cap) {
+    return dc_gpu_upload_chunk_exact(gpu, slot, chunk, seed, err, cap) &&
+        (!stream || (import_chunk_fluids(gpu, slot, chunk, stream->gas, stream->bulk,
+            stream->ambient_gas, gas_admitted, err, cap) &&
+            (!stream->colors || fr_renderer_upload_chunk_colors(gpu, slot, stream->colors, err, cap)) &&
+            (!stream->water_excess || fr_thermal_gpu_import_water_chunk(gpu, slot, chunk,
+                stream->water_excess, err, cap)) &&
+            (pending == UINT32_MAX || fr_gpu_reactive_checkpoint_retire_handles(gpu, pending, err, cap)) &&
+            fr_gpu_reactive_import_chunk(gpu, slot, chunk, stream->reactive, err, cap)));
+}
+
+static bool upload_saved(dc_gpu_t *gpu, uint32_t slot, uint32_t index,
+    const dc_chunk_t *streamed, dc_chunk_time_t saved_time, const dc_gpu_stream_channels_t *stream,
+    bool *gas_admitted, char *err, uint32_t cap) {
+    const dc_chunk_t *saved = gpu->checkpoint_chunks + index;
+    const dc_checkpoint_fluid_t *fluid = gpu->checkpoint_fluids ?
+        gpu->checkpoint_fluids + index : NULL;
+    const bool own_fluids = fluid && fluid->known;
+    const bool matching = !own_fluids && stream && (stream->gas || stream->bulk) &&
+        matching_stream_geometry(saved, streamed, saved_time, stream->time);
+    const fr_gas_checkpoint_chunk_t *gas = own_fluids ? fluid->gas : (matching ? stream->gas : NULL);
+    const fr_bulk_phase_chunk_t *bulk = own_fluids ? fluid->bulk : (matching ? stream->bulk : NULL);
+    if (!fr_gpu_reactive_checkpoint_preflight_chunk(gpu, saved, index, err, cap) ||
+        !fr_thermal_checkpoint_preflight_chunk(gpu, index, err, cap) ||
+        !dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap) ||
+        ((own_fluids || stream) && !import_chunk_fluids(gpu, slot, saved, gas, bulk,
+            stream && stream->ambient_gas, gas_admitted, err, cap)) ||
+        !fr_gpu_reactive_checkpoint_bind_chunk(gpu, slot, index, err, cap) ||
+        !fr_thermal_checkpoint_bind_chunk(gpu, slot, index, err, cap)) return false;
+    if (gpu->checkpoint_colors) dc_gpu_write_chunk_colors(gpu, slot, gpu->checkpoint_colors + index);
+    return true;
+}
+
 static bool upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk, bool seed,
-    const dc_gpu_stream_fluids_t *stream, bool *restored, dc_chunk_time_t *time,
+    const dc_gpu_stream_channels_t *stream, bool *restored, dc_chunk_time_t *time,
     bool *gas_admitted, char *err, uint32_t cap) {
     if (restored) *restored = false;
     if (time) *time = (dc_chunk_time_t){0};
     if (gas_admitted) *gas_admitted = false;
-    if (gpu && chunk) {
-        for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; i++) {
-            const dc_chunk_t *saved = gpu->checkpoint_chunks + i;
-            if (saved->coord.x == chunk->coord.x && saved->coord.y == chunk->coord.y) {
-                const dc_chunk_time_t saved_time = gpu->checkpoint_times ?
-                    gpu->checkpoint_times[i] : (dc_chunk_time_t){0};
-                const dc_checkpoint_fluid_t *fluid = gpu->checkpoint_fluids ?
-                    gpu->checkpoint_fluids + i : NULL;
-                const bool own_fluids = fluid && fluid->known;
-                const bool matching = !own_fluids && stream && (stream->gas || stream->bulk) &&
-                    matching_stream_geometry(saved, chunk, saved_time, stream->time);
-                const fr_gas_checkpoint_chunk_t *gas = own_fluids ? fluid->gas :
-                    (matching ? stream->gas : NULL);
-                const fr_bulk_phase_chunk_t *bulk = own_fluids ? fluid->bulk :
-                    (matching ? stream->bulk : NULL);
-                bool okay=fr_gpu_reactive_checkpoint_preflight_chunk(gpu,saved,i,err,cap)&&
-                    fr_thermal_checkpoint_preflight_chunk(gpu,i,err,cap)&&
-                    dc_gpu_upload_chunk_exact(gpu, slot, saved, false, err, cap)&&
-                    ((!own_fluids && !stream) || import_chunk_fluids(gpu, slot, saved, gas, bulk,
-                        stream && stream->ambient_gas, gas_admitted, err, cap))&&
-                    fr_gpu_reactive_checkpoint_bind_chunk(gpu,slot,i,err,cap)&&
-                    fr_thermal_checkpoint_bind_chunk(gpu,slot,i,err,cap);
-                if (okay) {
-                    if(gpu->checkpoint_colors) dc_gpu_write_chunk_colors(gpu,slot,gpu->checkpoint_colors+i);
-                    uint32_t last=gpu->checkpoint_chunk_count-1u;
-                    if (time) *time = saved_time;
-                    if (gpu->checkpoint_times) gpu->checkpoint_times[i] = gpu->checkpoint_times[last];
-                    if (gpu->checkpoint_owners) gpu->checkpoint_owners[i] = gpu->checkpoint_owners[last];
-                    if (gpu->checkpoint_fluids) {
-                        dc_checkpoint_fluid_release(gpu->checkpoint_fluids + i);
-                        if (i != last) {
-                            gpu->checkpoint_fluids[i] = gpu->checkpoint_fluids[last];
-                            gpu->checkpoint_fluids[last] = (dc_checkpoint_fluid_t){0};
-                        }
-                    }
-                    fr_gpu_reactive_checkpoint_remove_pending(gpu,i,last);
-                    fr_thermal_checkpoint_remove_pending(gpu,i,last);
-                    gpu->checkpoint_chunks[i]=gpu->checkpoint_chunks[last];gpu->checkpoint_chunk_count=last;
-                    if(gpu->checkpoint_colors) gpu->checkpoint_colors[i]=gpu->checkpoint_colors[gpu->checkpoint_chunk_count];
-                }
-                if (restored) *restored = okay;
-                return okay;
-            }
-        }
+    uint32_t index = gpu && chunk ? dc_gpu_pending_chunk_index(gpu, chunk->coord) : UINT32_MAX;
+    if (index == UINT32_MAX)
+        return upload_streamed(gpu, slot, chunk, seed, stream, index, gas_admitted, err, cap);
+    dc_chunk_time_t saved_time = gpu->checkpoint_times ? gpu->checkpoint_times[index] : (dc_chunk_time_t){0};
+    bool replace = stream && gpu->checkpoint_owners && dc_chunk_owner_valid(stream->replaces_owner) &&
+        dc_chunk_owner_equal(stream->replaces_owner, gpu->checkpoint_owners[index]) &&
+        saved_time.known && stream->time.known && stream->time.seconds >= saved_time.seconds;
+    if (replace) {
+        if (!upload_streamed(gpu, slot, chunk, seed, stream, index, gas_admitted, err, cap)) return false;
+    } else {
+        if (!upload_saved(gpu, slot, index, chunk, saved_time, stream, gas_admitted, err, cap)) return false;
+        if (restored) *restored = true;
+        if (time) *time = saved_time;
     }
-    return dc_gpu_upload_chunk_exact(gpu, slot, chunk, seed, err, cap) &&
-        (!stream || import_chunk_fluids(gpu, slot, chunk, stream->gas, stream->bulk,
-            stream->ambient_gas, gas_admitted, err, cap));
+    remove_pending(gpu, index);
+    return true;
 }
 
 bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
@@ -104,7 +136,7 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot, const dc_chunk
 }
 
 bool dc_gpu_upload_streamed_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-    const dc_gpu_stream_fluids_t *stream, bool *restored,
+    const dc_gpu_stream_channels_t *stream, bool *restored,
     dc_chunk_time_t *time, bool *gas_admitted, char *err, uint32_t cap) {
     return upload_chunk_checkpoint(gpu, slot, chunk, false, stream, restored, time, gas_admitted, err, cap);
 }

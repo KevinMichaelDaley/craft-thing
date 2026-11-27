@@ -43,8 +43,32 @@ bool fr_gpu_reactive_checkpoint_bind_chunk(dc_gpu_t *g,uint32_t slot,uint32_t in
     char *err,uint32_t cap) {
     if(!g||index>=g->checkpoint_chunk_count) return error(err,cap,"Invalid checkpoint binding index");
     if(!g->checkpoint_reactive) return true;
-    return fr_gpu_reactive_bind_prepared_chunk(g,slot,g->checkpoint_reactive+index,
-        g->checkpoint_reactive_handles?g->checkpoint_reactive_handles[index]:NULL,err,cap);
+    const fr_reactive_chunk_t *channel = g->checkpoint_reactive + index;
+    const uint32_t *handles = g->checkpoint_reactive_handles ? g->checkpoint_reactive_handles[index] : NULL;
+    if (channel->count && !handles)
+        return fr_gpu_reactive_import_chunk(g, slot, g->checkpoint_chunks + index, channel, err, cap);
+    return fr_gpu_reactive_bind_prepared_chunk(g, slot, channel, handles, err, cap);
+}
+bool fr_gpu_reactive_checkpoint_retire_handles(dc_gpu_t *g, uint32_t index,
+    char *err, uint32_t cap) {
+    if (!g->checkpoint_reactive_handles || !g->checkpoint_reactive_handles[index]) return true;
+    uint32_t *handles = g->checkpoint_reactive_handles[index];
+    const uint32_t count = g->checkpoint_reactive[index].count;
+    fr_reactive_arena_request_t *requests = calloc(count, sizeof(*requests));
+    if (!requests) return error(err, cap, "Cannot stage checkpoint parcel retirement");
+    for (uint32_t i = 0; i < count; ++i) {
+        requests[i].operation = FR_REACTIVE_ARENA_RETIRE;
+        memcpy(&requests[i].handle, handles + i * 2u, sizeof(requests[i].handle));
+    }
+    uint32_t required;
+    bool okay = fr_reactive_arena_apply(g, &g->reactive->arena, requests, count,
+        (fr_reactive_handle_t *)handles, &required, err, cap);
+    free(requests);
+    if (okay) {
+        free(handles);
+        g->checkpoint_reactive_handles[index] = NULL;
+    }
+    return okay;
 }
 static bool copy_channel(const fr_reactive_chunk_t *source,fr_reactive_chunk_t *out) {
     *out=*source;out->attachments=NULL;

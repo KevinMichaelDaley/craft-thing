@@ -75,14 +75,6 @@ static const dc_chunk_slot_t *resident_chunk(const dc_chunk_table_t *table,
     return owner;
 }
 
-static bool pending_chunk(const dc_gpu_t *gpu, dc_chunk_coord_t coord) {
-    for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; ++i) {
-        dc_chunk_coord_t saved = gpu->checkpoint_chunks[i].coord;
-        if (saved.x == coord.x && saved.y == coord.y) return true;
-    }
-    return false;
-}
-
 static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
     const dc_chunk_table_t *resident, const bool *gas_admitted, char *err, uint32_t cap) {
     if (!gpu || !path || !*path)
@@ -184,7 +176,8 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
         dc_chunk_t *chunk = chunks + header.reserved[0];
         memcpy(&chunk->coord, record, sizeof(chunk->coord));
         const dc_chunk_slot_t *owner = resident_chunk(resident, slot, chunk->coord);
-        if ((gas_admitted && !owner) || pending_chunk(gpu, chunk->coord)) continue;
+        if ((gas_admitted && !owner) ||
+            dc_gpu_pending_chunk_index(gpu, chunk->coord) != UINT32_MAX) continue;
         okay = dc_gpu_download_chunk(gpu, slot, chunk, err, cap) &&
                dc_gpu_checkpoint_chunk_valid(chunk);
         if (okay) {

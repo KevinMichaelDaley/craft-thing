@@ -350,17 +350,14 @@ static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
     }
     bool restored, gas_admitted;
     dc_chunk_time_t checkpoint_time;
-    const dc_gpu_stream_fluids_t fluids = {
+    const dc_gpu_stream_channels_t channels = {
         .gas = result->gas, .bulk = result->bulk, .time = result->time,
+        .colors = result->colors, .reactive = result->reactive, .water_excess = result->water_excess,
+        .replaces_owner = result->replaces_owner,
         .ambient_gas = view->stream_ambient_gas
     };
-    if (!dc_gpu_upload_streamed_chunk(view->gpu, index, result->chunk, &fluids,
+    if (!dc_gpu_upload_streamed_chunk(view->gpu, index, result->chunk, &channels,
         &restored, &checkpoint_time, &gas_admitted, err, cap)) return false;
-    if (!restored &&
-        ((result->colors && !fr_renderer_upload_chunk_colors(view->gpu, index, result->colors, err, cap)) ||
-         !fr_gpu_reactive_import_chunk(view->gpu, index, result->chunk, result->reactive, err, cap) ||
-         (result->water_excess && !fr_thermal_gpu_import_water_chunk(view->gpu, index,
-             result->chunk, result->water_excess, err, cap)))) return false;
     if (!dc_chunk_table_finish_load(&view->table, index, result->generation))
         return error(err, cap, "Cannot finish loaded chunk publication");
 
@@ -374,7 +371,8 @@ static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
         view->save_color_stale[index] = true;
         if (getenv("DC_SAVE_TRACE")) fprintf(stderr, "Save late load slot%u\n", index);
     }
-    if (restored || (!result->gas && view->stream_ambient_gas))
+    if (restored || dc_chunk_owner_valid(result->replaces_owner) ||
+        (!result->gas && view->stream_ambient_gas))
         dc_chunk_table_mark_dirty(&view->table, index);
     return true;
 }

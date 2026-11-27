@@ -81,7 +81,7 @@ bool __wrap_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out) {
 }
 
 bool __wrap_dc_gpu_upload_streamed_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-    const dc_gpu_stream_fluids_t *stream, bool *restored, dc_chunk_time_t *time,
+    const dc_gpu_stream_channels_t *stream, bool *restored, dc_chunk_time_t *time,
     bool *gas_admitted, char *err, uint32_t cap) {
     (void)gpu; (void)err; (void)cap;
     *restored = g_frame.restore_first_from_checkpoint && slot == 0;

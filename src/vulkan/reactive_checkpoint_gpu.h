@@ -26,6 +26,9 @@ bool fr_gpu_reactive_checkpoint_preflight_chunk(dc_gpu_t *gpu,const dc_chunk_t *
     uint32_t index,char *err,uint32_t cap);
 bool fr_gpu_reactive_checkpoint_bind_chunk(dc_gpu_t *gpu,uint32_t slot,uint32_t index,
     char *err,uint32_t cap);
+/** Retire detached GPU handles while retaining the immutable fallback parcel data. */
+bool fr_gpu_reactive_checkpoint_retire_handles(dc_gpu_t *gpu, uint32_t index,
+    char *err, uint32_t cap);
 /** Release one consumed packet while the caller removes its physical chunk. */
 void fr_gpu_reactive_checkpoint_remove_pending(dc_gpu_t *gpu,uint32_t index,uint32_t last);
 #endif

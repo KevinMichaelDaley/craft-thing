@@ -457,13 +457,19 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
 typedef struct {
     const fr_gas_checkpoint_chunk_t *gas;
     const fr_bulk_phase_chunk_t *bulk;
+    const dc_chunk_colors_t *colors;
+    const fr_reactive_chunk_t *reactive;
+    const float *water_excess;
     dc_chunk_time_t time;
+    dc_chunk_owner_t replaces_owner;
     bool ambient_gas;
-} dc_gpu_stream_fluids_t;
+} dc_gpu_stream_channels_t;
 
 /** Publish a streamed chunk or its pending structure owner with coherent fluids. */
+uint32_t dc_gpu_pending_chunk_index(const dc_gpu_t *gpu, dc_chunk_coord_t coord);
+/** Publish a verified stream replacement or its pending structure owner with matching channels. */
 bool dc_gpu_upload_streamed_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-    const dc_gpu_stream_fluids_t *streamed, bool *restored,
+    const dc_gpu_stream_channels_t *streamed, bool *restored,
     dc_chunk_time_t *time, bool *gas_admitted, char *err, uint32_t cap);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
