@@ -378,6 +378,10 @@ static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
     return true;
 }
 
+static bool has_checkpoint_receipt(const dc_chunk_slot_t *slot) {
+    return slot->time.known && dc_chunk_owner_valid(slot->checkpoint_owner);
+}
+
 static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
     dc_stream_result_t result;
     while (dc_stream_poll(view->stream, &result)) {
@@ -398,6 +402,8 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                        (failed || result.kind == DC_STREAM_LOADED);
         bool saving = slot->state == DC_SLOT_SAVING && slot->save_generation == result.generation &&
                       (failed || result.kind == DC_STREAM_SAVED);
+        if (saving && !failed && has_checkpoint_receipt(slot) &&
+            !dc_chunk_owner_equal(slot->checkpoint_owner, result.replaces_owner)) saving = false;
         if (!loading && !saving) {
             dc_stream_result_release(&result);
             continue;
@@ -458,8 +464,8 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
         fr_reactive_chunk_t reactive={0};
         if(!fr_gpu_reactive_export_chunk(view->gpu,i,&chunk,&reactive,err,cap)) return false;
         if(trace) {parts[2]+=SDL_GetTicks64()-stage;stage=SDL_GetTicks64();}
-        const fr_reactive_chunk_t *channel=reactive.count||reactive.next_id>1u?&reactive:NULL;
-        float water_excess[4096];const float *liquid=NULL;
+        fr_reactive_chunk_t *channel=reactive.count||reactive.next_id>1u?&reactive:NULL;
+        float water_excess[4096];float *liquid=NULL;
         if(fr_thermal_gpu_enabled(view->gpu)) {
             if(!fr_thermal_gpu_read_water_chunk(view->gpu,i,water_excess,4096,err,cap)) {
                 fr_reactive_chunk_release(&reactive);return false;
@@ -483,8 +489,13 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             free(bulk);free(gas);fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
         }
-        bool queued=dc_stream_request_save_snapshot(view->stream,&chunk,&colors,channel,
-            liquid,gas,bulk,slot->time,generation);
+        const dc_stream_result_t snapshot = {.kind = DC_STREAM_LOADED, .coord = slot->coord,
+            .generation = slot->generation, .chunk = &chunk, .colors = &colors, .reactive = channel,
+            .water_excess = liquid, .gas = gas, .bulk = bulk, .time = slot->time};
+        bool queued = has_checkpoint_receipt(slot) ?
+            dc_stream_request_save_takeover(view->stream, &snapshot, slot->checkpoint_owner, generation) :
+            dc_stream_request_save_snapshot(view->stream, &chunk, &colors, channel,
+                liquid, gas, bulk, slot->time, generation);
         free(bulk);
         free(gas);
         fr_reactive_chunk_release(&reactive);

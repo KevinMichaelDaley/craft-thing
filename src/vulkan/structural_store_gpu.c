@@ -76,7 +76,8 @@ static const dc_chunk_slot_t *resident_chunk(const dc_chunk_table_t *table,
 }
 
 static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
-    const dc_chunk_table_t *resident, const bool *gas_admitted, char *err, uint32_t cap) {
+    const dc_chunk_table_t *resident, const bool *gas_admitted, dc_chunk_table_t *publish,
+    char *err, uint32_t cap) {
     if (!gpu || !path || !*path)
         return error(err, cap, "Invalid structure snapshot path");
     if(err&&cap) err[0]='\0';
@@ -206,7 +207,7 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
     if (okay) okay = dc_checkpoint_channels_set_fluids(gpu, &channels, chunks, slots,
         header.reserved[0], gas_admitted, err, cap);
     if (okay) okay = dc_checkpoint_channels_set_owners(gpu, &channels, slots,
-        header.reserved[0], gas_admitted != NULL);
+        header.reserved[0], publish);
     header.version = channels.version;
     if(okay) okay=fr_gpu_reactive_checkpoint_mass_valid(channels.reactive_length?&channels.reactive:NULL,
         payload,pixels,header.reserved[1],err,cap);
@@ -234,6 +235,8 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
             remove(temporary);
     } else
         okay = false;
+    if (okay && publish)
+        dc_checkpoint_channels_publish_resident_owners(&channels, slots, header.reserved[0], publish);
     payload_destroy(payload);
     dc_checkpoint_channels_discard(gpu,&channels);
     free(pixels);
@@ -245,18 +248,18 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
 }
 
 bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
-    return save_structure_snapshot(gpu, path, NULL, NULL, err, cap);
+    return save_structure_snapshot(gpu, path, NULL, NULL, NULL, err, cap);
 }
 
 bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
     const dc_chunk_table_t *resident, char *err, uint32_t cap) {
-    return save_structure_snapshot(gpu, path, resident, NULL, err, cap);
+    return save_structure_snapshot(gpu, path, resident, NULL, NULL, err, cap);
 }
 
 bool fr_gpu_save_level_structure(dc_gpu_t *gpu, const char *path,
-    const dc_chunk_table_t *resident, const bool *gas_admitted, char *err, uint32_t cap) {
+    dc_chunk_table_t *resident, const bool *gas_admitted, char *err, uint32_t cap) {
     if (!resident || !gas_admitted) return error(err, cap, "Missing level checkpoint owners");
-    return save_structure_snapshot(gpu, path, resident, gas_admitted, err, cap);
+    return save_structure_snapshot(gpu, path, resident, gas_admitted, resident, err, cap);
 }
 
 static bool refresh_topology(dc_gpu_t *gpu) {

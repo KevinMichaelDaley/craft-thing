@@ -140,6 +140,7 @@ bool dc_chunk_table_set_active(dc_chunk_table_t *table, uint32_t index, bool act
     if (!table || index >= table->capacity) return false;
     dc_chunk_slot_t *slot = &table->slots[index];
     if (slot->state != DC_SLOT_ACTIVE && slot->state != DC_SLOT_SLEEPING) return false;
+    if (active && slot->state == DC_SLOT_SLEEPING) slot->checkpoint_owner = (dc_chunk_owner_t){0};
     slot->state = active ? DC_SLOT_ACTIVE : DC_SLOT_SLEEPING;
     return true;
 }
@@ -149,6 +150,7 @@ bool dc_chunk_table_mark_dirty(dc_chunk_table_t *table, uint32_t index) {
     dc_chunk_slot_t *slot = &table->slots[index];
     if (slot->state != DC_SLOT_ACTIVE && slot->state != DC_SLOT_SLEEPING) return false;
     slot->dirty = true;
+    slot->checkpoint_owner = (dc_chunk_owner_t){0};
     return true;
 }
 

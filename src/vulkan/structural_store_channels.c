@@ -103,8 +103,8 @@ static bool new_owner_epoch(uint64_t *epoch) {
 }
 
 bool dc_checkpoint_channels_set_owners(const dc_gpu_t *g, dc_checkpoint_channels_t *p,
-    const uint32_t *slots, uint32_t count, bool level_save) {
-    if (!count || (!level_save && !g->checkpoint_owners)) return true;
+    const uint32_t *slots, uint32_t count, const dc_chunk_table_t *resident) {
+    if (!count || (!resident && !g->checkpoint_owners)) return true;
     if (count > DC_GPU_CHUNK_SLOTS * 2u) return false;
     uint8_t *bytes = calloc(count, OWNER_RECORD_BYTES);
     if (!bytes) return false;
@@ -114,12 +114,15 @@ bool dc_checkpoint_channels_set_owners(const dc_gpu_t *g, dc_checkpoint_channels
         dc_chunk_owner_t owner = {0};
         if (slots[i] == UINT32_MAX) {
             if (g->checkpoint_owners) owner = g->checkpoint_owners[i];
-        } else if (level_save) {
-            if (!epoch && !new_owner_epoch(&epoch)) {
-                free(bytes);
-                return false;
+        } else if (resident) {
+            owner = resident->slots[slots[i]].checkpoint_owner;
+            if (!dc_chunk_owner_valid(owner)) {
+                if (!epoch && !new_owner_epoch(&epoch)) {
+                    free(bytes);
+                    return false;
+                }
+                owner = (dc_chunk_owner_t){.epoch = epoch, .serial = i + 1u};
             }
-            owner = (dc_chunk_owner_t){.epoch = epoch, .serial = i + 1u};
         }
         if (!dc_chunk_owner_valid(owner)) continue;
         put64(bytes + (size_t)i * OWNER_RECORD_BYTES, owner.epoch);
@@ -137,6 +140,22 @@ bool dc_checkpoint_channels_set_owners(const dc_gpu_t *g, dc_checkpoint_channels
     return true;
 }
 
+static dc_chunk_owner_t packet_owner(const uint8_t *bytes, uint32_t index) {
+    const uint8_t *row = bytes + (size_t)index * OWNER_RECORD_BYTES;
+    return (dc_chunk_owner_t){get64(row), get64(row + sizeof(uint64_t))};
+}
+
+void dc_checkpoint_channels_publish_resident_owners(const dc_checkpoint_channels_t *p,
+    const uint32_t *slots, uint32_t count, dc_chunk_table_t *resident) {
+    for (uint32_t i = 0; i < resident->capacity; ++i)
+        resident->slots[i].checkpoint_owner = (dc_chunk_owner_t){0};
+    if (!p->owner_bytes) return;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (slots[i] != UINT32_MAX)
+            resident->slots[slots[i]].checkpoint_owner = packet_owner(p->owner_bytes, i);
+    }
+}
+
 bool dc_checkpoint_channels_decode_owners(dc_checkpoint_channels_t *p, uint32_t count) {
     if (p->version < DC_STRUCTURE_OWNER_VERSION) return true;
     if (!p->owner_bytes || !count || count > DC_GPU_CHUNK_SLOTS * 2u ||
@@ -145,8 +164,7 @@ bool dc_checkpoint_channels_decode_owners(dc_checkpoint_channels_t *p, uint32_t 
     if (!owners) return false;
     bool any = false;
     for (uint32_t i = 0; i < count; ++i) {
-        const uint8_t *row = p->owner_bytes + (size_t)i * OWNER_RECORD_BYTES;
-        owners[i] = (dc_chunk_owner_t){get64(row), get64(row + sizeof(uint64_t))};
+        owners[i] = packet_owner(p->owner_bytes, i);
         if (!owners[i].epoch && !owners[i].serial) continue;
         if (!dc_chunk_owner_valid(owners[i])) { free(owners); return false; }
         for (uint32_t j = 0; j < i; ++j) {

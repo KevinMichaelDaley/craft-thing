@@ -168,9 +168,11 @@ static void test_resaving_pending_owner_keeps_its_id_and_new_owners_get_fresh_id
     dc_chunk_owner_t previous = {17, 2};
     gpu->checkpoint_owners = &previous;
     const uint32_t slots[] = {UINT32_MAX, 0u, 1u};
+    dc_chunk_slot_t live[2] = {0};
+    dc_chunk_table_t resident = {.slots = live, .capacity = 2};
     dc_checkpoint_channels_t first = {.fluid_length = 1}, second = {.fluid_length = 1};
-    ASSERT_TRUE(dc_checkpoint_channels_set_owners(gpu, &first, slots, 3, true));
-    ASSERT_TRUE(dc_checkpoint_channels_set_owners(gpu, &second, slots, 3, true));
+    ASSERT_TRUE(dc_checkpoint_channels_set_owners(gpu, &first, slots, 3, &resident));
+    ASSERT_TRUE(dc_checkpoint_channels_set_owners(gpu, &second, slots, 3, &resident));
     ASSERT_TRUE(dc_checkpoint_channels_decode_owners(&first, 3));
     ASSERT_TRUE(dc_checkpoint_channels_decode_owners(&second, 3));
     ASSERT_TRUE(dc_chunk_owner_equal(first.owners[0], previous));

@@ -43,7 +43,10 @@ bool dc_checkpoint_channels_set_fluids(dc_gpu_t *gpu, dc_checkpoint_channels_t *
 bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *channels,uint32_t count);
 /** Preserve pending owner IDs and issue new IDs for captured level slots. */
 bool dc_checkpoint_channels_set_owners(const dc_gpu_t *gpu, dc_checkpoint_channels_t *channels,
-    const uint32_t *slots, uint32_t count, bool level_save);
+    const uint32_t *slots, uint32_t count, const dc_chunk_table_t *resident);
+/** Publish exactly the owner IDs included in the committed archive. */
+void dc_checkpoint_channels_publish_resident_owners(const dc_checkpoint_channels_t *channels,
+    const uint32_t *slots, uint32_t count, dc_chunk_table_t *resident);
 /** Validate the owner table against the ordered physical records. */
 bool dc_checkpoint_channels_decode_owners(dc_checkpoint_channels_t *channels, uint32_t count);
 /** Extend the outer snapshot checksum with canonical lengths and channel bytes. */

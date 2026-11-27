@@ -93,9 +93,9 @@ bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path,
 /** Save a structure snapshot with completed times for matching resident slots. */
 bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
     const dc_chunk_table_t *resident, char *err_buf, uint32_t err_cap);
-/** Save matching level-owned chunks, their elapsed times, and their fluid stock. */
+/** Save matching level-owned chunks and publish their IDs after the archive is written. */
 bool fr_gpu_save_level_structure(dc_gpu_t *gpu, const char *path,
-    const dc_chunk_table_t *resident, const bool *gas_admitted,
+    dc_chunk_table_t *resident, const bool *gas_admitted,
     char *err_buf, uint32_t err_cap);
 /** Validate and restore a graph-aware snapshot; accept older body-only worlds. */
 bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path,
