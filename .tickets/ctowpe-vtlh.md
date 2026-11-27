@@ -1,7 +1,7 @@
 ---
 id: ctowpe-vtlh
 status: in_progress
-deps: [ctowpe-0zjo, ctowpe-kudk, ctowpe-o0i2, ctowpe-l2hw, ctowpe-mbc3, ctowpe-8rdr, ctowpe-1kw3, ctowpe-1y1n]
+deps: [ctowpe-0zjo, ctowpe-kudk, ctowpe-o0i2, ctowpe-l2hw, ctowpe-mbc3, ctowpe-8rdr, ctowpe-1kw3, ctowpe-1y1n, ctowpe-04hz, ctowpe-bsh0]
 links: []
 created: 2026-11-27T15:00:01Z
 type: bug
@@ -47,3 +47,7 @@ Instrumented the same production 1280x720 exact concave workload at 8f26f761 on 
 **2026-11-27T17:34:27Z**
 
 8f26f761 production 720 results on hidden :93 (mean/p95, ms): dry 22.783/23.524 and dense 28.743/32.371 pass. Concave 36.417/40.686 misses both thresholds. 1abdfaa8 completed its prebuild; the two production benchmark revisions are serialized before their aggregate suites.
+
+**2026-11-27T19:06:07Z**
+
+At 8abb9206 the saturated 16-owner camera passed every mean with half-native 24.263/24.554/24.440 ms near/middle/far and native 27.627/27.503/27.594. The six p95 values remain above 33.333 ms (half-native 38.107/44.956/44.747, native 41.350/47.327/46.321). The separate 720 dry, dense and exact concave gates passed with p95 4.361, 13.947 and 21.450 ms. Mapped water dispatch and uninterrupted pressure preparation now have separate pending production comparisons under hidden Xephyr.
