@@ -5,6 +5,7 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
 #extension GL_KHR_shader_subgroup_shuffle : require
+#include "../../include/dungeoncraft/fluid_aperture_layout.h"
 #ifndef DC_TRANSPORT_GROUP_SIZE
 #define DC_TRANSPORT_GROUP_SIZE 32
 #endif
@@ -22,8 +23,8 @@ layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 layout(set=0,binding=8,std430) readonly buffer SavedVelocity {uint fluid_a[];};
 layout(set=0,binding=10,std430) readonly buffer Velocity {vec2 face_velocity[];};
-layout(set=0,binding=28,std430) readonly buffer Prefix {uint aperture_prefix[];};
-layout(set=0,binding=29,std430) readonly buffer Tree {uint aperture_tree[];};
+layout(set=0,binding=DC_FLUID_APERTURE_PREFIX_BINDING,std430) readonly buffer Prefix {uint aperture_prefix[];};
+layout(set=0,binding=DC_FLUID_APERTURE_TREE_BINDING,std430) readonly buffer Tree {uint aperture_tree[];};
 #ifdef DC_TRANSPORT_PROFILE
 layout(set=0,binding=31,std430) buffer TransportProfile {uint transport_profile[];};
 uint request_queries=0u,blocker_checks=0u,source_queries=0u;

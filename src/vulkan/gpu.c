@@ -156,17 +156,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].pBufferInfo = &buffers[i];
     }
     vkUpdateDescriptorSets(gpu->device, DC_GPU_DESCRIPTOR_BINDINGS, writes, 0, NULL);
-    /* Native transport uses immutable owner fields and its own aperture cache. */
-    const uint32_t transport_bindings[] = {1, 2, 3, 8, 10, 28, 29, 31, 32, 36, 37};
-    enum { TRANSPORT_BINDINGS = sizeof(transport_bindings) / sizeof(transport_bindings[0]) };
-    buffers[28] = (VkDescriptorBufferInfo){gpu->aperture_prefix_buffer, 0, VK_WHOLE_SIZE};
-    buffers[29] = (VkDescriptorBufferInfo){gpu->aperture_tree_buffer, 0, VK_WHOLE_SIZE};
-    VkWriteDescriptorSet transport_writes[TRANSPORT_BINDINGS];
-    for (uint32_t i = 0; i < TRANSPORT_BINDINGS; ++i) {
-        transport_writes[i] = writes[transport_bindings[i]];
-        transport_writes[i].dstSet = gpu->fluid_transport_descriptor;
-    }
-    vkUpdateDescriptorSets(gpu->device, TRANSPORT_BINDINGS, transport_writes, 0, NULL);
+    dc_gpu_bind_native_transport(gpu, buffers);
     gpu->descriptor_revision++;
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
         .size = DC_GPU_PUSH_CONSTANT_BYTES };

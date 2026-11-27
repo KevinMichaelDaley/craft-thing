@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/fluid_aperture_layout.h"
 layout(local_size_x = 64, local_size_y = 1) in;
 layout(constant_id=3) const bool LEGACY_FLUID_PATHS=true;
 
@@ -12,8 +13,8 @@ layout(set = 0, binding = 10, std430) buffer FaceVelocity { vec2 face_velocity[]
 layout(set = 0, binding = 16, std430) readonly buffer MarkerGrid { uint marker_grid[]; };
 layout(set = 0, binding = 17, std430) readonly buffer SlotPages { uint slot_pages[]; };
 layout(set = 0, binding = 31, std430) buffer FluidPrevious { uint fluid_previous[]; };
-layout(set = 0, binding = 28, std430) readonly buffer AperturePrefix { uint aperture_prefix[]; };
-layout(set = 0, binding = 29, std430) readonly buffer ApertureTree { uint aperture_tree[]; };
+layout(set = 0, binding = DC_FLUID_APERTURE_PREFIX_BINDING, std430) readonly buffer AperturePrefix { uint aperture_prefix[]; };
+layout(set = 0, binding = DC_FLUID_APERTURE_TREE_BINDING, std430) readonly buffer ApertureTree { uint aperture_tree[]; };
 layout(push_constant) uniform Params {
     uint width;
     uint height;

@@ -34,8 +34,8 @@ static const struct {
     /* Dense dispatch still uses the native pressure descriptor layout. */
     [PRESSURE_WORK] = {1, 0, true},
     [PRESSURE_STENCIL] = {1, 1, true},
-    [APERTURE_PREFIX] = {0, 28, true},
-    [APERTURE_TREE] = {0, 29, true},
+    [APERTURE_PREFIX] = {0, DC_FLUID_APERTURE_PREFIX_BINDING, true},
+    [APERTURE_TREE] = {0, DC_FLUID_APERTURE_TREE_BINDING, true},
     [CROSSINGS] = {0, DC_WATER_SEAM_CROSSING_BINDING, true},
     [PREVIOUS_STOCK] = {0, 31, true},
     [WATER_COLOR] = {0, 32, true},

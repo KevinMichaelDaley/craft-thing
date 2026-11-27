@@ -615,6 +615,8 @@ void dc_gpu_record_water_seam_correction(dc_gpu_t *gpu, VkDescriptorSet descript
     VkPipeline pipeline, uint32_t width, uint32_t height, uint32_t slots, float step_scale, uint32_t axis,
     uint32_t tick, uint32_t source_ping);
 uint32_t dc_gpu_fluid_aperture_leaves(uint32_t length);
+/** Reuse the creation-time owner binding list to initialize the native transport set. */
+void dc_gpu_bind_native_transport(dc_gpu_t *gpu, const VkDescriptorBufferInfo owner[]);
 /** Storage for all horizontal or vertical aperture trees, including their reserved prefix. */
 VkDeviceSize dc_gpu_fluid_aperture_tree_bytes(uint32_t width, uint32_t height);
 void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first, uint32_t stop);

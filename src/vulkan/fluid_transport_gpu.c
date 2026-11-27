@@ -2,6 +2,25 @@
 #include "gpu_internal.h"
 #include "renderer_internal.h"
 
+void dc_gpu_bind_native_transport(dc_gpu_t *gpu, const VkDescriptorBufferInfo owner[]) {
+    const uint32_t bindings[] = {1, 2, 3, 8, 10, DC_FLUID_APERTURE_PREFIX_BINDING,
+        DC_FLUID_APERTURE_TREE_BINDING, 31, 32, 36, 37};
+    enum { COUNT = sizeof(bindings) / sizeof(bindings[0]) };
+    const VkDescriptorBufferInfo scratch[DC_GPU_DESCRIPTOR_BINDINGS] = {
+        [DC_FLUID_APERTURE_PREFIX_BINDING] = {gpu->aperture_prefix_buffer, 0, VK_WHOLE_SIZE},
+        [DC_FLUID_APERTURE_TREE_BINDING] = {gpu->aperture_tree_buffer, 0, VK_WHOLE_SIZE},
+    };
+    VkWriteDescriptorSet writes[COUNT];
+    for (uint32_t i = 0; i < COUNT; ++i) {
+        uint32_t binding = bindings[i];
+        writes[i] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = gpu->fluid_transport_descriptor, .dstBinding = binding, .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = scratch[binding].buffer ? &scratch[binding] : &owner[binding]};
+    }
+    vkUpdateDescriptorSets(gpu->device, COUNT, writes, 0, NULL);
+}
+
 void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     const VkPipeline pipelines[2], uint32_t width, uint32_t height, uint32_t seam_axis) {
     enum { UPWARD = 0u, LATERAL = 1u, FIRST_DISPLACEMENT_MODE = 11u };
