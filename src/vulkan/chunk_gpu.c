@@ -462,7 +462,8 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         }
         gpu->preserve_shifted_slot[slot] = false;
     }
-    memcpy(gpu->slot_page_mapped, gpu->slot_page, sizeof(gpu->slot_page));
+    memcpy(gpu->slot_page_mapped, gpu->slot_page,
+           dc_gpu_slot_capacity(gpu) * sizeof(gpu->slot_page[0]));
     return true;
 }
 

@@ -32,7 +32,7 @@ bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->slot_page_memory, &gpu->slot_page_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, counts, &gpu->slot_seed_buffer,
                &gpu->slot_seed_memory, &gpu->slot_seed_mapped, err, cap);
-    if (okay) memcpy(gpu->slot_page_mapped, gpu->slot_page, sizeof(gpu->slot_page));
+    if (okay) memcpy(gpu->slot_page_mapped, gpu->slot_page, (size_t)counts);
     return okay;
 }
 
