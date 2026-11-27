@@ -2,6 +2,7 @@
 #include "../../tests/vulkan/fluid_tests.c"
 #undef main
 #include <string.h>
+#include "../../src/vulkan/renderer_internal.h"
 static dc_gpu_t *dispatch_gpu;
 static VkPipeline dispatch_pipeline;
 static uint32_t dispatch_mode;
@@ -157,6 +158,30 @@ static void test_fluid_variant_fingerprint(void) {
     dc_gpu_destroy(g);
     PASS();
 }
+static bool read_aperture_prefix(dc_gpu_t *g, uint32_t *prefix, size_t bytes,
+                                 char *err, uint32_t cap) {
+    VkBuffer staging = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    void *mapped = NULL;
+    bool ok = dc_gpu_make_staging_buffer(g, bytes, &staging, &memory, &mapped, err, cap);
+    if (ok && (ok = fr_renderer_begin(g))) {
+        fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                            VK_ACCESS_2_TRANSFER_READ_BIT);
+        VkBufferCopy copy = {.size = bytes};
+        vkCmdCopyBuffer(g->command, g->aperture_prefix_buffer, staging, 1, &copy);
+        fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                            VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_HOST_BIT,
+                            VK_ACCESS_2_HOST_READ_BIT);
+        ok = fr_renderer_submit(g);
+        if (ok) memcpy(prefix, mapped, bytes);
+    }
+    if (mapped) vkUnmapMemory(g->device, memory);
+    if (staging) vkDestroyBuffer(g->device, staging, NULL);
+    if (memory) vkFreeMemory(g->device, memory, NULL);
+    return ok;
+}
+
 #include "../../tests/vulkan/fluid_aperture_runtime_case.h"
 
 int main(int argc, char **argv) {

@@ -27,7 +27,9 @@ static void test_long_transport_uses_exact_runtime_apertures(void) {
         for(size_t i=0;i<sizeof(saved.face_velocity);i++) hash=(hash^bytes[i])*UINT64_C(1099511628211);
         for(unsigned i=0;i<4096;i++) mass+=saved.cells[i].fluid_mass;
     }
-    const uint32_t *prefix=g->mpm_label_a_mapped,*coverage=g->occupancy_mapped;
+    uint32_t prefix[2*128*64];
+    ASSERT_TRUE(read_aperture_prefix(g,prefix,sizeof(prefix),err,sizeof(err)));
+    const uint32_t *coverage=g->occupancy_mapped;
     unsigned mismatches=0, restricted=0, open=0, changed_labels=0;
     const uint32_t *labels=g->mpm_label_a_mapped;
     for(unsigned y=0;y<64;y++) for(unsigned x=0;x<128;x++) {
