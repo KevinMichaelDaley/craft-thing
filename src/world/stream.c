@@ -1,4 +1,6 @@
+#define _POSIX_C_SOURCE 200809L
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
@@ -6,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <threads.h>
+#include <unistd.h>
 
 #include "dungeoncraft/generate.h"
 #include "dungeoncraft/stream.h"
@@ -29,6 +32,7 @@ typedef struct {
     uint8_t *bulk_packet;
     size_t bulk_bytes;
     dc_stream_chunk_time_t time;
+    dc_chunk_owner_t replaces_owner;
 } stream_job_t;
 
 typedef struct {
@@ -39,7 +43,7 @@ typedef struct {
 } chunk_header_t;
 
 /* The timed envelope leaves all existing channel payload layouts intact. */
-enum { CHUNK_TIMED_VERSION = 12 };
+enum { CHUNK_TIMED_VERSION = 12, CHUNK_TAKEOVER_VERSION = 13 };
 typedef struct {
     uint32_t payload_version, reserved;
     double completed_seconds;
@@ -47,6 +51,7 @@ typedef struct {
 
 _Static_assert(sizeof(chunk_header_t) == 32, "Chunk file header layout changed");
 _Static_assert(sizeof(chunk_time_header_t) == 16, "Chunk time header layout changed");
+_Static_assert(sizeof(dc_chunk_owner_t) == 16, "Chunk owner record layout changed");
 
 struct dc_streamer {
     char *directory;
@@ -102,11 +107,13 @@ static void release_channel(fr_reactive_chunk_t *channel) {
 static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const uint8_t *thermal,size_t thermal_bytes,const fr_gas_checkpoint_chunk_t *gas,
-    const uint8_t *bulk_packet,size_t bulk_bytes,dc_stream_chunk_time_t time) {
+    const uint8_t *bulk_packet,size_t bulk_bytes,dc_stream_chunk_time_t time,
+    dc_chunk_owner_t replaces_owner) {
     dc_chunk_colors_t ambient_colors={0};
     if(reactive&&!colors) colors=&ambient_colors;
     char temporary[1024], final[1024];
     const char *directory=staging?staging:stream->directory;
+    const bool takeover = dc_chunk_owner_valid(replaces_owner);
     if (!chunk_path(directory, chunk->coord, temporary, sizeof(temporary), true) ||
         !chunk_path(directory, chunk->coord, final, sizeof(final), false)) return false;
     FILE *file = fopen(temporary, "w+b");
@@ -120,9 +127,11 @@ static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_
     if(bulk_packet) header.version=10;
     chunk_time_header_t time_header = {.payload_version = header.version,
                                        .completed_seconds = time.known ? time.seconds : 0.0};
-    if (time.known) header.version = CHUNK_TIMED_VERSION;
+    if (takeover) header.version = CHUNK_TAKEOVER_VERSION;
+    else if (time.known) header.version = CHUNK_TIMED_VERSION;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         (!time.known || fwrite(&time_header, sizeof(time_header), 1, file) == 1) &&
+        (!takeover || fwrite(&replaces_owner, sizeof(replaces_owner), 1, file) == 1) &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
         chunk->particle_count <= DC_MPM_PARTICLES_PER_CHUNK &&
@@ -171,8 +180,14 @@ static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_
         okay = prefix_hash(file, end, &hash) && fseek(file, end, SEEK_SET) == 0 &&
                fwrite(&hash, sizeof(hash), 1, file) == 1;
     }
+    if (okay && takeover && !staging) okay = fflush(file) == 0 && fsync(fileno(file)) == 0;
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, final) == 0;
+    if (okay && takeover && !staging) {
+        int directory_fd = open(directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        okay = directory_fd >= 0 && fsync(directory_fd) == 0;
+        if (directory_fd >= 0) close(directory_fd);
+    }
     if (!okay) remove(temporary);
     return okay;
 }
@@ -185,7 +200,7 @@ static bool load_gas_checkpoint(FILE *file,size_t bytes,fr_gas_checkpoint_chunk_
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc_chunk_coord_t coord,
     dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,
     fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk,dc_stream_chunk_time_t *completed,
-    bool *generated) {
+    dc_chunk_owner_t *replaces_owner, bool *generated) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     chunk->coord=coord;
@@ -218,15 +233,19 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
     chunk_header_t header = {0};
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= CHUNK_TIMED_VERSION) &&
+        (header.version >= 1 && header.version <= CHUNK_TAKEOVER_VERSION) &&
         header.x == coord.x && header.y == coord.y && header.seed == stream->seed;
     uint32_t version = header.version;
     dc_stream_chunk_time_t time = {0};
-    if (okay && version == CHUNK_TIMED_VERSION) {
+    dc_chunk_owner_t owner = {0};
+    if (okay && version >= CHUNK_TIMED_VERSION) {
         chunk_time_header_t time_header;
         okay = fread(&time_header, sizeof(time_header), 1, file) == 1 &&
                time_header.payload_version >= 5 && time_header.payload_version <= 11 &&
                !time_header.reserved && valid_completed_time(time_header.completed_seconds);
+        if (okay && version == CHUNK_TAKEOVER_VERSION) {
+            okay = fread(&owner, sizeof(owner), 1, file) == 1 && dc_chunk_owner_valid(owner);
+        }
         if (okay) {
             version = time_header.payload_version;
             time = (dc_stream_chunk_time_t){.seconds = time_header.completed_seconds, .known = true};
@@ -311,6 +330,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
     chunk->coord = coord;
     if (version < 4) dc_chunk_seed_particles(chunk);
     *completed = time;
+    *replaces_owner = owner;
     return chunk;
 }
 
@@ -332,12 +352,14 @@ static int worker_main(void *arg) {
             result.colors=calloc(1,sizeof(*result.colors));
             if (result.colors) {
                 result.chunk = load_chunk(stream, job.staging, job.coord, result.colors, &result.reactive,
-                    &result.water_excess, &result.gas, &result.bulk, &result.time, &result.generated);
+                    &result.water_excess, &result.gas, &result.bulk, &result.time,
+                    &result.replaces_owner, &result.generated);
             }
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
             result.kind = save_chunk(stream,job.staging,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,
-                job.gas,job.bulk_packet,job.bulk_bytes,job.time) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+                job.gas,job.bulk_packet,job.bulk_bytes,job.time,job.replaces_owner) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+            if (result.kind == DC_STREAM_SAVED) result.replaces_owner = job.replaces_owner;
             free(job.chunk);
             free(job.colors);
             release_channel(job.reactive);
@@ -470,10 +492,11 @@ bool dc_stream_request_save_bulk(dc_streamer_t *stream,const dc_chunk_t *chunk,
     return dc_stream_request_save_snapshot(stream,chunk,colors,reactive,water_excess,gas,bulk,
                                            (dc_stream_chunk_time_t){0},generation);
 }
-bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chunk,
+static bool request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
-    const fr_bulk_phase_chunk_t *bulk,dc_stream_chunk_time_t time,uint64_t generation) {
+    const fr_bulk_phase_chunk_t *bulk,dc_stream_chunk_time_t time,uint64_t generation,
+    dc_chunk_owner_t replaces_owner) {
     fr_reactive_chunk_t empty={.next_id=1};
     if((water_excess||gas||bulk)&&!reactive) reactive=&empty;
     if (!stream || !chunk || !generation) return false;
@@ -499,7 +522,8 @@ bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chu
         }
     }
     stream_job_t job = { .kind = JOB_SAVE, .coord = chunk->coord,
-        .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy,.time=time };
+        .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy,.time=time,
+        .replaces_owner = replaces_owner };
     if(bulk) {
         job.bulk_bytes=fr_bulk_phase_chunk_bytes();job.bulk_packet=malloc(job.bulk_bytes);
         if(!job.bulk_packet||!fr_bulk_phase_chunk_encode(copy,bulk,job.bulk_packet,job.bulk_bytes)) {
@@ -525,6 +549,25 @@ bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chu
     free(job.gas);
     free(job.bulk_packet);
     return false;
+}
+
+bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
+    const fr_bulk_phase_chunk_t *bulk,dc_stream_chunk_time_t time,uint64_t generation) {
+    return request_save_snapshot(stream, chunk, colors, reactive, water_excess, gas, bulk,
+                                 time, generation, (dc_chunk_owner_t){0});
+}
+
+bool dc_stream_request_save_takeover(dc_streamer_t *stream, const dc_stream_result_t *snapshot,
+    dc_chunk_owner_t replaces_owner, uint64_t write_generation) {
+    if (!snapshot || snapshot->kind != DC_STREAM_LOADED || !snapshot->chunk ||
+        !snapshot->generation || !snapshot->time.known || !dc_chunk_owner_valid(replaces_owner) ||
+        snapshot->coord.x != snapshot->chunk->coord.x || snapshot->coord.y != snapshot->chunk->coord.y)
+        return false;
+    return request_save_snapshot(stream, snapshot->chunk, snapshot->colors, snapshot->reactive,
+        snapshot->water_excess, snapshot->gas, snapshot->bulk, snapshot->time, write_generation,
+        replaces_owner);
 }
 
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result) {

@@ -28,6 +28,7 @@ typedef struct {
     fr_gas_checkpoint_chunk_t *gas;
     fr_bulk_phase_chunk_t *bulk;
     dc_stream_chunk_time_t time;
+    dc_chunk_owner_t replaces_owner; /**< Present only in checked takeover loads and saves. */
     bool generated; /**< Chunk was created because no saved record existed. */
 } dc_stream_result_t;
 
@@ -76,6 +77,10 @@ bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chu
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
     const fr_bulk_phase_chunk_t *bulk,dc_stream_chunk_time_t time,uint64_t generation);
+
+/** Publish an immutable offscreen snapshot with a receipt for the replaced owner. */
+bool dc_stream_request_save_takeover(dc_streamer_t *stream, const dc_stream_result_t *snapshot,
+    dc_chunk_owner_t replaces_owner, uint64_t write_generation);
 
 /** Poll one completed result without waiting for disk I/O. */
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result);

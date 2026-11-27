@@ -59,6 +59,19 @@ uint32_t dc_chunk_grain_radius_fp(uint32_t material);
 
 typedef struct { int64_t x, y; } dc_chunk_coord_t;
 
+/** Durable identity of a structural snapshot, independent of worker generations. */
+typedef struct { uint64_t epoch, serial; } dc_chunk_owner_t;
+
+/** Check for a present durable owner. Zero identifies an unversioned snapshot. */
+static inline bool dc_chunk_owner_valid(dc_chunk_owner_t owner) {
+    return owner.epoch != 0 && owner.serial != 0;
+}
+
+/** Compare a receipt with a particular structural owner. */
+static inline bool dc_chunk_owner_equal(dc_chunk_owner_t a, dc_chunk_owner_t b) {
+    return a.epoch == b.epoch && a.serial == b.serial;
+}
+
 typedef struct {
     uint16_t material;
     uint16_t flags;

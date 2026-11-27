@@ -307,13 +307,17 @@ static void test_takeover_packet_accepts_only_checked_owner_and_coordinate(void)
     ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){0, 0}, 7u));
     ASSERT_TRUE(wait_result(stream, &result));
     const dc_stream_result_kind_t kind = result.kind;
+    const dc_chunk_owner_t owner = result.replaces_owner;
     dc_stream_result_release(&result);
     ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){1, 0}, 8u));
     ASSERT_TRUE(wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_FAILED);
+    ASSERT_TRUE(!dc_chunk_owner_valid(result.replaces_owner));
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     ASSERT_EQ(kind, DC_STREAM_LOADED);
+    ASSERT_EQ(owner.epoch, parent[0]);
+    ASSERT_EQ(owner.serial, parent[1]);
     PASS();
 }
 
