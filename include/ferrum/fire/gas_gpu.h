@@ -45,6 +45,14 @@ bool fr_gas_gpu_seed_chunk(dc_gpu_t *gpu,uint32_t slot,const fr_gas_state_t *sta
 /** Cold diagnostic/checkpoint snapshot; never a per-frame CPU gas solver. */
 bool fr_gas_gpu_read_chunk(dc_gpu_t *gpu,uint32_t slot,fr_gas_state_t *states,
     uint32_t capacity,char *err_buf,uint32_t err_cap);
+typedef struct {
+    fr_gas_thermo_t thermo;
+    double volume, heat_capacity, internal_energy, work;
+} fr_gas_gpu_probe_t;
+/** Inspect a resident gas-filled cell on a completed queue. The current void
+ * volume is a fraction of a cell. On failure the destination is untouched. */
+bool fr_gas_gpu_probe_cell(dc_gpu_t *gpu,uint32_t x,uint32_t y,fr_gas_gpu_probe_t *out,
+    char *err_buf,uint32_t err_cap);
 /** Read accepted clock counters without reading simulation cells. */
 bool fr_gas_gpu_clock(const dc_gpu_t *gpu,fr_gas_gpu_clock_t *out);
 /** Cold completed-queue export; never part of the simulation loop. */

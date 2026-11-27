@@ -23,11 +23,6 @@
 #include "../../src/vulkan/reactive_storage_gpu.h"
 #include "../../src/vulkan/gas_gpu_state.h"
 
-static const fr_gas_model_t forest_gas_model = {
-    .gas_constant = {.25984, .29680, .18892, .46152, 0},
-    .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
-    .kinetic_scale = 1. / 512.};
-
 enum {
     DC_FOREST_MAX_SAMPLES = 40, DC_FOREST_SAMPLE_INTERVAL_S = 10,
     DC_FOREST_RUNTIME_WARMTH_BEGIN_S = 60, DC_FOREST_RUNTIME_WARMTH_HIGH_KX100 = 36000
@@ -58,7 +53,8 @@ typedef struct {
     uint64_t region_fuel[6], region_char[6], region_water;
     uint32_t region_flaming[6];
     uint32_t outside_flaming, outside_burnt, outside_hot_gas;
-    float probe_K, ember_K;
+    fr_gas_gpu_probe_t probe;
+    float ember_K;
     double emission_power;
 } forest_sample_t;
 
@@ -86,24 +82,6 @@ static uint32_t forest_tile_slot(const dc_gpu_t *gpu, uint32_t x, uint32_t y) {
     return pages[(y / 64u) * gpu->page_width + x / 64u];
 }
 
-static float forest_gas_temperature_K(dc_gpu_t *gpu, uint32_t x, uint32_t y,
-                                      char *err, uint32_t cap) {
-    uint32_t slot = forest_tile_slot(gpu, x, y);
-    if (!slot || slot > DC_GPU_CHUNK_SLOTS) return 0.f;
-    fr_gas_state_t *states = calloc(4096, sizeof(*states));
-    if (!states || !fr_gas_gpu_read_chunk(gpu, slot - 1u, states, 4096, err, cap)) {
-        free(states);
-        return 0.f;
-    }
-    fr_gas_thermo_t thermo = {0};
-    bool okay = fr_gas_thermodynamics(&forest_gas_model,
-                                      &states[(y % 64u) * 64u + (x % 64u)], 1.,
-                                      &thermo, err, cap);
-    float temperature = okay ? (float)thermo.temperature_K : 0.f;
-    free(states);
-    return temperature;
-}
-
 static bool forest_gap_hot_gas(dc_gpu_t *gpu, char *err, uint32_t cap) {
     uint32_t slot = forest_tile_slot(gpu, 244u, 202u);
     if (!slot || slot > DC_GPU_CHUNK_SLOTS) return false;
@@ -121,7 +99,7 @@ static bool forest_gap_hot_gas(dc_gpu_t *gpu, char *err, uint32_t cap) {
         for (uint32_t s = 0; s < FR_GAS_SPECIES; s++) mass += state->species[s];
         fr_gas_thermo_t thermo = {0};
         if (mass > 1e-9 &&
-            fr_gas_thermodynamics(&forest_gas_model, state, 1., &thermo,
+            fr_gas_thermodynamics(&gpu->gas->model, state, 1., &thermo,
                                   err, cap) &&
             thermo.temperature_K > 400.)
             hot = true;
@@ -199,6 +177,8 @@ static bool forest_collect_sample(dc_gpu_t *gpu, double sim_seconds,
                                   forest_sample_t *out, char *err, uint32_t cap) {
     memset(out, 0, sizeof(*out));
     out->sim_seconds = sim_seconds;
+    if (!fr_gas_gpu_probe_cell(gpu, DC_FOREST_WARMTH_PROBE_X, DC_FOREST_WARMTH_PROBE_Y,
+                                &out->probe, err, cap)) return false;
     fr_gas_gpu_audit_t audit;
     if (!fr_gas_gpu_audit(gpu, &audit, err, cap)) return false;
     out->oxygen = audit.metrics[FR_GAS_AUDIT_SPECIES + FR_GAS_OXYGEN];
@@ -249,8 +229,6 @@ static bool forest_collect_sample(dc_gpu_t *gpu, double sim_seconds,
     out->region_water = water;
     out->reactive_energy = energy;
     out->reactive_mass = mass_units;
-    out->probe_K = forest_gas_temperature_K(gpu, DC_FOREST_WARMTH_PROBE_X,
-                                            DC_FOREST_WARMTH_PROBE_Y, err, cap);
     fr_thermal_inspection_t ember = {0};
     if (fr_thermal_gpu_inspect(gpu, DC_FOREST_IGNITION_X, DC_FOREST_IGNITION_Y,
                                &ember, err, cap))
@@ -351,8 +329,9 @@ static bool forest_run(dc_gpu_t *gpu, forest_run_t *run, char *err, uint32_t cap
 static void forest_print_sample(const forest_sample_t *s, const char *label) {
     printf("FOREST %s sim%.1fs probe%.2fK ember%.1fK O2%.4f exhaust%.4f soot%.5f vapor%.4f "
            "power%.4g pile fuel%llu char%llu flame%u outside flame%u burnt%u hotgas%u "
-           "wet water%llu flame%u\n",
-           label, s->sim_seconds, s->probe_K, s->ember_K, s->oxygen, s->exhaust,
+           "wet water%llu flame%u probe_mass%.9g probe_capacity%.9g probe_internal%.9g "
+           "probe_pressure%.9g probe_void%.6g probe_work%.9g\n",
+           label, s->sim_seconds, s->probe.thermo.temperature_K, s->ember_K, s->oxygen, s->exhaust,
            s->soot,
            s->vapor, s->emission_power,
            (unsigned long long)s->region_fuel[DC_FOREST_REGION_PILE],
@@ -360,7 +339,9 @@ static void forest_print_sample(const forest_sample_t *s, const char *label) {
            s->region_flaming[DC_FOREST_REGION_PILE], s->outside_flaming,
            s->outside_burnt, s->outside_hot_gas,
            (unsigned long long)s->region_water,
-           s->region_flaming[DC_FOREST_REGION_TREE_WET]);
+           s->region_flaming[DC_FOREST_REGION_TREE_WET], s->probe.thermo.mass,
+           s->probe.heat_capacity, s->probe.internal_energy, s->probe.thermo.pressure,
+           s->probe.volume, s->probe.work);
     fflush(stdout);
 }
 
@@ -441,6 +422,15 @@ static void test_locked_forest_scene_matches_the_manifest_fixture(void) {
     ASSERT_TRUE(wet_trunk.wetness > .9f);
     fr_gas_gpu_clock_t clock = {0};
     ASSERT_TRUE(fr_gas_gpu_clock(gpu, &clock) && clock.advanced_seconds == 0.);
+    fr_gas_gpu_probe_t probe;
+    ASSERT_TRUE(fr_gas_gpu_probe_cell(gpu, DC_FOREST_WARMTH_PROBE_X, DC_FOREST_WARMTH_PROBE_Y,
+                                       &probe, err, sizeof(err)));
+    printf("Forest initial warmth probe %.3f K, mass %.9g, capacity %.9g, internal energy %.9g, "
+           "pressure %.9g, void %.6g\n", probe.thermo.temperature_K, probe.thermo.mass,
+           probe.heat_capacity, probe.internal_energy, probe.thermo.pressure, probe.volume);
+    ASSERT_TRUE(fabs(probe.thermo.temperature_K - 293.15) < .01);
+    ASSERT_TRUE(probe.thermo.mass > 0. && probe.heat_capacity > 0. && probe.thermo.pressure > 0.);
+    ASSERT_EQ(probe.volume, 1.);
     dc_gpu_destroy(gpu);
     PASS();
 }
@@ -465,9 +455,9 @@ static bool forest_assert_contained(const forest_run_t *run,
 }
 
 static bool forest_warmth_held(const forest_run_t *run) {
-    const float low = DC_FOREST_WARMTH_LOW_KX100 / 100.f;
-    const float high = DC_FOREST_WARMTH_HIGH_KX100 / 100.f;
-    float coolest = INFINITY, hottest = -INFINITY;
+    const double low = DC_FOREST_WARMTH_LOW_KX100 / 100.;
+    const double high = DC_FOREST_WARMTH_HIGH_KX100 / 100.;
+    double coolest = INFINITY, hottest = -INFINITY;
     uint32_t sampled = 0u, outside_locked_band = 0u;
     bool ramp_sampled = false, runtime_band_held = true;
     for (uint32_t i = 0; i < run->sample_count; i++) {
@@ -477,16 +467,17 @@ static bool forest_warmth_held(const forest_run_t *run) {
         if (scheduled_seconds < DC_FOREST_WARMTH_BEGIN_S ||
             scheduled_seconds > DC_FOREST_WARMTH_END_S)
             continue;
-        if (!isfinite(s->probe_K)) return false;
-        coolest = fminf(coolest, s->probe_K);
-        hottest = fmaxf(hottest, s->probe_K);
+        double temperature = s->probe.thermo.temperature_K;
+        if (!isfinite(temperature)) return false;
+        coolest = fmin(coolest, temperature);
+        hottest = fmax(hottest, temperature);
         sampled++;
-        outside_locked_band += s->probe_K < low || s->probe_K > high;
+        outside_locked_band += temperature < low || temperature > high;
         /* ctlo-ehqj tracks the measured ramp and ceiling deviations from the manifest. */
         if (scheduled_seconds >= DC_FOREST_RUNTIME_WARMTH_BEGIN_S) {
             ramp_sampled = true;
-            runtime_band_held &= s->probe_K >= low &&
-                s->probe_K <= DC_FOREST_RUNTIME_WARMTH_HIGH_KX100 / 100.f;
+            runtime_band_held &= temperature >= low &&
+                temperature <= DC_FOREST_RUNTIME_WARMTH_HIGH_KX100 / 100.;
         }
     }
     if (sampled)
@@ -755,9 +746,11 @@ static void test_unresident_warmth_probe_reports_its_failure(void) {
     dc_gpu_t gpu = {.width = DC_CHUNK_SIDE, .height = DC_CHUNK_SIDE,
         .page_width = 1u, .page_height = 1u, .page_mapped = &page};
     char err[128] = {0};
-    float temperature = forest_gas_temperature_K(&gpu, 0u, 0u, err, sizeof(err));
-    printf("Unavailable forest probe returned %.2f K with '%s'\n", temperature, err);
+    fr_gas_gpu_probe_t probe = {.thermo = {.temperature_K = 310.}};
+    ASSERT_TRUE(!fr_gas_gpu_probe_cell(&gpu, 0u, 0u, &probe, err, sizeof(err)));
+    printf("Unavailable forest probe reported '%s'\n", err);
     ASSERT_TRUE(strstr(err, "resident") != NULL);
+    ASSERT_EQ(probe.thermo.temperature_K, 310.);
     PASS();
 }
 
@@ -781,12 +774,12 @@ static void test_warmth_window_includes_its_scheduled_endpoint(void) {
     const double accepted_step = (double)(1.f / 60.f);
     for (uint32_t i = 0; i < run.sample_count; ++i) {
         run.samples[i].sim_seconds = i * DC_FOREST_SAMPLE_INTERVAL_S * 60u * accepted_step;
-        run.samples[i].probe_K = 310.f;
+        run.samples[i].probe.thermo.temperature_K = 310.;
     }
     ASSERT_TRUE(run.samples[endpoint].sim_seconds > DC_FOREST_WARMTH_END_S);
-    run.samples[endpoint + 1u].probe_K = 400.f;
+    run.samples[endpoint + 1u].probe.thermo.temperature_K = 400.;
     ASSERT_TRUE(forest_warmth_held(&run));
-    run.samples[endpoint].probe_K = 361.f;
+    run.samples[endpoint].probe.thermo.temperature_K = 361.;
     ASSERT_TRUE(!forest_warmth_held(&run));
     PASS();
 }

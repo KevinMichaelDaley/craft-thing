@@ -117,6 +117,39 @@ bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint
     for(uint32_t i=0;i<4096u;i++) states[i]=unpack(packets+i);
     return true;
 }
+bool fr_gas_gpu_probe_cell(dc_gpu_t *g, uint32_t x, uint32_t y, fr_gas_gpu_probe_t *out,
+                          char *err, uint32_t cap) {
+    enum { GAS_CELL_VOLUME_WORD = 12, GAS_CELL_WORK_WORD = 15 };
+    if (!g || !out || !g->page_mapped || x >= g->width || y >= g->height)
+        return error(err, cap, "Invalid gas probe coordinates or destination");
+    const uint32_t *pages = g->page_mapped;
+    size_t tile = (size_t)(y / DC_CHUNK_SIDE) * g->page_width + x / DC_CHUNK_SIDE;
+    uint32_t page = pages[tile];
+    if (!page || page > DC_GPU_CHUNK_SLOTS)
+        return error(err, cap, "Gas probe cell is not resident");
+    if (!g->gas) return error(err, cap, "Gas probe requires an enabled gas field");
+    if (vkQueueWaitIdle(g->queue) != VK_SUCCESS)
+        return error(err, cap, "Cannot complete gas probe snapshot");
+    const gas_packet_t *packets = NULL;
+    if (!fr_gas_gpu_checkpoint_packets(g, g->gas->direct_publish ? 1u : 0u,
+                                       page - 1u, &packets, err, cap)) return false;
+    uint32_t cell = (y % DC_CHUNK_SIDE) * DC_CHUNK_SIDE + x % DC_CHUNK_SIDE;
+    const gas_packet_t *packet = &packets[cell];
+    fr_gas_gpu_probe_t sample = {.volume = packet->words[GAS_CELL_VOLUME_WORD],
+        .work = packet->words[GAS_CELL_WORK_WORD]};
+    if (!(sample.volume > 0. && sample.volume <= 1.) || !isfinite(sample.work))
+        return error(err, cap, "Gas probe has invalid void volume or work");
+    fr_gas_state_t state = unpack(packet);
+    const fr_gas_model_t *model = &g->gas->model;
+    if (!fr_gas_thermodynamics(model, &state, sample.volume, &sample.thermo, err, cap))
+        return false;
+    if (sample.thermo.mass == 0.) return error(err, cap, "Gas probe cell is empty");
+    for (uint32_t i = 0; i < FR_GAS_SPECIES; ++i)
+        sample.heat_capacity += state.species[i] * model->heat_capacity_cv[i];
+    sample.internal_energy = sample.heat_capacity * sample.thermo.temperature_K;
+    *out = sample;
+    return true;
+}
 bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
     if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!out) return error(err,cap,"Invalid cold gas checkpoint export");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint export");
