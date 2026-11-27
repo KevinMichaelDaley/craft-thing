@@ -21,4 +21,3 @@ Carry a durable ownership receipt from the level and workspace through a generat
 ## Acceptance Criteria
 
 Exercise a matching workspace takeover, stale and wrong-coordinate acknowledgements, interruption before publication, and cold reopen with updated topology and conserved fluid, parcel and elapsed-time state.
-
