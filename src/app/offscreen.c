@@ -393,10 +393,10 @@ dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
             return DC_LEVEL_OFFSCREEN_HANDLED;
         }
         if (accept_source(view, handoff, result, err, cap)) return DC_LEVEL_OFFSCREEN_HANDLED;
-        bool retry_water = view->camera_offscreen.water_face &&
-                           handoff->workspace == view->camera_offscreen.workspace;
+        bool retry_camera = (view->camera_offscreen.water_face || view->camera_offscreen.rigid_group) &&
+                            handoff->workspace == view->camera_offscreen.workspace;
         remove_handoff(link);
-        if (retry_water) dc_camera_offscreen_retry(&view->camera_offscreen);
+        if (retry_camera) dc_camera_offscreen_retry(&view->camera_offscreen);
         return DC_LEVEL_OFFSCREEN_FAILED;
     }
     if (!handoff->write_generation || handoff->write_generation != result->generation)

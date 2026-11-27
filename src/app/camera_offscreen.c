@@ -191,6 +191,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     bool needed = camera_needs_chunk(view, camera->coord);
     bool independent = dc_gpu_chunk_physics_isolated(view->gpu) || dc_offscreen_body_island(view->gpu, camera->coord);
     bool coupled = camera->water_face != 0u;
+    bool required = coupled || camera->rigid_group;
     bool attached = coupled && face_in_view(view, camera->coord, camera->water_face);
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
         if (closing || (coupled ? !attached : !independent) || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
@@ -198,10 +199,10 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
             dc_camera_offscreen_discard(view);
             return true;
         }
-        camera->workspace = dc_offscreen_create(view->gpu, camera->coord, coupled ? err : NULL, coupled ? cap : 0u);
+        camera->workspace = dc_offscreen_create(view->gpu, camera->coord, required ? err : NULL, required ? cap : 0u);
         if (!camera->workspace || !dc_level_offscreen_begin_disk(view, camera->workspace,
-            camera->coord, camera->owner, camera->time, &camera->generation, coupled ? err : NULL, coupled ? cap : 0u)) {
-            if (coupled) {
+            camera->coord, camera->owner, camera->time, &camera->generation, required ? err : NULL, required ? cap : 0u)) {
+            if (required) {
                 dc_camera_offscreen_retry(camera);
                 return false;
             }
