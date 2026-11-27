@@ -97,7 +97,7 @@ static int camera_marker_order(const void *left, const void *right) {
     return memcmp(left, right, sizeof(dc_marker_t));
 }
 
-static void check_camera_water_returns(bool heated) {
+static void check_camera_water_returns(bool heated, bool bulk_liquid) {
     char directory[] = "build/camera_water_basin_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -112,6 +112,8 @@ static void check_camera_water_returns(bool heated) {
         dc_gpu_set_fluid_interval(reference, 2u));
     dc_chunk_colors_t colors = {0}, expected_colors;
     float heat[DC_CHUNK_CELLS] = {0}, expected_heat[DC_CHUNK_CELLS];
+    fr_bulk_phase_chunk_t *phase = calloc(1, sizeof(*phase)), *expected_phase = calloc(1, sizeof(*expected_phase));
+    ASSERT_TRUE(phase && expected_phase);
     if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(view->gpu, err, sizeof(err)) &&
                             fr_thermal_gpu_enable(reference, err, sizeof(err)));
     for (unsigned tile = 0; tile < 2u; ++tile) {
@@ -130,11 +132,18 @@ static void check_camera_water_returns(bool heated) {
         }
         memset(&colors, 0, sizeof(colors));
         memset(heat, 0, sizeof(heat));
+        memset(phase, 0, sizeof(*phase));
         for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
             if (!chunk->cells[i].fluid_mass) continue;
             colors.water[i][1] = .75f;
             colors.water[i][3] = 1.f;
             heat[i] = 2.f + .25f * (i % DC_CHUNK_SIDE);
+            if (bulk_liquid) {
+                phase->oil_fp[i] = DC_FLUID_FULL / 4u;
+                phase->slime_fp[i] = DC_FLUID_FULL / 8u;
+                phase->oil_momentum_x[i] = 4.f;
+                phase->slime_momentum_x[i] = 8.f;
+            }
         }
         ASSERT_TRUE(dc_gpu_upload_chunk(reference, tile, chunk, err, sizeof(err)) &&
             dc_gpu_set_page(reference, tile, 0, tile, err, sizeof(err)) &&
@@ -146,6 +155,8 @@ static void check_camera_water_returns(bool heated) {
             fr_renderer_upload_chunk_colors(view->gpu, slot, &colors, err, sizeof(err)) &&
             dc_chunk_table_finish_load(&view->table, slot, generation));
         view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
+        if (bulk_liquid) ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(view->gpu, slot, chunk, phase, err, sizeof(err)) &&
+            fr_bulk_phase_gpu_import_chunk(reference, tile, chunk, phase, err, sizeof(err)));
         if (heated) ASSERT_TRUE(fr_thermal_gpu_import_water_chunk(view->gpu, slot, chunk, heat, err, sizeof(err)) &&
                                 fr_thermal_gpu_import_water_chunk(reference, tile, chunk, heat, err, sizeof(err)));
         ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, slot));
@@ -268,6 +279,11 @@ static void check_camera_water_returns(bool heated) {
             stock[tile] = camera_stock(chunk, NULL, false);
             dc_chunk_t expected;
             ASSERT_TRUE(dc_gpu_download_chunk(reference, tile, &expected, err, sizeof(err)));
+            if (bulk_liquid) {
+                ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view->gpu, slot, phase, err, sizeof(err)) &&
+                            fr_bulk_phase_gpu_export_chunk(reference, tile, expected_phase, err, sizeof(err)));
+                ASSERT_EQ(memcmp(phase, expected_phase, sizeof(*phase)), 0);
+            }
             if (heated) {
                 ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(view->gpu, slot, heat, DC_CHUNK_CELLS, err, sizeof(err)) &&
                     fr_thermal_gpu_read_water_chunk(reference, tile, expected_heat, DC_CHUNK_CELLS, err, sizeof(err)));
@@ -292,11 +308,14 @@ static void check_camera_water_returns(bool heated) {
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     dc_gpu_destroy(reference);
     free(chunk);
+    free(phase);
+    free(expected_phase);
     PASS();
 }
 
-static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(false); }
-static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(true); }
+static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(false, false); }
+static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(true, false); }
+static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(false, true); }
 
 static void test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner(void) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
