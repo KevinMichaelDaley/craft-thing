@@ -4,18 +4,19 @@
 
 #include "gpu_internal.h"
 #include "present_mode_select.h"
+#include "software_present.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;
 }
 
-static bool create_transfer_image(dc_gpu_t *gpu, uint32_t width, uint32_t height,
+bool dc_window_transfer_image(dc_gpu_t *gpu, VkExtent2D extent, VkFormat format,
                                   VkImage *image, VkDeviceMemory *memory,
                                   char *err, uint32_t cap) {
     VkImageCreateInfo info = { .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType = VK_IMAGE_TYPE_2D, .format = VK_FORMAT_R8G8B8A8_UNORM,
-        .extent = { width, height, 1 }, .mipLevels = 1, .arrayLayers = 1,
+        .imageType = VK_IMAGE_TYPE_2D, .format = format,
+        .extent = { extent.width, extent.height, 1 }, .mipLevels = 1, .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT, .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED };
@@ -110,17 +111,20 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
             if (caps.supportedCompositeAlpha & alpha) { swap_info.compositeAlpha = alpha; break; }
         }
     }
+    if (!dc_window_transfer_image(gpu, (VkExtent2D){gpu->width, gpu->height}, VK_FORMAT_R8G8B8A8_UNORM,
+                                  &gpu->frame_image, &gpu->frame_memory, err, cap) ||
+        !dc_window_transfer_image(gpu, (VkExtent2D){1,1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                  &gpu->reticle_image, &gpu->reticle_memory, err, cap)) return false;
+    VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    if (vkCreateFence(gpu->device, &fence_info, NULL, &gpu->render_fence) != VK_SUCCESS)
+        return error(err, cap, "Cannot create presentation rendering fence");
+    if (dc_software_present_create(gpu, &swap_info)) return true;
     if (vkCreateSwapchainKHR(gpu->device, &swap_info, NULL, &gpu->swapchain) != VK_SUCCESS)
         return error(err, cap, "Cannot create Vulkan swapchain");
     vkGetSwapchainImagesKHR(gpu->device, gpu->swapchain, &gpu->swap_count, NULL);
     gpu->swap_images = calloc(gpu->swap_count, sizeof(*gpu->swap_images));
     if (!gpu->swap_images) return error(err, cap, "Out of memory listing swapchain images");
     vkGetSwapchainImagesKHR(gpu->device, gpu->swapchain, &gpu->swap_count, gpu->swap_images);
-    if (!create_transfer_image(gpu, gpu->width, gpu->height,
-                               &gpu->frame_image, &gpu->frame_memory, err, cap) ||
-        !create_transfer_image(gpu, 1u, 1u,
-                               &gpu->reticle_image, &gpu->reticle_memory, err, cap))
-        return false;
     VkSemaphoreCreateInfo semaphore_info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     if (vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->acquire_sem) != VK_SUCCESS)
         return error(err, cap, "Cannot create present semaphores");
@@ -130,9 +134,6 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
     for (uint32_t i = 0; i < gpu->swap_count; ++i)
         if (vkCreateSemaphore(gpu->device, &semaphore_info, NULL, &gpu->present_sems[i]) != VK_SUCCESS)
             return error(err, cap, "Cannot create image presentation semaphore");
-    VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-    if (vkCreateFence(gpu->device, &fence_info, NULL, &gpu->render_fence) != VK_SUCCESS)
-        return error(err, cap, "Cannot create presentation rendering fence");
     return true;
 }
 

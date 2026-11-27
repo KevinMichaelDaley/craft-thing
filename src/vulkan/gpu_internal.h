@@ -107,6 +107,7 @@ struct dc_gpu {
     VkCommandBuffer command;
     SDL_Window *window;
     VkSurfaceKHR surface;
+    struct dc_software_present *software_present;
     VkSwapchainKHR swapchain;
     VkImage *swap_images;
     uint32_t swap_count;

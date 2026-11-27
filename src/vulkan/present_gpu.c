@@ -7,6 +7,7 @@
 #include "gas_gpu_internal.h"
 #include "gpu_internal.h"
 #include "renderer_internal.h"
+#include "software_present.h"
 #include "runtime_body_gpu.h"
 #include "thermal_gpu_internal.h"
 
@@ -104,7 +105,7 @@ static void record_composed_readback(dc_gpu_t *gpu, VkImage composed, VkBuffer c
         VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
 }
 
-static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkBuffer capture,
+static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, dc_gpu_address_buffer_t *capture,
                           uint32_t *completed, char *err, uint32_t cap) {
     if (completed) *completed = 0;
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
@@ -128,14 +129,16 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
     SDL_PumpEvents();
     uint64_t acquire_begin=trace_waits?SDL_GetPerformanceCounter():0;
     uint32_t index = 0;
-    VkResult result = vkAcquireNextImageKHR(gpu->device, gpu->swapchain, ACQUIRE_TIMEOUT_NS,
-        gpu->acquire_sem, VK_NULL_HANDLE, &index);
+    dc_software_present_t *software = gpu->software_present;
+    VkResult result = vkAcquireNextImageKHR(software ? software->device : gpu->device,
+        gpu->swapchain, ACQUIRE_TIMEOUT_NS, software ? software->acquire : gpu->acquire_sem,
+        VK_NULL_HANDLE, &index);
     uint64_t acquire_done=trace_waits?SDL_GetPerformanceCounter():0;
     if (result == VK_TIMEOUT || result == VK_NOT_READY)
         return error(err, cap, "Vulkan window image acquisition timed out");
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Cannot acquire Vulkan window image");
-    const VkImage composed = gpu->swap_images[index];
+    const VkImage composed = software ? software->composed : gpu->swap_images[index];
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset present command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -236,34 +239,40 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
         }
     }
     record_reticles(gpu, composed, layouts);
-    if (capture) record_composed_readback(gpu, composed, capture);
-    image_barrier(gpu->command, composed,
+    if (software) record_composed_readback(gpu, composed, software->readback.buffer);
+    else {
+        if (capture) record_composed_readback(gpu, composed, capture->buffer);
+        image_barrier(gpu->command, composed,
         capture ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         capture ? VK_ACCESS_2_TRANSFER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
+    }
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end present command buffer");
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->acquire_sem,
+        .waitSemaphoreCount = software ? 0u : 1u, .pWaitSemaphores = &gpu->acquire_sem,
         .pWaitDstStageMask = &wait_stage,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command,
-        .signalSemaphoreCount = 1, .pSignalSemaphores = &gpu->present_sems[index] };
+        .signalSemaphoreCount = software ? 0u : 1u, .pSignalSemaphores = software ? NULL : &gpu->present_sems[index] };
     if (vkResetFences(gpu->device, 1, &gpu->render_fence) != VK_SUCCESS)
         return error(err, cap, "Cannot reset presentation rendering fence");
     if (vkQueueSubmit(gpu->queue, 1, &submit, gpu->render_fence) != VK_SUCCESS)
         return error(err, cap, "Vulkan present submission failed");
-    VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->present_sems[index],
-        .swapchainCount = 1, .pSwapchains = &gpu->swapchain, .pImageIndices = &index };
     uint64_t present_begin=trace_waits?SDL_GetPerformanceCounter():0;
-    result = vkQueuePresentKHR(gpu->queue, &present);
+    if (!software) {
+        VkPresentInfoKHR present = { .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1, .pWaitSemaphores = &gpu->present_sems[index],
+            .swapchainCount = 1, .pSwapchains = &gpu->swapchain, .pImageIndices = &index };
+        result = vkQueuePresentKHR(gpu->queue, &present);
+    }
     uint64_t present_done=trace_waits?SDL_GetPerformanceCounter():0;
     /* The render fence also commits any ticks recorded in the frame command. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
     if (completed) *completed += steps;
+    if (software) result = dc_software_present_frame(gpu, index, capture ? capture->mapped : NULL);
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Vulkan swapchain presentation failed");
     if (render_chunks) fr_renderer_fire_coverage_presented(gpu);
@@ -313,7 +322,7 @@ bool dc_gpu_capture_present(dc_gpu_t *gpu, uint32_t *pixels, size_t count,
     dc_gpu_address_buffer_t staging = {0};
     if (!dc_gpu_address_buffer_create(gpu, pixel_count * sizeof(*pixels), true, &staging, err, cap))
         return false;
-    bool okay = present_frame(gpu, false, 0, staging.buffer, NULL, err, cap);
+    bool okay = present_frame(gpu, false, 0, &staging, NULL, err, cap);
     if (okay) {
         const uint8_t *sample = staging.mapped;
         for (size_t i = 0; i < (size_t)pixel_count; ++i, sample += 4u) {

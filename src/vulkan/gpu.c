@@ -9,6 +9,7 @@
 #include "ferrum/fire/bulk_phase.h"
 #include "gas_gpu_internal.h"
 #include "gpu_internal.h"
+#include "software_present.h"
 #include "reactive_checkpoint_gpu.h"
 #include "reactive_gpu_internal.h"
 #include "runtime_body_gpu.h"
@@ -38,6 +39,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     free(gpu->checkpoint_times);
     free(gpu->checkpoint_owners);
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
+    dc_software_present_destroy(gpu);
     dc_gpu_liquid_seam_destroy(gpu);
     dc_gpu_seam_projection_destroy(gpu);
     dc_gpu_solver_commands_destroy(gpu);

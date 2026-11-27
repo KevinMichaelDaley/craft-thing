@@ -96,6 +96,10 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror
 CFLAGS += -pthread
 CPPFLAGS += -Iinclude $(shell pkg-config --cflags sdl2)
 LDLIBS += -lvulkan $(shell pkg-config --libs sdl2) -pthread -lm
+ifneq ($(shell pkg-config --exists x11 && echo yes),)
+CPPFLAGS += -DDC_HAVE_X11 $(shell pkg-config --cflags x11)
+LDLIBS += $(shell pkg-config --libs x11)
+endif
 GLSLANG ?= glslangValidator
 
 GPU_OBJ = build/gpu.o build/device.o build/chunk_gpu.o build/rigid_gpu.o build/body_store_gpu.o build/broadphase_gpu.o build/contact_gpu.o build/tick_gpu.o build/shader.o build/halo_gpu.o build/fluid_gpu.o build/marker_gpu.o build/mpm_gpu.o build/present_gpu.o
@@ -170,6 +174,11 @@ GPU_OBJ += build/color_gpu.o
 build/color_gpu.o: src/vulkan/color_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/color.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/window_gpu.o
+GPU_OBJ += build/software_present.o build/software_present_frame.o
+build/software_present.o: src/vulkan/software_present.c src/vulkan/software_present.h src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/software_present_frame.o: src/vulkan/software_present_frame.c src/vulkan/software_present.h src/vulkan/gpu_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/structural_gpu.o build/structural_material.o
 GPU_OBJ += build/scene_gpu.o build/renderer_resource.o build/occlusion_gpu.o build/lighting_gpu.o
 GPU_OBJ += build/sprite_gpu.o
