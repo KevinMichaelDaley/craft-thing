@@ -369,6 +369,8 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 }
 
 int main(int argc, char **argv) {
+    RUN(test_water_comparison_preserves_complete_marker_records);
+    if (argc == 2 && !strcmp(argv[1], "--marker-records")) return g_fail != 0;
     if (argc == 2 && strcmp(argv[1], "--camera-reversal") == 0) {
         RUN(test_world_transfer_resolves_against_replayed_room);
         RUN(test_reversal_replays_a_sleeping_slot_before_residency);

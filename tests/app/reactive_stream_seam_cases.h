@@ -131,6 +131,36 @@ static bool same_water_chunk(const dc_chunk_t *actual, const dc_chunk_t *expecte
         !memcmp(actual->markers, expected->markers, actual->marker_count * sizeof(dc_marker_t));
 }
 
+static void test_water_comparison_preserves_complete_marker_records(void) {
+    char err[128] = {0};
+    dc_chunk_t *chunks = calloc(2, sizeof(*chunks));
+    ASSERT_TRUE(chunks);
+    dc_chunk_t *actual = chunks, *expected = chunks + 1;
+    actual->marker_count = expected->marker_count = 3;
+    const dc_marker_t first = {11, 13, 5, DC_MARKER_INSIDE};
+    const dc_marker_t second = {17, 19, 5, DC_MARKER_OUTSIDE};
+    expected->markers[0] = expected->markers[1] = first;
+    expected->markers[2] = second;
+    actual->markers[0] = second;
+    actual->markers[1] = actual->markers[2] = first;
+    ASSERT_TRUE(same_water_chunk(actual, expected));
+    dc_marker_t mutations[] = {first, first, first, first, second};
+    mutations[0].x_fp++;
+    mutations[1].y_fp++;
+    mutations[2].id++;
+    mutations[3].kind = DC_MARKER_OUTSIDE;
+    for (unsigned i = 0; i < sizeof(mutations) / sizeof(*mutations); ++i) {
+        memcpy(actual->markers, expected->markers, sizeof(dc_marker_t) * 3);
+        actual->markers[0] = mutations[i];
+        ASSERT_TRUE(!same_water_chunk(actual, expected));
+    }
+    memcpy(actual->markers, expected->markers, sizeof(dc_marker_t) * 3);
+    actual->marker_count--;
+    ASSERT_TRUE(!same_water_chunk(actual, expected));
+    free(chunks);
+    PASS();
+}
+
 static void check_level_step_advances_admitted_water_owners(unsigned restart_phase) {
     char directory[] = "build/paired_water_tick_XXXXXX", err[256] = {0};
     const uint32_t lane = 24u;
