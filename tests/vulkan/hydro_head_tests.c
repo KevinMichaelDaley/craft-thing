@@ -7,13 +7,16 @@
 #ifndef HYDRO_TEST_HEIGHT
 #define HYDRO_TEST_HEIGHT 721
 #endif
+#ifndef HYDRO_TEST_WIDTH
+#define HYDRO_TEST_WIDTH 64
+#endif
 #ifndef HYDRO_TEST_SHADER
 #define HYDRO_TEST_SHADER "build/shaders/hydro_head.comp.spv"
 #endif
 enum {
     FULL = 65536,
     CAP = 64 * FULL,
-    WIDTH = 64,
+    WIDTH = HYDRO_TEST_WIDTH,
     HEIGHT = HYDRO_TEST_HEIGHT,
     PAGES = (HEIGHT + 63) / 64,
     CELLS = WIDTH * HEIGHT
@@ -59,7 +62,7 @@ typedef struct {
     VkBuffer buffers[6];
     VkDeviceMemory memories[6];
     uint32_t *words[6];
-    uint32_t expected[CELLS];
+    uint32_t expected[CELLS], expected_raw[CELLS];
 } fixture_t;
 static uint32_t capped(uint32_t a, uint32_t b) {
     return a + b < CAP ? a + b : CAP;
@@ -109,9 +112,11 @@ static uint32_t neighboring(const fixture_t *f, int x, int y) {
 }
 static void reference(fixture_t *f) {
     for (int x = 0; x < WIDTH; x++) {
-        uint32_t head = 0;
+        uint32_t head = 0, raw = 0;
         for (int y = 0; y < HEIGHT; y++) {
             uint32_t i = y * WIDTH + x, covered = f->words[2][2 * CELLS + i];
+            raw = wet(f, x, y) ? capped(raw, f->words[0][2 * atlas(f, x, y) + 1]) : 0;
+            f->expected_raw[i] = raw;
             if (covered) {
                 uint32_t water = f->words[0][2 * atlas(f, x, y) + 1];
                 uint32_t increment =
@@ -208,17 +213,18 @@ static void run_case(unsigned scenario) {
     ASSERT_TRUE(submit(p, "parallel hydro head", 1));
     unsigned mismatches = 0;
     for (unsigned i = 0; i < CELLS; i++)
-        if (f->words[3][i] != f->expected[i]) {
+        if (f->words[3][i] != f->expected[i] || f->words[4][i] != f->expected_raw[i]) {
             if (!mismatches)
-                printf("scenario%u first mismatch%u: %u expected%u\n", scenario,
-                       i, f->words[3][i], f->expected[i]);
+                printf("scenario%u cell%u: corrected %u expected %u, raw %u expected %u\n",
+                       scenario, i, f->words[3][i], f->expected[i],
+                       f->words[4][i], f->expected_raw[i]);
             mismatches++;
         }
     printf("scenario%u %u exact heads, %u mismatches\n", scenario, CELLS,
            mismatches);
 #ifdef HYDRO_TEST_PROFILE
     uint32_t evaluations=f->words[5][0];
-    uint32_t budget=2u*CELLS*((HEIGHT+127u)/128u<=8u?1u:2u);
+    uint32_t budget = 2u * CELLS;
     printf("transform evaluations%u budget%u\n",evaluations,budget);
     if(evaluations>budget) mismatches++;
 #endif
