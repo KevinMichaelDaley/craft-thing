@@ -18,6 +18,83 @@ static int g_fail = 0;
 #define ASSERT_INT_EQ(a, b) ASSERT_TRUE((int)(a) == (int)(b))
 #define PASS() g_pass++
 
+#if defined(__GNUC__)
+extern bool dc_gpu_create_shared(dc_gpu_t **out, const dc_gpu_t *parent,
+                                 uint32_t width, uint32_t height,
+                                 const char *shader_path, char *err, uint32_t cap)
+    __attribute__((weak));
+#endif
+
+static const char pattern_shader[] = "build/shaders/pattern.comp.spv";
+
+static void test_shared_device_contexts_keep_independent_simulation_state(void) {
+    ASSERT_TRUE(dc_gpu_create_shared != NULL);
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL, *workspace = NULL;
+    ASSERT_TRUE(dc_gpu_create(&parent, 4, 4, pattern_shader, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&workspace, parent, 64, 64, pattern_shader, err, sizeof(err)));
+    ASSERT_EQ(parent->instance, workspace->instance);
+    ASSERT_EQ(parent->device, workspace->device);
+    ASSERT_EQ(parent->queue, workspace->queue);
+    ASSERT_EQ(parent->pipeline_cache, workspace->pipeline_cache);
+    ASSERT_TRUE(parent->command_pool != workspace->command_pool);
+    ASSERT_TRUE(parent->chunk_buffer != workspace->chunk_buffer);
+    ASSERT_TRUE(parent->particle_buffer != workspace->particle_buffer);
+
+    dc_chunk_t chunk = {0};
+    ASSERT_TRUE(dc_gpu_upload_chunk(workspace, 0, &chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(workspace, 0, 0, 0, err, sizeof(err)));
+    const dc_gpu_body_t body = {.id = 7, .active = 1, .width = 2, .height = 2,
+                                .x_fp = 10 << 16, .y_fp = 10 << 16, .vx_fp = 1 << 16};
+    ASSERT_TRUE(dc_gpu_spawn_body(workspace, body, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_tick_step(workspace, err, sizeof(err)));
+    dc_gpu_body_t advanced;
+    ASSERT_TRUE(dc_gpu_read_body(workspace, &advanced, err, sizeof(err)));
+    ASSERT_EQ(advanced.x_fp, 11 << 16);
+
+    dc_gpu_destroy(workspace);
+    ASSERT_TRUE(dc_gpu_pattern(parent, err, sizeof(err)));
+    ASSERT_EQ(dc_gpu_validation_errors(parent), 0u);
+    dc_gpu_destroy(parent);
+    PASS();
+}
+
+static void test_shared_device_survives_destruction_of_parent(void) {
+    ASSERT_TRUE(dc_gpu_create_shared != NULL);
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL, *workspace = NULL;
+    ASSERT_TRUE(dc_gpu_create(&parent, 4, 4, pattern_shader, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&workspace, parent, 4, 4, pattern_shader, err, sizeof(err)));
+    dc_gpu_destroy(parent);
+
+    uint32_t pixels[16] = {0};
+    ASSERT_TRUE(dc_gpu_pattern(workspace, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_readback(workspace, pixels, 16, err, sizeof(err)));
+    ASSERT_EQ(pixels[0], 0xff202020u);
+    ASSERT_EQ(pixels[1], 0xff4040c0u);
+    ASSERT_EQ(dc_gpu_validation_errors(workspace), 0u);
+    dc_gpu_destroy(workspace);
+    PASS();
+}
+
+static void test_shared_device_failed_construction_preserves_parent(void) {
+    ASSERT_TRUE(dc_gpu_create_shared != NULL);
+    char err[256] = {0};
+    dc_gpu_t *parent = NULL, *workspace = NULL;
+    ASSERT_TRUE(!dc_gpu_create_shared(&workspace, NULL, 4, 4, pattern_shader, err, sizeof(err)));
+    ASSERT_TRUE(!workspace && err[0]);
+    ASSERT_TRUE(dc_gpu_create(&parent, 4, 4, pattern_shader, err, sizeof(err)));
+    workspace = parent;
+    ASSERT_TRUE(!dc_gpu_create_shared(&workspace, parent, 0, 4, pattern_shader, err, sizeof(err)));
+    ASSERT_TRUE(!workspace);
+    ASSERT_TRUE(!dc_gpu_create_shared(&workspace, parent, 4, 4, "missing_workspace.spv", err, sizeof(err)));
+    ASSERT_TRUE(!workspace);
+    ASSERT_TRUE(dc_gpu_pattern(parent, err, sizeof(err)));
+    ASSERT_EQ(dc_gpu_validation_errors(parent), 0u);
+    dc_gpu_destroy(parent);
+    PASS();
+}
+
 static void test_gpu_pattern_readback(void) {
     char err[256] = {0};
     dc_gpu_t *gpu = NULL;
@@ -327,6 +404,13 @@ int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--pipeline-cache")==0) {
         RUN(test_pipeline_cache_persists_across_contexts);
         return g_fail?1:0;
+    }
+    RUN(test_shared_device_contexts_keep_independent_simulation_state);
+    RUN(test_shared_device_survives_destruction_of_parent);
+    RUN(test_shared_device_failed_construction_preserves_parent);
+    if (argc == 2 && strcmp(argv[1], "--shared-device") == 0) {
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
     }
     RUN(test_gpu_pattern_readback);
     RUN(test_pipeline_cache_persists_across_contexts);
