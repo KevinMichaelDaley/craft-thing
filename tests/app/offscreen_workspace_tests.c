@@ -11,6 +11,7 @@
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "../../src/app/offscreen.h"
+#include "../../src/app/offscreen_internal.h"
 
 static int g_pass, g_fail;
 static char g_err[256];
@@ -241,7 +242,44 @@ static void test_absolute_target_budget_and_failed_owner_cannot_publish(void) {
     PASS();
 }
 
+static void test_partial_water_cycle_holds_the_workspace_until_both_owners_finish(void) {
+    reset_ticks();
+    dc_gpu_t *resident = make_parent();
+    dc_chunk_t chunk = {0};
+    dc_offscreen_t *workspace = dc_offscreen_create(resident, (dc_chunk_coord_t){1, 0}, g_err, sizeof(g_err));
+    ASSERT_TRUE(resident && workspace);
+    ASSERT_TRUE(dc_gpu_upload_chunk(resident, 0u, &chunk, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_page(resident, 0u, 0u, 0u, g_err, sizeof(g_err)));
+    chunk.coord = workspace->origin;
+    dc_stream_result_t source = {.kind = DC_STREAM_LOADED, .coord = chunk.coord, .chunk = &chunk,
+        .generation = 1u, .time = {.known = true}};
+    ASSERT_TRUE(dc_offscreen_admit(workspace, &source, 1u, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(resident, 2u) && dc_gpu_set_fluid_interval(workspace->gpu, 2u));
+    const dc_liquid_seam_endpoint_t tiles[] = {{.gpu = resident}, {.gpu = workspace->gpu, .coord = chunk.coord}};
+    ASSERT_EQ(dc_gpu_step_water_cohort(tiles, 2u, 1.f / 60.f, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+    dc_stream_result_t snapshot = {0};
+    ASSERT_TRUE(!dc_offscreen_snapshot(workspace, chunk.coord, 1u, &snapshot, g_err, sizeof(g_err)));
+    ASSERT_TRUE(!snapshot.chunk);
+    ASSERT_TRUE(dc_offscreen_advance(workspace, .125, 1u, g_err, sizeof(g_err)));
+    ASSERT_EQ(g_ticks, 0u);
+    ASSERT_EQ(workspace->time.seconds, 0.);
+    dc_chunk_t neighbor = {.coord = {2, 0}};
+    dc_stream_result_t next = source;
+    next.coord = neighbor.coord;
+    next.chunk = &neighbor;
+    next.generation = 2u;
+    ASSERT_TRUE(!dc_offscreen_admit(workspace, &next, 2u, g_err, sizeof(g_err)));
+    ASSERT_EQ(dc_gpu_step_water_cohort(tiles, 2u, 1.f / 60.f, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+    ASSERT_TRUE(dc_offscreen_admit(workspace, &next, 2u, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_offscreen_snapshot(workspace, chunk.coord, 1u, &snapshot, g_err, sizeof(g_err)));
+    dc_stream_result_release(&snapshot);
+    dc_offscreen_destroy(workspace);
+    dc_gpu_destroy(resident);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_partial_water_cycle_holds_the_workspace_until_both_owners_finish);
     RUN(test_isolated_tile_advances_and_returns_through_cold_storage);
     RUN(test_absolute_target_budget_and_failed_owner_cannot_publish);
     printf("%d passed, %d failed\n", g_pass, g_fail);
