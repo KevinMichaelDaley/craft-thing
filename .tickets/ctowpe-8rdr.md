@@ -1,6 +1,6 @@
 ---
 id: ctowpe-8rdr
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T18:04:56Z
@@ -27,3 +27,7 @@ The new camera cadence assertion compiled and failed on separate Vulkan submissi
 **2026-11-27T18:20:40Z**
 
 The d50c4f60 refactor passed all three camera checks and all four workspace checks under Vulkan synchronization validation on persistent hidden :93. The injected failure after a completed group submission confirmed that only the earlier successful round updated its participating clocks, and a room that had already reached its target stayed usable. The cold-storage regression preserved gas species exactly. The half-native near benchmark improved from 31.031/49.009 ms mean/p95 at 47e99db4 to 26.412/42.568 ms with the same 16 owners and 2.000000104 s simulated. The broader frame budget remains open.
+
+**2026-11-27T18:25:26Z**
+
+Completed the production d50c4f60 camera benchmarks on hidden Xephyr :93. Both used RTX A2000 simulation, llvmpipe presentation and a real 1920x1080 swapchain. Half-native mean/p95 (ms) near 26.412/42.568, middle 26.213/48.291, far 26.305/50.596. Native near 29.891/49.022, middle 28.919/50.064, far 29.571/51.601. Each band ran 60 measured frames, kept all 16 owners, and advanced 2.000000104 simulated seconds. All six means pass and all six p95 results remain above 33.333 ms. Follow-up ctowpe-1kw3 measures the remaining replay cost.
