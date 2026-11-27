@@ -246,23 +246,25 @@ typedef struct {
     double completed_seconds;
 } timed_chunk_fixture_header_t;
 
-static bool write_chunk_clock_fixture(const char *path) {
+static bool write_chunk_clock_fixture(const char *path, const uint64_t *replaced_owner) {
     const timed_chunk_fixture_header_t header = {
-        .magic = {'D', 'C', 'C', '1'}, .version = 12, .seed = 98,
+        .magic = {'D', 'C', 'C', '1'}, .version = replaced_owner ? 13u : 12u, .seed = 98,
         .payload_version = 5, .completed_seconds = 42.125};
     dc_cell_t cells[DC_CHUNK_CELLS] = {0};
     dc_face_velocity_t faces[DC_CHUNK_CELLS] = {0};
     const uint32_t zero = 0;
     cells[10].fluid_mass = DC_FLUID_FULL;
     faces[10].x = 1.25f;
-    const void *parts[] = {&header, cells, &zero, faces, &zero};
-    const size_t sizes[] = {sizeof(header), sizeof(cells), sizeof(zero),
+    const void *parts[] = {&header, replaced_owner, cells, &zero, faces, &zero};
+    const size_t sizes[] = {sizeof(header), replaced_owner ? 2u * sizeof(uint64_t) : 0u,
+                            sizeof(cells), sizeof(zero),
                             sizeof(faces), sizeof(zero)};
     FILE *file = fopen(path, "wb");
     if (!file) return false;
     bool okay = true;
     uint64_t hash = UINT64_C(14695981039346656037);
     for (unsigned i = 0; okay && i < sizeof(parts) / sizeof(parts[0]); ++i) {
+        if (!sizes[i]) continue;
         hash = dc_color_hash(hash, parts[i], sizes[i]);
         okay = fwrite(parts[i], sizes[i], 1, file) == 1;
     }
@@ -274,7 +276,7 @@ static void test_completed_time_fixture_loads_with_physical_state(void) {
     char directory[] = "build/stream_clock_fixture_XXXXXX", path[256];
     ASSERT_TRUE(mkdtemp(directory));
     snprintf(path, sizeof(path), "%s/chunk_0000000000000000_0000000000000000.bin", directory);
-    ASSERT_TRUE(write_chunk_clock_fixture(path));
+    ASSERT_TRUE(write_chunk_clock_fixture(path, NULL));
     dc_streamer_t *stream = dc_stream_create(directory, 98, 2);
     ASSERT_TRUE(stream);
     dc_stream_result_t result = {0};
@@ -289,6 +291,29 @@ static void test_completed_time_fixture_loads_with_physical_state(void) {
     ASSERT_TRUE(loaded);
     ASSERT_EQ(kind, DC_STREAM_LOADED);
     ASSERT_TRUE(preserved);
+    PASS();
+}
+
+static void test_takeover_packet_accepts_only_checked_owner_and_coordinate(void) {
+    char directory[] = "build/stream_takeover_fixture_XXXXXX", path[256], wrong[256];
+    ASSERT_TRUE(mkdtemp(directory));
+    snprintf(path, sizeof(path), "%s/chunk_0000000000000000_0000000000000000.bin", directory);
+    snprintf(wrong, sizeof(wrong), "%s/chunk_0000000000000001_0000000000000000.bin", directory);
+    const uint64_t parent[] = {UINT64_C(0x53ba8efb52431fc2), 17u};
+    ASSERT_TRUE(write_chunk_clock_fixture(path, parent) && write_chunk_clock_fixture(wrong, parent));
+    dc_streamer_t *stream = dc_stream_create(directory, 98, 2);
+    ASSERT_TRUE(stream);
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){0, 0}, 7u));
+    ASSERT_TRUE(wait_result(stream, &result));
+    const dc_stream_result_kind_t kind = result.kind;
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(dc_stream_request_load(stream, (dc_chunk_coord_t){1, 0}, 8u));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_FAILED);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    ASSERT_EQ(kind, DC_STREAM_LOADED);
     PASS();
 }
 
@@ -459,6 +484,7 @@ int main(void) {
     RUN(test_legacy_chunk_loads_with_zero_velocity);
     RUN(test_version_four_grain_radius_migrates);
     RUN(test_completed_time_fixture_loads_with_physical_state);
+    RUN(test_takeover_packet_accepts_only_checked_owner_and_coordinate);
     RUN(test_known_zero_survives_restart_and_invalid_clock_cannot_replace_it);
     RUN(test_color_chunk_roundtrip_and_corruption_rejection);
     RUN(test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime);

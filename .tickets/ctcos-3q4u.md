@@ -1,6 +1,6 @@
 ---
 id: ctcos-3q4u
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-27T03:09:36Z
