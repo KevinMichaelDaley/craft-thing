@@ -9,6 +9,15 @@
 
 static int g_pass, g_fail;
 static char g_err[256];
+static bool g_lose_receipt;
+
+bool __real_fr_renderer_submit(dc_gpu_t *gpu);
+bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {
+    bool complete = __real_fr_renderer_submit(gpu);
+    if (!g_lose_receipt) return complete;
+    g_lose_receipt = false;
+    return false;
+}
 
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); } while (0)
 #define ASSERT_TRUE(test) do { if (!(test)) { \
@@ -38,6 +47,8 @@ static bool init_fixture(seam_fixture_t *f, dc_liquid_seam_axis_t axis) {
     const dc_chunk_coord_t origin = {3, -5};
     f->a->coord = (dc_chunk_coord_t){4, -5};
     f->b->coord = (dc_chunk_coord_t){4 + (axis == DC_LIQUID_SEAM_X), -5 + (axis == DC_LIQUID_SEAM_Y)};
+    f->first.coord = f->a->coord;
+    f->second.coord = f->b->coord;
     const dc_chunk_coord_t other_origin = {f->b->coord.x, f->b->coord.y - 1};
     return dc_gpu_create(&f->first.gpu, 128, 64, shader, g_err, sizeof(g_err)) &&
         dc_gpu_create_shared(&f->second.gpu, f->first.gpu, 64, 192, shader, g_err, sizeof(g_err)) &&
@@ -177,6 +188,10 @@ static void test_one_invalid_lane_and_one_stale_binding_reject_the_whole_face(vo
     ASSERT_EQ(f.bulk_a->oil_fp[a], 12000u);
     ASSERT_TRUE(dc_gpu_set_page(f.second.gpu, f.second.tile_x, f.second.tile_y, f.second.slot,
         g_err, sizeof(g_err)));
+    dc_liquid_seam_endpoint_t stale = f.second;
+    --stale.coord.y;
+    ASSERT_EQ(dc_gpu_commit_liquid_seam(f.first, stale, DC_LIQUID_SEAM_X, flux,
+        g_err, sizeof(g_err)), DC_LIQUID_SEAM_REJECTED);
     ASSERT_EQ(dc_gpu_commit_liquid_seam(f.first, f.second, DC_LIQUID_SEAM_X, flux,
         g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
     ASSERT_TRUE(download_endpoint(f.first, f.a, f.bulk_a) && download_endpoint(f.second, f.b, f.bulk_b));
@@ -213,10 +228,32 @@ static void test_vertical_face_accepts_reverse_flow_and_simultaneous_full_cell_s
     PASS();
 }
 
+static void test_lost_submission_receipt_is_distinct_from_a_rejected_plan(void) {
+    seam_fixture_t f = {0};
+    ASSERT_TRUE(init_fixture(&f, DC_LIQUID_SEAM_X));
+    const uint32_t lane = 29u, from = lane * DC_CHUNK_SIDE + DC_CHUNK_SIDE - 1u;
+    const uint32_t to = lane * DC_CHUNK_SIDE;
+    f.a->cells[from].fluid_mass = 12000u;
+    ASSERT_TRUE(seed_endpoint(f.first, f.a, f.bulk_a) && seed_endpoint(f.second, f.b, f.bulk_b));
+    dc_liquid_seam_flux_t flux[DC_CHUNK_SIDE] = {0};
+    flux[lane].water = 5000;
+    g_lose_receipt = true;
+    ASSERT_EQ(dc_gpu_commit_liquid_seam(f.first, f.second, DC_LIQUID_SEAM_X, flux,
+        g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_TRUE(!g_lose_receipt);
+    ASSERT_TRUE(download_endpoint(f.first, f.a, f.bulk_a) && download_endpoint(f.second, f.b, f.bulk_b));
+    ASSERT_EQ(f.a->cells[from].fluid_mass, 7000u);
+    ASSERT_EQ(f.b->cells[to].fluid_mass, 5000u);
+    ASSERT_EQ(dc_gpu_validation_errors(f.first.gpu), 0u);
+    destroy_fixture(&f);
+    PASS();
+}
+
 int main(void) {
     RUN(test_real_seam_conserves_stock_heat_momentum_and_water_color);
     RUN(test_one_invalid_lane_and_one_stale_binding_reject_the_whole_face);
     RUN(test_vertical_face_accepts_reverse_flow_and_simultaneous_full_cell_swaps);
+    RUN(test_lost_submission_receipt_is_distinct_from_a_rejected_plan);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

@@ -104,7 +104,7 @@ GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o 
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
 GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o
-build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
+build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/liquid_seam_layout.h src/vulkan/gas_gpu_internal.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 GPU_OBJ += build/structural_store_fluids.o
@@ -271,6 +271,7 @@ PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
 FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_retained.comp.spv build/shaders/bulk_phase_thermal.comp.spv
+FLUID_SHADER += build/shaders/liquid_seam.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
@@ -710,7 +711,10 @@ build/bulk_phase_packet.o: src/fire/bulk_phase_packet.c src/fire/bulk_phase_inte
 build/bulk_phase_gpu.o: src/vulkan/bulk_phase_gpu.c src/fire/bulk_phase_internal.h src/vulkan/gpu_internal.h include/ferrum/fire/bulk_phase_gpu.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp shaders/reactive/thermal_water.glsl
+build/shaders/liquid_seam.comp.spv: shaders/sim/liquid_seam.comp include/dungeoncraft/bulk_phase_layout.h include/dungeoncraft/liquid_seam_layout.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/thermal_water_layout.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/bulk_phase_pair.comp.spv: shaders/sim/bulk_phase_pair.comp shaders/reactive/thermal_water.glsl include/dungeoncraft/terrain_flags.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/shaders/bulk_phase_retained.comp.spv: shaders/sim/bulk_phase_retained.comp
@@ -794,7 +798,7 @@ test_offscreen_workspace: build/offscreen_workspace_tests
 test: test_offscreen_workspace
 
 build/liquid_seam_tests: tests/vulkan/liquid_seam_tests.c include/dungeoncraft/liquid_seam.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_submit
 .PHONY: test_liquid_seam
 test_liquid_seam: build/liquid_seam_tests
 	./build/liquid_seam_tests

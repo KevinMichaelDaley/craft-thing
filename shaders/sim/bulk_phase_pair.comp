@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #include "../../include/dungeoncraft/bulk_phase_layout.h"
 #include "../../include/dungeoncraft/bulk_rheology_layout.h"
+#include "../../include/dungeoncraft/terrain_flags.h"
 #include "../reactive/thermal_water.glsl"
 layout(local_size_x=64) in;
 layout(set=0,binding=1,std430) buffer Cells {uvec2 cells[];};
@@ -64,10 +65,6 @@ void transfer_phase_momentum(uint source,uint target,uint phase,uint component,
     }
     bulk_momentum_write(source,phase,component,source_momentum-carried);
     bulk_momentum_write(target,phase,component,target_momentum+carried);
-}
-bool permeable(uint material) {
-    return material==0u||material==2u||material==4u||material==5u||material==6u||
-        material==10u||material==13u;
 }
 uint used(uint volume[3]) {return volume[0]+volume[1]+volume[2];}
 void move_water_heat(uint source,uint target,uint source_before,uint source_after) {
@@ -141,7 +138,8 @@ void main() {
     uint top_page=page_at(p),bottom_page=page_at(q);
     if(top_page==0u||bottom_page==0u) return;
     uint top_at=atlas_at(p,top_page),bottom_at=atlas_at(q,bottom_page);
-    if(!permeable(cells[top_at].x&65535u)||!permeable(cells[bottom_at].x&65535u)) return;
+    if(!DC_CELL_LIQUID_PERMEABLE(cells[top_at].x&65535u)||
+       !DC_CELL_LIQUID_PERMEABLE(cells[bottom_at].x&65535u)) return;
     uint world_size=params.width*params.height;
     uint face_open=FULL-min(FULL,occupancy[(params.axis==0u?4u:3u)*world_size+index]);
     uint top_index=index;

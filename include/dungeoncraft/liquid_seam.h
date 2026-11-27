@@ -7,6 +7,7 @@ typedef enum { DC_LIQUID_SEAM_X, DC_LIQUID_SEAM_Y } dc_liquid_seam_axis_t;
 
 typedef struct {
     dc_gpu_t *gpu;
+    dc_chunk_coord_t coord;
     uint32_t tile_x, tile_y, slot;
 } dc_liquid_seam_endpoint_t;
 
@@ -24,6 +25,7 @@ typedef enum {
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.
+ * The caller owns the generations and epoch of both endpoints for the call.
  * After an unconfirmed submission the caller must recover both endpoints.
  */
 dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t first,

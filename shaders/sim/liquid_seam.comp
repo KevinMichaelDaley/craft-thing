@@ -1,0 +1,202 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../../include/dungeoncraft/bulk_phase_layout.h"
+#include "../../include/dungeoncraft/liquid_seam_layout.h"
+#include "../../include/dungeoncraft/terrain_flags.h"
+#include "../../include/dungeoncraft/thermal_water_layout.h"
+
+const uint SIDE = 64u;
+const uint CELLS = SIDE * SIDE;
+const uint FULL = 65536u;
+const vec3 DEFAULT_WATER_COLOR = vec3(.035, .193, .666);
+
+layout(local_size_x = 64) in;
+struct Flux { int water, oil, slime; };
+layout(set = 0, binding = 0, std430) buffer Plan { Flux fluxes[SIDE]; uint receipt; } plan;
+layout(set = 0, binding = 1, std430) buffer FirstCells { uvec2 first_cells[]; };
+layout(set = 0, binding = 2, std430) buffer SecondCells { uvec2 second_cells[]; };
+layout(set = 0, binding = 3, std430) buffer FirstBulk { uint first_bulk[]; };
+layout(set = 0, binding = 4, std430) buffer SecondBulk { uint second_bulk[]; };
+layout(set = 0, binding = 5, std430) readonly buffer FirstOccupancy { uint first_occupancy[]; };
+layout(set = 0, binding = 6, std430) readonly buffer SecondOccupancy { uint second_occupancy[]; };
+layout(set = 0, binding = 7, std430) buffer FirstColor { vec4 first_colors[]; };
+layout(set = 0, binding = 8, std430) buffer SecondColor { vec4 second_colors[]; };
+layout(set = 0, binding = 9, std430) readonly buffer FirstThermal { uint first_thermal[]; };
+layout(set = 0, binding = 10, std430) readonly buffer SecondThermal { uint second_thermal[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer WaterHeat { float energy[]; };
+layout(push_constant) uniform Params {
+    uint first_slot, first_x, first_y, first_width, first_height;
+    uint second_slot, second_x, second_y, second_width, second_height;
+    uint axis;
+} params;
+
+shared uint invalid_face;
+
+struct LaneState {
+    uint first_cell, second_cell, first_base, second_base;
+    uvec3 first_after, second_after;
+    vec3 first_extensive[2], second_extensive[2];
+    vec4 first_color, second_color;
+    float first_heat, second_heat;
+    bool water_changed, heat_enabled;
+};
+
+uint sum_volume(uvec3 volume) { return volume.x + volume.y + volume.z; }
+
+uint bulk_word(uint base, uint channel) { return base + channel * CELLS; }
+
+vec3 extensive_at(bool first, uint base, uint phase) {
+    uint heat = bulk_word(base, 4u + phase);
+    uint x = bulk_word(base, 6u + 2u * phase);
+    uint y = x + CELLS;
+    return uintBitsToFloat(first ? uvec3(first_bulk[heat], first_bulk[x], first_bulk[y]) :
+        uvec3(second_bulk[heat], second_bulk[x], second_bulk[y]));
+}
+
+void store_extensive(uint a, uint b, uint phase, vec3 first, vec3 second) {
+    uint heat = 4u + phase, x = 6u + 2u * phase, y = x + 1u;
+    first_bulk[bulk_word(a, heat)] = floatBitsToUint(first.x);
+    first_bulk[bulk_word(a, x)] = floatBitsToUint(first.y);
+    first_bulk[bulk_word(a, y)] = floatBitsToUint(first.z);
+    second_bulk[bulk_word(b, heat)] = floatBitsToUint(second.x);
+    second_bulk[bulk_word(b, x)] = floatBitsToUint(second.y);
+    second_bulk[bulk_word(b, y)] = floatBitsToUint(second.z);
+}
+
+bool finite_vector(vec3 value) { return !any(isnan(value)) && !any(isinf(value)); }
+
+vec4 mixed_color(vec4 receiving, vec4 source, uint stock, uint moved) {
+    if (receiving.w == 0. && source.w == 0.) return vec4(0.);
+    vec3 a = receiving.w > 0. ? receiving.rgb : DEFAULT_WATER_COLOR;
+    vec3 b = source.w > 0. ? source.rgb : DEFAULT_WATER_COLOR;
+    return vec4(mix(a, b, float(moved) / float(stock + moved)), 1.);
+}
+
+WaterHeat first_water_heat() {
+    return WaterHeat(uvec2(first_thermal[DC_THERMAL_WATER_ADDRESS_WORD],
+                           first_thermal[DC_THERMAL_WATER_ADDRESS_WORD + 1u]));
+}
+
+WaterHeat second_water_heat() {
+    return WaterHeat(uvec2(second_thermal[DC_THERMAL_WATER_ADDRESS_WORD],
+                           second_thermal[DC_THERMAL_WATER_ADDRESS_WORD + 1u]));
+}
+
+bool prepare_water(ivec3 delta, uvec3 first, uvec3 second, inout LaneState state) {
+    state.water_changed = delta.x != 0;
+    if (!state.water_changed) return true;
+    state.first_color = first_colors[state.first_cell];
+    state.second_color = second_colors[state.second_cell];
+    uint moved = uint(abs(delta.x));
+    if (delta.x > 0) {
+        state.second_color = mixed_color(state.second_color, state.first_color, second.x, moved);
+        if (state.first_after.x == 0u) state.first_color = vec4(0.);
+    } else {
+        state.first_color = mixed_color(state.first_color, state.second_color, first.x, moved);
+        if (state.second_after.x == 0u) state.second_color = vec4(0.);
+    }
+    if (!finite_vector(state.first_color.rgb) || !finite_vector(state.second_color.rgb)) return false;
+    state.heat_enabled = first_thermal[0] == DC_THERMAL_WATER_MAGIC;
+    if (state.heat_enabled != (second_thermal[0] == DC_THERMAL_WATER_MAGIC)) return false;
+    if (state.heat_enabled) {
+        state.first_heat = first_water_heat().energy[state.first_cell];
+        state.second_heat = second_water_heat().energy[state.second_cell];
+        float carried = delta.x > 0 ? state.first_heat * (float(moved) / float(first.x)) :
+            -state.second_heat * (float(moved) / float(second.x));
+        state.first_heat -= carried;
+        state.second_heat += carried;
+        if (!finite_vector(vec3(state.first_heat, state.second_heat, 0.))) return false;
+    }
+    return true;
+}
+
+bool prepare_lane(uint lane, ivec3 delta, out LaneState state) {
+    uvec2 a = params.axis == 0u ? uvec2(SIDE - 1u, lane) : uvec2(lane, SIDE - 1u);
+    uvec2 b = params.axis == 0u ? uvec2(0u, lane) : uvec2(lane, 0u);
+    uint local_a = a.y * SIDE + a.x, local_b = b.y * SIDE + b.x;
+    state.first_cell = params.first_slot * CELLS + local_a;
+    state.second_cell = params.second_slot * CELLS + local_b;
+    state.first_base = params.first_slot * CELLS * FR_BULK_CHUNK_CHANNELS + local_a;
+    state.second_base = params.second_slot * CELLS * FR_BULK_CHUNK_CHANNELS + local_b;
+    uint base_a = state.first_base, base_b = state.second_base;
+    uvec2 cell_a = first_cells[state.first_cell], cell_b = second_cells[state.second_cell];
+    if (!DC_CELL_LIQUID_PERMEABLE(cell_a.x & 65535u) || !DC_CELL_LIQUID_PERMEABLE(cell_b.x & 65535u))
+        return false;
+    uvec3 first = uvec3(cell_a.y, first_bulk[base_a], first_bulk[bulk_word(base_a, 1u)]);
+    uvec3 second = uvec3(cell_b.y, second_bulk[base_b], second_bulk[bulk_word(base_b, 1u)]);
+    if (any(greaterThan(first, uvec3(FULL))) || any(greaterThan(second, uvec3(FULL)))) return false;
+    uvec3 held_a = uvec3(0u, first_bulk[bulk_word(base_a, 2u)], first_bulk[bulk_word(base_a, 3u)]);
+    uvec3 held_b = uvec3(0u, second_bulk[bulk_word(base_b, 2u)], second_bulk[bulk_word(base_b, 3u)]);
+    uvec3 outgoing_a = uvec3(max(delta, ivec3(0))), outgoing_b = uvec3(max(-delta, ivec3(0)));
+    if (any(greaterThan(outgoing_a, first - min(first, held_a))) ||
+        any(greaterThan(outgoing_b, second - min(second, held_b)))) return false;
+    state.first_after = first - outgoing_a + outgoing_b;
+    state.second_after = second - outgoing_b + outgoing_a;
+    if (any(greaterThan(state.first_after, uvec3(FULL))) ||
+        any(greaterThan(state.second_after, uvec3(FULL)))) return false;
+
+    uint grid_a = (params.first_y + a.y) * params.first_width + params.first_x + a.x;
+    uint grid_b = (params.second_y + b.y) * params.second_width + params.second_x + b.x;
+    uint size_a = params.first_width * params.first_height;
+    uint size_b = params.second_width * params.second_height;
+    uint capacity_a = FULL - min(FULL, first_occupancy[2u * size_a + grid_a]);
+    uint capacity_b = FULL - min(FULL, second_occupancy[2u * size_b + grid_b]);
+    uint aperture = FULL - min(FULL, first_occupancy[(3u + params.axis) * size_a + grid_a]);
+    if (max(sum_volume(outgoing_a), sum_volume(outgoing_b)) > aperture ||
+        sum_volume(state.first_after) > max(capacity_a, sum_volume(first)) ||
+        sum_volume(state.second_after) > max(capacity_b, sum_volume(second))) return false;
+
+    for (uint phase = 0u; phase < 2u; ++phase) {
+        vec3 from_a = extensive_at(true, base_a, phase);
+        vec3 from_b = extensive_at(false, base_b, phase);
+        uint component = phase + 1u;
+        vec3 carried = vec3(0.);
+        if (outgoing_a[component] > 0u)
+            carried = from_a * (float(outgoing_a[component]) / float(first[component]));
+        else if (outgoing_b[component] > 0u)
+            carried = -from_b * (float(outgoing_b[component]) / float(second[component]));
+        state.first_extensive[phase] = from_a - carried;
+        state.second_extensive[phase] = from_b + carried;
+        if (!finite_vector(state.first_extensive[phase]) || !finite_vector(state.second_extensive[phase]))
+            return false;
+    }
+    return prepare_water(delta, first, second, state);
+}
+
+void commit_lane(LaneState state) {
+    first_cells[state.first_cell].y = state.first_after.x;
+    second_cells[state.second_cell].y = state.second_after.x;
+    for (uint phase = 0u; phase < 2u; ++phase) {
+        first_bulk[bulk_word(state.first_base, phase)] = state.first_after[phase + 1u];
+        second_bulk[bulk_word(state.second_base, phase)] = state.second_after[phase + 1u];
+        store_extensive(state.first_base, state.second_base, phase,
+            state.first_extensive[phase], state.second_extensive[phase]);
+    }
+    if (state.water_changed) {
+        first_colors[state.first_cell] = state.first_color;
+        second_colors[state.second_cell] = state.second_color;
+        if (state.heat_enabled) {
+            first_water_heat().energy[state.first_cell] = state.first_heat;
+            second_water_heat().energy[state.second_cell] = state.second_heat;
+        }
+    }
+}
+
+void main() {
+    uint lane = gl_LocalInvocationID.x;
+    if (lane == 0u) invalid_face = 0u;
+    barrier();
+    Flux flux = plan.fluxes[lane];
+    ivec3 delta = ivec3(flux.water, flux.oil, flux.slime);
+    bool has_flux = any(notEqual(delta, ivec3(0)));
+    LaneState state;
+    if (has_flux && !prepare_lane(lane, delta, state)) atomicOr(invalid_face, 1u);
+    barrier();
+    if (invalid_face == 0u && has_flux) commit_lane(state);
+    memoryBarrierBuffer();
+    barrier();
+    if (lane == 0u)
+        plan.receipt = invalid_face == 0u ? DC_LIQUID_RECEIPT_COMMITTED : DC_LIQUID_RECEIPT_REJECTED;
+}
