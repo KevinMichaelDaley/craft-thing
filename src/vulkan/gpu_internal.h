@@ -361,6 +361,23 @@ static inline uint32_t dc_gpu_water_slot_extent(const dc_gpu_t *gpu) {
     return slots;
 }
 
+/** Number of workspace columns and rows through the last mapped page on each axis. */
+static inline VkExtent2D dc_gpu_water_transport_extent(const dc_gpu_t *gpu) {
+    if (!gpu->workspace_slots) return (VkExtent2D){gpu->width, gpu->height};
+    VkExtent2D extent = {0};
+    for (uint32_t slot = 0; slot < gpu->workspace_slots; ++slot) {
+        uint32_t tile = gpu->slot_page[slot];
+        if (tile == UINT32_MAX) continue;
+        uint32_t right = (tile % gpu->page_width + 1) * DC_CHUNK_SIDE;
+        uint32_t bottom = (tile / gpu->page_width + 1) * DC_CHUNK_SIDE;
+        if (right > extent.width) extent.width = right;
+        if (bottom > extent.height) extent.height = bottom;
+    }
+    if (extent.width > gpu->width) extent.width = gpu->width;
+    if (extent.height > gpu->height) extent.height = gpu->height;
+    return extent;
+}
+
 static inline uint32_t dc_gpu_broadphase_buckets(const dc_gpu_t *gpu) {
     return (gpu->page_width + 2u) * (gpu->page_height + 2u);
 }
@@ -615,7 +632,7 @@ bool dc_gpu_make_water_seam_displacement_pipeline(dc_gpu_t *gpu, uint32_t mode, 
 void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     const VkPipeline pipelines[2], uint32_t width, uint32_t height, uint32_t seam_axis);
 void dc_gpu_record_transport_sweep(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
-                                   uint32_t *push, uint32_t push_bytes, bool occupancy);
+                                   uint32_t *push, uint32_t push_bytes, bool occupancy, uint32_t lines);
 void dc_gpu_record_water_seam_transport(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     const VkPipeline pipelines[4], uint32_t width, uint32_t height, float step_scale,
     bool occupancy, uint32_t axis, uint32_t first, uint32_t stop);

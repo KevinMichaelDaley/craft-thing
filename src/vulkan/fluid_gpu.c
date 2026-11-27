@@ -316,11 +316,13 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
+    VkExtent2D extent = dc_gpu_water_transport_extent(gpu);
     for (uint32_t mode = first; mode < stop; ++mode) {
         push[2] = mode;
         if (mode < 4u) {
             dc_gpu_record_transport_sweep(gpu, gpu->fluid_transport_descriptor, gpu->fluid_transport_pipelines[mode],
-                                   push, sizeof(push), gpu->rigid_occupancy_present);
+                                   push, sizeof(push), gpu->rigid_occupancy_present,
+                                   mode < 2 ? extent.width : extent.height);
         } else {
             bind_fluid_mode(gpu, mode);
             vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
