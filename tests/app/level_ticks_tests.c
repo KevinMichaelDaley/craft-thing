@@ -809,6 +809,58 @@ static void test_level_water_settings_change_all_owners_together(void) {
     PASS();
 }
 
+static void test_parked_receipt_survives_close_before_slot_eviction(void) {
+    char directory[] = "build/room_close_pending_evict_XXXXXX", path[256], err[128] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t view = {.world_seconds = 2.};
+    const dc_chunk_coord_t coord = {-40, 3};
+    dc_chunk_owner_t owner = {13, 7};
+    uint32_t slot;
+    uint64_t generation;
+    ASSERT_TRUE(dc_chunk_table_init(&view.table, 1u) &&
+        dc_chunk_table_begin_load(&view.table, coord, &slot, &generation) &&
+        dc_chunk_table_finish_load(&view.table, slot, generation) &&
+        dc_chunk_table_set_active(&view.table, slot, false));
+    view.table.slots[slot].checkpoint_owner = owner;
+    view.table.slots[slot].time = (dc_chunk_time_t){1., true};
+    view.camera_offscreen = (dc_camera_offscreen_t){.coord=coord,.owner=owner,
+        .phase=DC_CAMERA_OFFSCREEN_STORED,.time={1.,true}};
+    view.save = dc_world_save_open(directory, err, sizeof(err));
+    ASSERT_TRUE(view.save && dc_world_save_begin(view.save, err, sizeof(err)) &&
+        dc_camera_catalog_stage(&view, err, sizeof(err)) &&
+        dc_player_inventory_stage(view.save, view.saved_inventory, err, sizeof(err)));
+    snprintf(path, sizeof(path), "%s/%s", dc_world_save_directory(view.save,true), DC_WORLD_BODY_RECORD);
+    FILE *body = fopen(path,"wb");
+    ASSERT_TRUE(body && fclose(body)==0 && dc_world_save_commit(view.save, err, sizeof(err)));
+    dc_camera_offscreen_discard(&view);
+    dc_chunk_table_destroy(&view.table);
+    view.stream = dc_stream_create(directory, 42, 2);
+    ASSERT_TRUE(view.stream && dc_camera_catalog_load(&view, err, sizeof(err)));
+    dc_camera_offscreen_t *restored = dc_camera_find_room(&view, coord);
+    ASSERT_TRUE(restored && restored->restored_record && dc_chunk_owner_equal(restored->owner, owner));
+    ASSERT_EQ(restored->time.seconds, 1.);
+    dc_stream_destroy(view.stream);
+    dc_camera_offscreen_discard(&view);
+    dc_world_save_close(view.save);
+    PASS();
+}
+
+static void test_truncated_room_catalog_cannot_install_an_owner(void) {
+    char directory[] = "build/bad_room_catalog_XXXXXX", path[256], err[128] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t view = {0};
+    view.save = dc_world_save_open(directory, err, sizeof(err));
+    ASSERT_TRUE(view.save);
+    snprintf(path, sizeof(path), "%s/%s", directory, DC_WORLD_ROOM_RECORD);
+    FILE *file = fopen(path, "wb");
+    ASSERT_TRUE(file && fwrite("DCR1", 1, 4, file) == 4 && fclose(file) == 0);
+    ASSERT_TRUE(!dc_camera_catalog_load(&view, err, sizeof(err)));
+    ASSERT_TRUE(!view.sealed_rooms && !view.room_catalog_loaded && !view.world_save_staged);
+    ASSERT_TRUE(!dc_camera_catalog_active(&view));
+    dc_world_save_close(view.save);
+    PASS();
+}
+
 int main(void) {
     RUN(test_level_water_settings_change_all_owners_together);
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
@@ -831,6 +883,8 @@ int main(void) {
     RUN(test_duplicate_load_reply_cannot_overwrite_a_live_slot);
     RUN(test_transfer_releases_rejected_request_and_rebinds_failed_worker_destination);
     RUN(test_camera_workspace_requires_a_closed_stationary_rim);
+    RUN(test_truncated_room_catalog_cannot_install_an_owner);
+    RUN(test_parked_receipt_survives_close_before_slot_eviction);
     RUN(test_empty_camera_eviction_leaves_the_workspace_for_oil_stock);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
