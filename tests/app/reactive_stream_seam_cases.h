@@ -130,7 +130,7 @@ static bool same_water_chunk(const dc_chunk_t *actual, const dc_chunk_t *expecte
         !memcmp(actual->markers, expected->markers, actual->marker_count * sizeof(dc_marker_t));
 }
 
-static void test_level_step_advances_admitted_water_owners_together(void) {
+static void check_level_step_advances_admitted_water_owners(bool restart_partial) {
     char directory[] = "build/paired_water_tick_XXXXXX", err[256] = {0};
     const uint32_t lane = 24u;
     dc_level_liquid_exchange_t owners = {.resident = {5, -4}, .offscreen = {6, -4}, .begin_seconds = 2.};
@@ -209,6 +209,17 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
                 execute_level_steps(view, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
     const double end = view->world_seconds + 3. * elapsed;
+    if (restart_partial) {
+        const double saved_time = view->world_seconds;
+        ASSERT_EQ(view->pending_steps, 0u);
+        ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+        dc_offscreen_destroy(workspace);
+        view = seam_test_view(directory, err, sizeof(err));
+        workspace = NULL;
+        ASSERT_TRUE(view && admit_seam_owners(view, &owners, &slot, &workspace, err, sizeof(err)));
+        ASSERT_EQ(view->world_seconds, saved_time);
+        ASSERT_EQ(workspace->time.seconds, saved_time);
+    }
     for (unsigned i = 0; i < 3; ++i)
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
     for (unsigned i = 0; i < 4; ++i)
@@ -217,6 +228,7 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
                 dc_gpu_download_chunk(mono, 1u, &expected[1], err, sizeof(err)) &&
                 fr_renderer_download_chunk_colors(mono, 1u, &pigment, err, sizeof(err)));
     dc_gpu_destroy(mono);
+    if (restart_partial) ASSERT_TRUE(execute_level_steps(view, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     dc_offscreen_destroy(workspace);
     view = seam_test_view(directory, err, sizeof(err));
@@ -250,6 +262,14 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     dc_level_view_discard(view);
     dc_offscreen_destroy(workspace);
     PASS();
+}
+
+static void test_level_step_advances_admitted_water_owners_together(void) {
+    check_level_step_advances_admitted_water_owners(false);
+}
+
+static void test_quit_resumes_confirmed_partial_water_cycle(void) {
+    check_level_step_advances_admitted_water_owners(true);
 }
 
 static void test_new_exchange_cannot_claim_an_earlier_receipt(void) {
