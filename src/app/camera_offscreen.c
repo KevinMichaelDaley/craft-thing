@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/gas.h"
 #include "dungeoncraft/terrain_flags.h"
 #include "../vulkan/gpu_internal.h"
@@ -15,17 +16,19 @@ static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
     return a.x == b.x && a.y == b.y;
 }
 
-static bool cell_has_transport_stock(const dc_stream_result_t *snapshot, uint32_t index) {
-    if (snapshot->chunk->cells[index].fluid_mass ||
-        (snapshot->bulk && (snapshot->bulk->oil_fp[index] || snapshot->bulk->slime_fp[index])))
-        return true;
-    const fr_gas_checkpoint_chunk_t *gas = snapshot->gas;
+static bool gas_cell_has_stock(const fr_gas_checkpoint_chunk_t *gas, uint32_t index) {
     if (!gas) return false;
     if (gas->carrier_tail[index][0] || gas->carrier_tail[index][1]) return true;
     for (uint32_t species = 0; species < FR_GAS_SPECIES; ++species) {
         if (gas->cells[index][species]) return true;
     }
     return false;
+}
+
+static bool cell_has_transport_stock(const dc_stream_result_t *snapshot, uint32_t index) {
+    return snapshot->chunk->cells[index].fluid_mass ||
+        (snapshot->bulk && (snapshot->bulk->oil_fp[index] || snapshot->bulk->slime_fp[index])) ||
+        gas_cell_has_stock(snapshot->gas, index);
 }
 
 static bool has_transport_stock(const dc_stream_result_t *snapshot) {
@@ -126,12 +129,22 @@ static bool neighbor_has_transport_stock(dc_level_view_t *view, dc_chunk_coord_t
     const fr_bulk_phase_chunk_t *bulk = (const fr_bulk_phase_chunk_t *)view->gpu->bulk_phase_mapped + slot;
     for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i)
         if (cells[i].fluid_mass || bulk->oil_fp[i] || bulk->slime_fp[i]) return true;
+    if (view->gpu->gas && view->gas_admitted[slot]) {
+        fr_gas_checkpoint_chunk_t *gas = malloc(sizeof(*gas));
+        bool stock = false;
+        if (gas && fr_gas_gpu_export_checkpoint(view->gpu, slot, gas, NULL, 0)) {
+            for (unsigned i = 0; i < DC_CHUNK_CELLS && !stock; ++i)
+                stock = gas_cell_has_stock(gas, i);
+        }
+        free(gas);
+        return stock;
+    }
     return false;
 }
 
 unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_stream_result_t *snapshot) {
     if (!snapshot->chunk || !snapshot->time.known || !isfinite(snapshot->time.seconds) ||
-        snapshot->time.seconds < 0. || snapshot->gas || view->gpu->gas)
+        snapshot->time.seconds < 0. || (snapshot->gas != NULL) != (view->gpu->gas != NULL))
         return 0;
     unsigned faces = 0;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
@@ -159,8 +172,8 @@ bool dc_camera_offscreen_ready(dc_level_view_t *view) {
 
 bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err, uint32_t cap) {
     *hold = view->gpu->water_cycle_peer != NULL;
-    if (*hold || !view->gpu->fluid_phase || !view->gpu->fluid_work_possible ||
-        view->gpu->gas || view->camera_offscreen.phase != DC_CAMERA_OFFSCREEN_IDLE) return true;
+    if (*hold || !view->gpu->fluid_phase || (!view->gpu->fluid_work_possible && !view->gpu->gas) ||
+        view->camera_offscreen.phase != DC_CAMERA_OFFSCREEN_IDLE) return true;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         const dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_ACTIVE || !slot->time.known || slot->time.seconds != view->world_seconds ||
@@ -170,13 +183,22 @@ bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err
         if (face > SOUTH) continue;
         dc_chunk_t chunk;
         if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
-        const dc_stream_result_t snapshot = {.time = slot->time, .coord = slot->coord, .chunk = &chunk,
+        fr_gas_checkpoint_chunk_t *gas = NULL;
+        if (view->gpu->gas && view->gas_admitted[i]) {
+            gas = malloc(sizeof(*gas));
+            if (!gas || !fr_gas_gpu_export_checkpoint(view->gpu, i, gas, err, cap)) {
+                free(gas);
+                return false;
+            }
+        }
+        const dc_stream_result_t snapshot = {.gas = gas, .time = slot->time, .coord = slot->coord, .chunk = &chunk,
             .bulk = (fr_bulk_phase_chunk_t *)view->gpu->bulk_phase_mapped + i};
         if (dc_camera_offscreen_water_face(view, &snapshot) == face &&
             (has_transport_stock(&snapshot) || neighbor_has_transport_stock(view, slot->coord, face))) {
             *hold = true;
-            break;
         }
+        free(gas);
+        if (*hold) break;
     }
     return true;
 }

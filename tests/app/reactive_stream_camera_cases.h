@@ -255,6 +255,19 @@ static void check_camera_water_returns(unsigned channels) {
         }
         ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(dc_level_offscreen_owns(view, first));
+        if (gas && cycle == 0u) {
+            /* Isolate the far halo rooms before they acquire older disk epochs. */
+            for (uint32_t i = 0; i < view->table.capacity; ++i) {
+                const dc_chunk_slot_t *s = &view->table.slots[i];
+                if (s->state != DC_SLOT_ACTIVE || s->coord.x !=
+                    view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS - 1) continue;
+                memset(chunk, 0, sizeof(*chunk));
+                camera_seal_room(chunk, s->coord);
+                ASSERT_TRUE(dc_gpu_upload_chunk(view->gpu, i, chunk, err, sizeof(err)) &&
+                    camera_seed_gas(view->gpu, i, chunk, false, err, sizeof(err)) &&
+                    dc_chunk_table_mark_dirty(&view->table, i));
+            }
+        }
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
         uint32_t older_slot = UINT32_MAX;
         double older_start = 0.;

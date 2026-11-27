@@ -109,6 +109,7 @@ static bool inspect_water_region(dc_liquid_seam_endpoint_t tile, water_region_ti
     _Static_assert(DC_CHUNK_SIDE == 64, "Water boundary mask needs one bit per cell");
     const dc_gpu_t *gpu = tile.gpu;
     if (tile.tile_x >= gpu->width / DC_CHUNK_SIDE || tile.tile_y >= gpu->height / DC_CHUNK_SIDE) return false;
+    r->active |= gpu->gas != NULL;
     r->active |= ((const uint32_t *)gpu->particle_count_mapped)[tile.slot] != 0;
     const uint32_t *markers = gpu->marker_ping ? gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
     r->active |= markers[tile.slot] != 0;
@@ -140,7 +141,7 @@ static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_s
     for (uint32_t t = 0; t < count; ++t) {
         dc_gpu_t *gpu = tiles[t].gpu;
         if ((t == 0 || t == residents) && (gpu->body_count || gpu->structural_graph_possible ||
-            gpu->gas || gpu->tick_water_source || !fr_thermal_water_only(gpu, err, cap) ||
+            gpu->tick_water_source || !fr_thermal_water_only(gpu, err, cap) ||
             !dc_gpu_copy_chunk_state(gpu, UINT32_MAX, false, false, err, cap)))
             return false;
         regions[t].active = t >= residents;
@@ -155,7 +156,13 @@ static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_s
         for (uint32_t next = 0; next < queued; ++next) {
             uint32_t t = queue[next];
             double owner_time = t < residents ? view->table.slots[tiles[t].slot].time.seconds : view->world_seconds;
-            if (owner_time != epoch) return false;
+            if (owner_time != epoch) {
+                if (err && cap) snprintf(err, cap,
+                    "Connected transport regions have different epochs at (%lld,%lld) and (%lld,%lld): %.9g and %.9g",
+                    (long long)tiles[seed].coord.x, (long long)tiles[seed].coord.y,
+                    (long long)tiles[t].coord.x, (long long)tiles[t].coord.y, epoch, owner_time);
+                return false;
+            }
             for (uint32_t n = 0; n < count; ++n) {
                 dc_liquid_seam_axis_t axis;
                 bool first;
@@ -218,7 +225,8 @@ static dc_level_offscreen_result_t service_water_pair(dc_level_view_t *view, flo
         tiles[count++] = (dc_liquid_seam_endpoint_t){.gpu = workspace->gpu, .coord = p->coord, .slot = slot,
             .tile_x = slot % OFFSCREEN_SIDE, .tile_y = slot / OFFSCREEN_SIDE};
     }
-    if (different_times && !water_regions_aligned(view, tiles, count, residents, err, cap)) goto stale;
+    if (different_times && !water_regions_aligned(view, tiles, count, residents, err, cap))
+        return DC_LEVEL_OFFSCREEN_FAILED;
     if (!dc_level_resume_water_checkpoint(view, tiles, count, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
     if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
     dc_liquid_seam_result_t result = resume_only ? DC_LIQUID_SEAM_COMMITTED :
