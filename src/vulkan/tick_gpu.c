@@ -118,10 +118,10 @@ static void record_before_water(dc_gpu_t *gpu) {
     record_scheduled_rigid(gpu);
 }
 
-static void record_particles_and_heat(dc_gpu_t *gpu) {
+static void record_particles_and_heat(dc_gpu_t *gpu, bool advance_grains) {
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    dc_gpu_record_mpm(gpu);
+    if (advance_grains) dc_gpu_record_mpm(gpu);
     fr_thermal_record_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
 }
 
@@ -129,7 +129,7 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     record_before_water(gpu);
     record_scheduled_fluid(gpu);
     dc_gpu_record_bulk_phase(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
-    record_particles_and_heat(gpu);
+    record_particles_and_heat(gpu, true);
 }
 
 static bool submit_pair(dc_gpu_t *first, dc_gpu_t *second, char *err, uint32_t cap) {
@@ -205,7 +205,7 @@ static uint64_t elapsed_ns(const dc_gpu_t *gpu, uint64_t start, uint64_t stop) {
     return (uint64_t)((double)ticks * gpu->timestamp_period);
 }
 
-static bool tick_record(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
+static bool tick_record(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture, bool advance_grains,
                         char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "Invalid GPU tick");
     if(!dc_gpu_runtime_bodies_service(gpu,err,cap)) return false;
@@ -231,7 +231,7 @@ static bool tick_record(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);
     }
-    record_particles_and_heat(gpu);
+    record_particles_and_heat(gpu, advance_grains);
     if (capture) {
         record_probe(gpu, 1);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
@@ -272,14 +272,19 @@ bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char
             if (owners[j] == gpu) return error(err, cap, "Duplicate independent tick owner");
     }
     for (uint32_t i = 0; i < count; ++i) {
-        if (!tick_record(owners[i], NULL, err, cap)) return false;
+        dc_gpu_t *gpu = owners[i];
+        const uint32_t *counts = gpu->particle_count_mapped;
+        bool advance_grains = gpu->structural_enabled;
+        for (uint32_t slot = 0; !advance_grains && slot < dc_gpu_slot_capacity(gpu); ++slot)
+            advance_grains = gpu->slot_page[slot] != UINT32_MAX && counts[slot] != 0;
+        if (!tick_record(gpu, NULL, advance_grains, err, cap)) return false;
         commands[i] = owners[i]->command;
     }
     return submit_commands(first, commands, count, err, cap);
 }
 
 static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture, char *err, uint32_t cap) {
-    if (!tick_record(gpu, capture, err, cap) || !submit_commands(gpu, &gpu->command, 1, err, cap))
+    if (!tick_record(gpu, capture, true, err, cap) || !submit_commands(gpu, &gpu->command, 1, err, cap))
         return false;
     if (!capture) return true;
     uint64_t timestamps[4] = {0};
