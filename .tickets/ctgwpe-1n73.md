@@ -24,3 +24,7 @@ Read the single resident physical probe from the completed authoritative gas pac
 **2026-11-26T23:59:12Z**
 
 RED builds the actual forest fixture and passes an unbound page to its warmth reader without starting Vulkan. The reader returns 0 K with an empty diagnostic. The regression requires the missing resident owner to be reported.
+
+**2026-11-27T00:07:02Z**
+
+GREEN and refactor pass the mapped-packet test, including swizzled residency, partial cell volume, the live model, compensated energy and existing chunk reads. Unbound, invalid volume, empty stock and device-loss paths keep the output untouched. The three focused gas cases also pass with ASan/UBSan. The forest contract reports unavailable samples and records covered dry-bridge sites as skipped. Still/control samples now publish temperature, density inputs, pressure and work as each observation is accepted. Native warm-probe validation and the matched comparison remain due.

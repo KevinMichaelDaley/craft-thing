@@ -68,25 +68,30 @@ static void test_mapped_probe_uses_live_model_void_and_compensated_stock(void) {
     ASSERT_TRUE(fabs(sample.internal_energy - 1800.000001) < 1e-10);
     ASSERT_TRUE(fabs(sample.thermo.temperature_K - 1800.000001 / 6.) < 1e-9);
     ASSERT_TRUE(fabs(sample.thermo.pressure - sample.thermo.temperature_K * 20.) < 1e-10);
+    fr_gas_state_t chunk[DC_CHUNK_CELLS];
+    ASSERT_TRUE(fr_gas_gpu_read_chunk(&gpu, 1u, chunk, DC_CHUNK_CELLS, err, sizeof(err)));
+    ASSERT_EQ(queue_waits, 2u);
+    ASSERT_TRUE(fabs(chunk[PROBE_Y * DC_CHUNK_SIDE + PROBE_X].energy - 1800.750001) < 1e-10);
     PASS();
 }
 
 static void test_unresident_and_out_of_bounds_probes_keep_destination(void) {
     setup();
-    fr_gas_gpu_probe_t sample = {.volume = .5};
+    fr_gas_gpu_probe_t sample = {.volume = .5, .thermo = {.temperature_K = 310.}};
     ASSERT_TRUE(!fr_gas_gpu_probe_cell(&gpu, gpu.width, PROBE_Y, &sample, err, sizeof(err)));
     ASSERT_TRUE(strstr(err, "coordinates") != NULL);
     pages[0] = 0u;
     ASSERT_TRUE(!fr_gas_gpu_probe_cell(&gpu, PROBE_X, PROBE_Y, &sample, err, sizeof(err)));
     ASSERT_TRUE(strstr(err, "resident") != NULL);
     ASSERT_EQ(sample.volume, .5);
+    ASSERT_EQ(sample.thermo.temperature_K, 310.);
     ASSERT_EQ(queue_waits, 0u);
     PASS();
 }
 
 static void test_unavailable_queue_and_gas_void_keep_destination(void) {
     gas_packet_t *packet = setup();
-    fr_gas_gpu_probe_t sample = {.volume = .5};
+    fr_gas_gpu_probe_t sample = {.volume = .5, .internal_energy = 17., .heat_capacity = .25};
     queue_status = VK_ERROR_DEVICE_LOST;
     ASSERT_TRUE(!fr_gas_gpu_probe_cell(&gpu, PROBE_X, PROBE_Y, &sample, err, sizeof(err)));
     ASSERT_TRUE(strstr(err, "snapshot") != NULL);
@@ -98,6 +103,8 @@ static void test_unavailable_queue_and_gas_void_keep_destination(void) {
     ASSERT_TRUE(!fr_gas_gpu_probe_cell(&gpu, PROBE_X, PROBE_Y, &sample, err, sizeof(err)));
     ASSERT_TRUE(strstr(err, "empty") != NULL);
     ASSERT_EQ(sample.volume, .5);
+    ASSERT_EQ(sample.internal_energy, 17.);
+    ASSERT_EQ(sample.heat_capacity, .25);
     PASS();
 }
 

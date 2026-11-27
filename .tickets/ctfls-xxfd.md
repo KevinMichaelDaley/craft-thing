@@ -28,3 +28,7 @@ The manifest wood union contains 90 distinct cells, 37 inside its ignition disc.
 **2026-11-26T23:51:52Z**
 
 The actual NVIDIA RED confirmed undeclared material at (238,206) in the otherwise locked still scene. Host GREEN and refactor pass with radius four, 12000 energy and the center at (228,204). The default staging counts unique authored wood cells, and the native audit checks the actual pit cell, all 37 heated body parcels and their total finite energy. The displaced kindling is available only through the named historical control. Native cold audit, matched 180-second runs and spread controls remain due.
+
+**2026-11-27T00:07:02Z**
+
+Exact 19ca2597 passed the NVIDIA cold acceptance fixture. The undeclared pit cell was air, 37 authored parcels were lit and their measured starter heat was 11999.999481. The live ember was 980.3 K. Long still, historical and spread comparisons remain open.
