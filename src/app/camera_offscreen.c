@@ -1,22 +1,15 @@
 #include <math.h>
 
-#include "ferrum/fire/combustion_gpu.h"
 #include "ferrum/fire/gas.h"
-#include "ferrum/fire/thermal_gpu.h"
 #include "../vulkan/gpu_internal.h"
 #include "camera_offscreen.h"
 #include "level_internal.h"
 #include "level_offscreen.h"
 
-enum { CAMERA_WORKSPACE_STEPS_PER_TICK = 2u, GAS_CHECKPOINT_VOLUME_WORD = 12u };
+enum { CAMERA_WORKSPACE_STEPS_PER_TICK = 2u };
 
 static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
     return a.x == b.x && a.y == b.y;
-}
-
-static bool isolated_solvers(const dc_gpu_t *gpu) {
-    return gpu && !gpu->body_count && !gpu->structural_graph_possible &&
-        !fr_thermal_gpu_enabled(gpu) && !fr_combustion_gpu_enabled(gpu);
 }
 
 static bool cell_has_transport_stock(const dc_stream_result_t *snapshot, uint32_t index) {
@@ -43,13 +36,13 @@ static bool closed_edge_cell(const dc_stream_result_t *snapshot, uint32_t index)
     const dc_cell_t *cell = snapshot->chunk->cells + index;
     return cell->material == DC_MATERIAL_STONE && (cell->flags & DC_CELL_LOADED_TERRAIN) &&
         !(cell->flags & DC_CELL_RELEASED_TERRAIN) &&
-        (!snapshot->gas || !snapshot->gas->cells[index][GAS_CHECKPOINT_VOLUME_WORD]) &&
+        (!snapshot->gas || !snapshot->gas->cells[index][FR_GAS_CHECKPOINT_VOLUME_WORD]) &&
         !cell_has_transport_stock(snapshot, index);
 }
 
 bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_result_t *snapshot) {
     if (!snapshot->chunk || !snapshot->time.known || !isfinite(snapshot->time.seconds) ||
-        snapshot->time.seconds < 0. || !isolated_solvers(view->gpu) ||
+        snapshot->time.seconds < 0. || !dc_gpu_chunk_physics_isolated(view->gpu) ||
         snapshot->water_excess || snapshot->chunk->particle_count ||
         (snapshot->gas != NULL) != (view->gpu->gas != NULL)) return false;
     for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
@@ -98,7 +91,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     if (camera->phase == DC_CAMERA_OFFSCREEN_IDLE || camera->phase == DC_CAMERA_OFFSCREEN_SAVING)
         return true;
     bool needed = camera_needs_chunk(view, camera->coord);
-    bool independent = isolated_solvers(view->gpu);
+    bool independent = dc_gpu_chunk_physics_isolated(view->gpu);
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
         if (closing || !independent || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
             (needed && camera->time.seconds >= view->world_seconds)) {

@@ -1,6 +1,8 @@
 #ifndef FERRUM_FIRE_GAS_CHECKPOINT_H
 #define FERRUM_FIRE_GAS_CHECKPOINT_H
 #include <stdint.h>
+/** Geometry words in the cold gas packet. */
+enum { FR_GAS_CHECKPOINT_VOLUME_WORD = 12u, FR_GAS_CHECKPOINT_PREVIOUS_VOLUME_WORD = 13u };
 typedef struct {uint64_t physical_steps,substeps;double advanced_seconds;} fr_gas_gpu_clock_t;
 /** Cold authoritative chunk stock, compensated energy, geometry/work and face
  * valves. Derived pressure/transport caches are deliberately not persisted. */

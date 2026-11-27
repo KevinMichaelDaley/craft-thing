@@ -2349,7 +2349,7 @@ build/structural_store_channels.o: src/vulkan/structural_store_channels.c src/vu
 build/structural_store_fluids.o: src/vulkan/structural_store_fluids.c src/vulkan/structural_store_fluids.h src/vulkan/gpu_internal.h src/fire/bulk_phase_internal.h src/fire/gas_checkpoint_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gpu.o build/structural_store_chunk.o build/structural_store_channels.o: src/vulkan/structural_store_fluids.h
-build/structural_store_chunk.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/thermal_gpu_internal.h
+build/structural_store_chunk.o: include/ferrum/fire/gas_checkpoint.h src/vulkan/reactive_checkpoint_gpu.h src/vulkan/thermal_gpu_internal.h
 build/gpu.o build/chunk_gpu.o build/structural_store_gpu.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/structural_store_channels.h
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)

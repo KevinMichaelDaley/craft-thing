@@ -81,13 +81,14 @@ bool __wrap_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out) {
 }
 
 bool __wrap_dc_gpu_upload_streamed_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
-    const dc_gpu_stream_channels_t *stream, bool *restored, dc_chunk_time_t *time,
-    bool *gas_admitted, char *err, uint32_t cap) {
+    const dc_gpu_stream_channels_t *stream, dc_gpu_stream_admission_t *admission,
+    char *err, uint32_t cap) {
     (void)gpu; (void)err; (void)cap;
-    *restored = g_frame.restore_first_from_checkpoint && slot == 0;
-    *time = (dc_chunk_time_t){0};
-    *gas_admitted = stream->gas != NULL || stream->ambient_gas;
-    g_frame.material[slot] = *restored ? DC_MATERIAL_STONE : chunk->cells[0].material;
+    const bool restored = g_frame.restore_first_from_checkpoint && slot == 0;
+    *admission = (dc_gpu_stream_admission_t){.restored = restored,
+        .time = restored ? (dc_chunk_time_t){0} : stream->time,
+        .gas_admitted = stream->gas != NULL || stream->ambient_gas};
+    g_frame.material[slot] = restored ? DC_MATERIAL_STONE : chunk->cells[0].material;
     ++g_frame.uploads[slot];
     return true;
 }

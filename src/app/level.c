@@ -336,28 +336,32 @@ static bool queue_reserved_load(dc_level_view_t *view, uint32_t index, uint64_t 
 
 static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
     dc_stream_result_t *result, char *err, uint32_t cap) {
+    bool terrain_promoted = false;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
-        uint32_t material = result->chunk->cells[i].material;
+        dc_cell_t *cell = result->chunk->cells + i;
+        uint32_t material = cell->material;
         if (material == DC_MATERIAL_STONE || material == DC_MATERIAL_WOOD ||
-            material == DC_MATERIAL_DENSE_WOOD || material == DC_MATERIAL_LEAVES)
-            result->chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
+            material == DC_MATERIAL_DENSE_WOOD || material == DC_MATERIAL_LEAVES) {
+            terrain_promoted |= !(cell->flags & DC_CELL_LOADED_TERRAIN);
+            cell->flags |= DC_CELL_LOADED_TERRAIN;
+        }
     }
-    bool restored, gas_admitted;
-    dc_chunk_time_t checkpoint_time;
+    dc_gpu_stream_admission_t admission;
     const dc_gpu_stream_channels_t channels = {
         .gas = result->gas, .bulk = result->bulk, .time = result->time,
         .colors = result->colors, .reactive = result->reactive, .water_excess = result->water_excess,
         .replaces_owner = result->replaces_owner,
-        .ambient_gas = view->stream_ambient_gas
+        .ambient_gas = view->stream_ambient_gas, .terrain_promoted = terrain_promoted
     };
     if (!dc_gpu_upload_streamed_chunk(view->gpu, index, result->chunk, &channels,
-        &restored, &checkpoint_time, &gas_admitted, err, cap)) return false;
+        &admission, err, cap)) return false;
     if (!dc_chunk_table_finish_load(&view->table, index, result->generation))
         return error(err, cap, "Cannot finish loaded chunk publication");
 
-    view->gas_admitted[index] = gas_admitted;
-    dc_chunk_time_t time = restored ? checkpoint_time : result->time;
-    if (!restored && result->generated)
+    view->gas_admitted[index] = admission.gas_admitted;
+    dc_chunk_time_t time = admission.time;
+    if ((!admission.restored && result->generated) ||
+        (admission.idle && time.seconds < view->world_seconds))
         time = (dc_chunk_time_t){.seconds = view->world_seconds, .known = true};
     view->table.slots[index].time = time;
     if (view->closing) {
@@ -365,7 +369,7 @@ static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
         view->save_color_stale[index] = true;
         if (getenv("DC_SAVE_TRACE")) fprintf(stderr, "Save late load slot%u\n", index);
     }
-    if (restored || dc_chunk_owner_valid(result->replaces_owner) ||
+    if (admission.restored || dc_chunk_owner_valid(result->replaces_owner) ||
         (!result->gas && view->stream_ambient_gas))
         dc_chunk_table_mark_dirty(&view->table, index);
     return true;

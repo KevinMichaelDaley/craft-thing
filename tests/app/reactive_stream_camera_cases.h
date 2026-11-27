@@ -249,7 +249,9 @@ static void test_dormant_clock_uses_the_authoritative_structure_channels(void) {
     ASSERT_TRUE(snprintf(path, sizeof(path), "%s/%s", directory, DC_WORLD_BODY_RECORD) > 0);
     dc_level_view_t view = {0};
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    ASSERT_TRUE(chunk && structure_time_gpu(&view.gpu, err, sizeof(err)));
+    fr_gas_checkpoint_chunk_t *gas = calloc(1, sizeof(*gas));
+    ASSERT_TRUE(chunk && gas && structure_time_gpu(&view.gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
     view.save = dc_world_save_open(directory, err, sizeof(err));
     view.stream = dc_stream_create(directory, 42, 4);
@@ -263,10 +265,18 @@ static void test_dormant_clock_uses_the_authoritative_structure_channels(void) {
         uint64_t request;
         ASSERT_TRUE(dc_chunk_table_begin_load(&view.table, coords[i], &slot, &request));
         ASSERT_TRUE(dc_gpu_upload_chunk(view.gpu, slot, chunk, err, sizeof(err)));
+        for (uint32_t cell = 0; cell < DC_CHUNK_CELLS; ++cell) {
+            const float volume = chunk->cells[cell].material == DC_MATERIAL_STONE ? 0.f : 1.f;
+            gas->cells[cell][FR_GAS_CHECKPOINT_VOLUME_WORD] = volume;
+            gas->cells[cell][FR_GAS_CHECKPOINT_PREVIOUS_VOLUME_WORD] = volume;
+        }
+        ASSERT_TRUE(fr_gas_gpu_import_checkpoint(view.gpu, slot, gas, err, sizeof(err)));
+        view.gas_admitted[slot] = true;
         ASSERT_TRUE(dc_chunk_table_finish_load(&view.table, slot, request));
         view.table.slots[slot].time = (dc_chunk_time_t){2. + i, true};
     }
-    ASSERT_TRUE(fr_gpu_save_structure_with_chunk_times(view.gpu, path, &view.table, err, sizeof(err)));
+    ASSERT_TRUE(fr_gpu_save_level_structure(view.gpu, path, &view.table, view.gas_admitted,
+        err, sizeof(err)));
     for (uint32_t i = 0; i < 2u; ++i) {
         chunk->coord = coords[i];
         chunk->cells[center].fluid_mass = i ? 0u : 10000u;
@@ -283,6 +293,7 @@ static void test_dormant_clock_uses_the_authoritative_structure_channels(void) {
 
     view.gpu = NULL;
     ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
     ASSERT_TRUE(dc_world_save_load_clock(view.save, &view.world_seconds, err, sizeof(err)));
     ASSERT_TRUE(fr_gpu_load_structure(view.gpu, path, err, sizeof(err)));
@@ -299,6 +310,7 @@ static void test_dormant_clock_uses_the_authoritative_structure_channels(void) {
     dc_gpu_destroy(view.gpu);
     dc_chunk_table_destroy(&view.table);
     dc_world_save_close(view.save);
+    free(gas);
     free(chunk);
     PASS();
 }
