@@ -1,7 +1,7 @@
 ---
 id: ctowt-7388
 status: in_progress
-deps: [ctowt-o11u, ctowp-v2rf, ctowtb-yr4g, ctowtb-kz7x, ctowd-09br, ctowc-ccrm]
+deps: [ctowt-o11u, ctowp-v2rf, ctowtb-yr4g, ctowtb-kz7x, ctowd-09br, ctowc-ccrm, ctowpe-bs8y]
 links: []
 created: 2026-11-27T06:30:47Z
 type: task
@@ -54,3 +54,7 @@ The level tick path now binds adjacent admitted structure-workspace tiles to the
 **2026-11-27T10:44:34Z**
 
 Two camera evictions and returns now match an independent monolithic simulation for per-cell water mass, face velocity and pigment. The test pans back during a partial phase with an elapsed tick queued. A dry returning tile is eligible when its connected resident neighbor holds water. Camera admission with a failed workspace load and an eviction initiated midway through an ordinary resident cycle still need coverage.
+
+**2026-11-27T10:58:36Z**
+
+Verified eviction halfway through resident pressure work on Xephyr :93 against a monolithic GPU solve. Repeated pans exposing a region with an older confirmed clock reject atomically and retain the elapsed tick. Tracked recovery in ctowpe-bs8y.
