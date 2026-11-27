@@ -28,3 +28,7 @@ This closes the known gap between worker-only cold return and the structure-chec
 **2026-11-27T01:19:42Z**
 
 The RTX A2000 staged reopen passed with core and synchronization validation and no errors. The fixture committed deliberately conflicting stream records, chose embedded stock and its 15.5 s timestamp, then resaved while two chunks remained pending. A second reopen restored known zero, 15.5 s, and unknown alongside all three correct materials. Three clock encoding checks passed normally and under sanitizers; twelve level cases and four world-save cases passed. Version 8 and 9 clock absence remains explicit. The initial native test reported a duplicate color cleanup, which was removed before the passing rerun.
+
+**2026-11-27T01:49:58Z**
+
+The downstream full-suite prebuild found one reactive-particle test calling the old private upload signature. The fixture now calls the stable public structure upload wrapper. Both headless and display variants compile with warnings treated as errors.
