@@ -22,3 +22,7 @@ Native transport does not modify terrain component labels. GPU transport/referen
 **2026-11-27T16:07:10Z**
 
 Verified RED on the real native water recorder: terrain component labels changed. GREEN has dedicated device-local prefix and tree buffers, retaining mapped terrain labels and the seam descriptor ABI. After repairing the missing incremental build prerequisites for projection and transport, synchronization validation reported zero errors on the native label isolation and both native/seam equivalence cases (3/3). All four direct aperture and ten transport reference tests passed. On the same half-native capture, downward setup was 0.1258/0.1255 ms, versus 15.7854/15.6426 ms in the matched staging baseline. The 16-owner near diagnostic averaged 95.012 ms, p95 121.770 ms. Additional saturated camera bands, final regression runs and full-suite verification are underway.
+
+**2026-11-27T16:14:48Z**
+
+The half-native production run with dedicated scratch completed all distance bands at 16 owners and the required 2.000000104 s simulated time per 60 measured frames. Near, middle, and far mean/p95 in ms were 87.039/121.872, 81.341/118.999, and 79.254/115.278. Before dedicated scratch these were 97.241/126.275, 94.972/132.820, and 98.886/134.871. The synchronized coupled-owner suite passed all 15 cases, including gas, grains, heat, bulk and water, and the graphical heated-water return passed. The 30 FPS parent gate remains open.
