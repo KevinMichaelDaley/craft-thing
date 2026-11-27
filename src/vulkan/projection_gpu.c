@@ -102,13 +102,14 @@ void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
     const VkDescriptorSet sets[] = {gpu->descriptor, gpu->pressure_work_descriptor};
     uint32_t push[7] = {gpu->width, gpu->height, 0u, 1u, 0u,
                         dc_gpu_float_bits(gpu->fluid_step_scale), 0u};
+    const uint32_t slots = dc_gpu_water_slot_extent(gpu);
     for (uint32_t pass = first; pass < stop; ++pass) {
         push[2] = pressure_phase(pass);
         bool sparse = gpu->pressure_work_enabled && (push[2] == 1u || push[2] == 2u);
         push[3] = !sparse;
         push[4] = sparse;
         push[6] = sparse;
-        record_projection_pass(gpu, sets, push, dc_gpu_water_slot_extent(gpu));
+        record_projection_pass(gpu, sets, push, slots);
         if (gpu->pressure_work_enabled && pass == 0u) record_pressure_stencil(gpu);
     }
 }

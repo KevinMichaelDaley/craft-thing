@@ -182,6 +182,35 @@ static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terra
     }
     free(a);free(b);dc_gpu_destroy(sparse);dc_gpu_destroy(dense);PASS();
 }
+static dc_gpu_t *traced_workspace;
+static VkPipeline traced_pipeline;
+static uint32_t expected_slots, pressure_dispatches, mass_dispatches, wrong_dispatches;
+
+void __real_vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline);
+void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point, VkPipeline pipeline) {
+    traced_pipeline = pipeline;
+    __real_vkCmdBindPipeline(command, point, pipeline);
+}
+
+void __real_vkCmdDispatch(VkCommandBuffer, uint32_t, uint32_t, uint32_t);
+void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint32_t z) {
+    if (traced_workspace) {
+        dc_gpu_t *g = traced_workspace;
+        bool pressure = traced_pipeline == g->projection_pipeline;
+        for (unsigned i = 0; i < 7; ++i)
+            pressure |= traced_pipeline == g->projection_phase_pipelines[i];
+        bool mass = traced_pipeline == g->fluid_pipeline;
+        for (unsigned i = 4; i <= 10; ++i)
+            mass |= traced_pipeline == g->fluid_phase_pipelines[i];
+        if (pressure || mass) {
+            wrong_dispatches += z != expected_slots;
+            pressure_dispatches += pressure;
+            mass_dispatches += mass;
+        }
+    }
+    __real_vkCmdDispatch(command, x, y, z);
+}
+
 static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
     enum { SIDE = DC_CHUNK_SIDE * 3, PIXELS = SIDE * SIDE };
     const char *shader = "build/shaders/pattern.comp.spv";
@@ -207,9 +236,21 @@ static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
             if (round < 2)
                 ASSERT_TRUE(dc_gpu_upload_chunk(g, slot, chunks, err, sizeof(err)));
             ASSERT_TRUE(dc_gpu_set_page(g, tile, 0, round == 2 ? UINT32_MAX : slot, err, sizeof(err)));
+            if (g == workspace) {
+                expected_slots = round == 1 ? 6 : 1;
+                pressure_dispatches = mass_dispatches = wrong_dispatches = 0;
+                traced_workspace = g;
+            }
             /* Two full cycles return cached command selection to the same parity. */
             for (unsigned cycle = 0; cycle < 2; ++cycle)
                 ASSERT_TRUE(dc_gpu_fluid_step(g, err, sizeof(err)));
+            traced_workspace = NULL;
+            if (g == workspace) {
+                printf("Mapped slot extent %u: %u pressure, %u mass, %u wrong-depth dispatches\n",
+                       expected_slots, pressure_dispatches, mass_dispatches, wrong_dispatches);
+                ASSERT_TRUE(pressure_dispatches && mass_dispatches);
+                ASSERT_EQ(wrong_dispatches, 0u);
+            }
             ASSERT_TRUE(pressure_snapshot(g, pressure + owner * PIXELS, err, sizeof(err)));
         }
         ASSERT_EQ(resident->fluid_tick, workspace->fluid_tick);
