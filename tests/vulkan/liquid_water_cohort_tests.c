@@ -467,7 +467,7 @@ cleanup:
     free(identity);
 }
 
-static void check_bulk_crossing(bool vertical, bool reverse) {
+static void check_bulk_crossing(bool vertical, bool reverse, bool moving_body) {
     const char shader[] = "build/shaders/pattern.comp.spv";
     dc_gpu_t *owners[2] = {0}, *mono = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *native = calloc(1, sizeof(*native));
@@ -549,7 +549,7 @@ static void check_bulk_crossing(bool vertical, bool reverse) {
                 dc_gpu_body_t body = {.x_fp = 63 * DC_FLUID_FULL, .y_fp = 30 * DC_FLUID_FULL + DC_FLUID_FULL/2,
                     .width = 1, .height = 1, .id = 202, .active = 1};
                 ASSERT_TRUE(dc_gpu_spawn_body(g, body, g_err, sizeof(g_err)) &&
-                    dc_gpu_set_body_motion(g, 202, 0, 0, DC_GPU_BODY_KINEMATIC, g_err, sizeof(g_err)));
+                    dc_gpu_set_body_motion(g, 202, 0, 0, moving_body ? 0u : DC_GPU_BODY_KINEMATIC, g_err, sizeof(g_err)));
             }
             ASSERT_TRUE(dc_gpu_rigid_step(g, g_err, sizeof(g_err)));
         }
@@ -560,6 +560,22 @@ static void check_bulk_crossing(bool vertical, bool reverse) {
         g_lose_ack = tick == 1u;
         ASSERT_EQ(dc_gpu_tick_water_cohort(endpoints, 2, elapsed[tick], g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
         ASSERT_TRUE(!g_lose_ack);
+        if (reverse) {
+            dc_gpu_body_t actual, reference;
+            dc_gpu_body_motion_t actual_motion, reference_motion;
+            ASSERT_TRUE(dc_gpu_read_body_id(owners[0], 202, &actual, g_err, sizeof(g_err)) &&
+                        dc_gpu_read_body_id(mono, 202, &reference, g_err, sizeof(g_err)) &&
+                        dc_gpu_read_body_motion(owners[0], 202, &actual_motion, g_err, sizeof(g_err)) &&
+                        dc_gpu_read_body_motion(mono, 202, &reference_motion, g_err, sizeof(g_err)));
+            if (memcmp(&actual, &reference, sizeof(actual)))
+                fprintf(stderr, "tick %u split body (%d,%d) velocity (%d,%d), native (%d,%d) velocity (%d,%d)\n",
+                    tick, actual.x_fp, actual.y_fp, actual.vx_fp, actual.vy_fp,
+                    reference.x_fp, reference.y_fp, reference.vx_fp, reference.vy_fp);
+            ASSERT_EQ(memcmp(&actual, &reference, sizeof(actual)), 0);
+            ASSERT_EQ(actual_motion.angle, reference_motion.angle);
+            ASSERT_EQ(actual_motion.angular_velocity, reference_motion.angular_velocity);
+            if (moving_body && tick == 2u) ASSERT_TRUE(reference.vx_fp || reference.vy_fp);
+        }
         for (unsigned i = 0; i < 2; ++i) {
             ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(mono, i, expected, g_err, sizeof(g_err)) &&
                         fr_bulk_phase_gpu_export_chunk(owners[i], 0, phase, g_err, sizeof(g_err)));
@@ -612,20 +628,24 @@ cleanup:
     dc_gpu_destroy(owners[0]);
     free(native); free(chunk); free(phase); free(expected);
 }
-static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) { check_bulk_crossing(false, false); }
-static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_bulk_crossing(true, false); }
-static void test_reverse_bulk_flow_conducts_heat_across_the_west_face(void) { check_bulk_crossing(false, true); }
+static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) { check_bulk_crossing(false, false, false); }
+static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_bulk_crossing(true, false, false); }
+static void test_reverse_bulk_flow_conducts_heat_across_the_west_face(void) { check_bulk_crossing(false, true, false); }
+static void test_moving_body_receives_shared_liquid_feedback(void) { check_bulk_crossing(false, true, true); }
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
     } else if (argc == 2 && strcmp(argv[1], "--cadence-clock") == 0) {
         RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
+    } else if (argc == 2 && strcmp(argv[1], "--moving-body") == 0) {
+        RUN(test_moving_body_receives_shared_liquid_feedback);
     } else if (argc == 2 && strcmp(argv[1], "--bulk") == 0) {
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
         RUN(test_reverse_bulk_flow_conducts_heat_across_the_west_face);
     } else if (argc == 1) {
+        RUN(test_moving_body_receives_shared_liquid_feedback);
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
         RUN(test_reverse_bulk_flow_conducts_heat_across_the_west_face);
