@@ -35,12 +35,15 @@ layout(set = 0, binding = 23, std430) buffer SecondHeat { float second_heat[]; }
 layout(set = 0, binding = 24, std430) buffer SecondMarkers { uvec4 second_markers[]; };
 layout(set = 0, binding = 25, std430) buffer SecondMarkerCounts { uint second_marker_counts[]; };
 layout(set = 0, binding = 26, std430) buffer SecondMarkerGrid { uint second_marker_grid[]; };
+layout(set = 0, binding = 27, std430) buffer FirstBulk { uint first_bulk[]; };
+layout(set = 0, binding = 28, std430) buffer SecondBulk { uint second_bulk[]; };
 
 struct Location { uint slot, x, y, width, scratch_x, scratch_y, context; };
 layout(set = 0, binding = 12, std430) readonly buffer Tiles { Location locations[]; };
-layout(push_constant) uniform Params { uint width, height, tiles, thermal, markers; } params;
+layout(push_constant) uniform Params { uint width, height, tiles, thermal, markers, shared_bulk; } params;
 
 shared uint invalid, before_low, before_high, after_low, after_high;
+shared uvec4 bulk_sums[2];
 
 void add_stock(inout uvec2 total, uint mass) {
     uint carry;
@@ -98,16 +101,35 @@ void main() {
         before_high = 0u;
         after_low = 0u;
         after_high = 0u;
+        bulk_sums[0] = bulk_sums[1] = uvec4(0);
     }
     barrier();
 
     uvec2 before = uvec2(0), after = uvec2(0);
+    uvec2 old_bulk[2] = uvec2[2](uvec2(0), uvec2(0));
+    uvec2 new_bulk[2] = uvec2[2](uvec2(0), uvec2(0));
     bool valid = true;
     for (uint atlas = lane; atlas < params.tiles * CELLS; atlas += gl_WorkGroupSize.x) {
         const uint tile = atlas / CELLS, local = atlas % CELLS;
         const Location owner = locations[tile];
         const uint grid = scratch_grid(owner, uvec2(local % SIDE, local / SIDE));
         valid = valid_cell(atlas, tile, local, owner, grid) && valid;
+        if (params.shared_bulk != 0u) {
+            uint base = tile * FR_BULK_CHUNK_CHANNELS * CELLS + local;
+            uint live_base = owner.slot * FR_BULK_CHUNK_CHANNELS * CELLS + local;
+            for (uint k = 0u; k < FR_BULK_CHUNK_CHANNELS; ++k) {
+                uint word = bulk[base + k * CELLS];
+                if (k < 2u) {
+                    uint live = live_base + k * CELLS;
+                    add_stock(old_bulk[k], owner.context == 0u ? first_bulk[live] : second_bulk[live]);
+                    add_stock(new_bulk[k], word);
+                    valid = valid && word <= FULL && bulk[base + (k+2u) * CELLS] <= word;
+                } else if (k >= FR_BULK_VOLUME_CHANNELS) {
+                    float value = uintBitsToFloat(word);
+                    valid = valid && !isnan(value) && !isinf(value);
+                }
+            }
+        }
         add_stock(before, min(FULL, initial_cells[atlas].y));
         add_stock(after, min(FULL, final_cells[atlas].y));
     }
@@ -116,10 +138,19 @@ void main() {
     const uint old_after = atomicAdd(after_low, after.x);
     atomicAdd(before_high, before.y + uint(old_before > 0xffffffffu - before.x));
     atomicAdd(after_high, after.y + uint(old_after > 0xffffffffu - after.x));
+    if (params.shared_bulk != 0u) {
+        for (uint k = 0u; k < 2u; ++k) {
+            uint lo = atomicAdd(bulk_sums[k].x, old_bulk[k].x);
+            atomicAdd(bulk_sums[k].y, old_bulk[k].y + uint(lo > 0xffffffffu - old_bulk[k].x));
+            lo = atomicAdd(bulk_sums[k].z, new_bulk[k].x);
+            atomicAdd(bulk_sums[k].w, new_bulk[k].y + uint(lo > 0xffffffffu - new_bulk[k].x));
+        }
+    }
     /* A single workgroup finishes the entire preflight before any owner stores. */
     barrier();
 
-    if (invalid != 0u || before_low != after_low || before_high != after_high) {
+    if (invalid != 0u || before_low != after_low || before_high != after_high ||
+        bulk_sums[0].xy != bulk_sums[0].zw || bulk_sums[1].xy != bulk_sums[1].zw) {
         if (lane == 0u) receipt = DC_LIQUID_RECEIPT_REJECTED;
         return;
     }
@@ -134,6 +165,14 @@ void main() {
         const uint grid = scratch_grid(owner, point);
         const uint marker = owner.slot * MARKER_CAPACITY + local;
         const uint scratch_marker = tile * MARKER_CAPACITY + local;
+        if (params.shared_bulk != 0u) {
+            for (uint k = 0u; k < FR_BULK_CHUNK_CHANNELS; ++k) {
+                uint value = bulk[(tile * FR_BULK_CHUNK_CHANNELS + k) * CELLS + local];
+                uint target = (owner.slot * FR_BULK_CHUNK_CHANNELS + k) * CELLS + local;
+                if (second) second_bulk[target] = value;
+                else first_bulk[target] = value;
+            }
+        }
         if (second) {
             second_cells[live].y = final_cells[atlas].y;
             second_color[live] = final_color[atlas];

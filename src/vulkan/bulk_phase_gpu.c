@@ -83,8 +83,8 @@ static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
 bool dc_gpu_ensure_bulk_phase_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap) {
     return gpu&&ensure_pipeline(gpu,err,cap);
 }
-void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
-    if(!gpu->bulk_phase_work_possible||!gpu->bulk_phase_pipeline||seconds<=0.f) return;
+void dc_gpu_record_bulk_domain(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    uint32_t width, uint32_t height, float seconds) {
     const fr_reactive_profile_t *water=fr_reactive_profile(DC_MATERIAL_WATER);
     const fr_reactive_profile_t *oil=fr_reactive_profile(DC_MATERIAL_OIL);
     const fr_reactive_profile_t *slime=fr_reactive_profile(DC_MATERIAL_RED_SLIME_JELLY);
@@ -98,9 +98,9 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
     vkCmdPipelineBarrier2(gpu->command,&dependency);
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,gpu->bulk_phase_pipeline);
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
+        gpu->pipeline_layout,0,1,&descriptor,0,NULL);
     fr_bulk_pair_push_t push={
-        gpu->width,gpu->height,0,0,seconds,FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED,
+        width,height,0,0,seconds,FR_BULK_GRAVITY_CELLS_PER_SECOND_SQUARED,
         water->density,oil->density,slime->density,
         oil->yield_stress,slime->yield_stress,oil->consistency,slime->consistency,
         oil->shear_exponent,slime->shear_exponent,oil->softening_K,slime->softening_K,
@@ -110,27 +110,35 @@ void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
         push.parity=parity;push.axis=axis;
         vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
             0,sizeof(push),&push);
-        vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
+        vkCmdDispatch(gpu->command,(width*height+63u)/64u,1,1);
         vkCmdPipelineBarrier2(gpu->command,&dependency);
     }
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->bulk_phase_retained_pipeline);
     vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
         0,2u*sizeof(uint32_t),&push);
-    vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
+    vkCmdDispatch(gpu->command,(width*height+63u)/64u,1,1);
     if(gpu->thermal) {
         vkCmdPipelineBarrier2(gpu->command,&dependency);
         struct {uint32_t width,height;float seconds,cw,co,cs,kw,ko,ks;} thermal={
-            gpu->width,gpu->height,seconds,water->heat_capacity,oil->heat_capacity,
+            width,height,seconds,water->heat_capacity,oil->heat_capacity,
             slime->heat_capacity,water->conductivity,oil->conductivity,slime->conductivity};
         vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
             gpu->bulk_phase_thermal_pipeline);
         vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
             0,sizeof(thermal),&thermal);
-        vkCmdDispatch(gpu->command,(gpu->width*gpu->height+63u)/64u,1,1);
+        vkCmdDispatch(gpu->command,(width*height+63u)/64u,1,1);
     }
+}
+void dc_gpu_mark_bulk_step(dc_gpu_t *gpu) {
+    gpu->bulk_phase_work_possible=true;
     gpu->fluid_snapshot_valid=false;gpu->fluid_work_possible=true;
     fr_gas_gpu_geometry_changed(gpu,false);
+}
+void dc_gpu_record_bulk_phase(dc_gpu_t *gpu,float seconds) {
+    if(!gpu->bulk_phase_work_possible||!gpu->bulk_phase_pipeline||seconds<=0.f) return;
+    dc_gpu_record_bulk_domain(gpu,gpu->descriptor,gpu->width,gpu->height,seconds);
+    dc_gpu_mark_bulk_step(gpu);
 }
 bool fr_bulk_phase_gpu_step(dc_gpu_t *gpu,float seconds,char *err,uint32_t cap) {
     if(!gpu||!isfinite(seconds)||seconds<0.f)

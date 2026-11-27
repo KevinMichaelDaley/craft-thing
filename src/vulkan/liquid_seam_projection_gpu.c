@@ -18,6 +18,7 @@ typedef struct {
     const dc_liquid_seam_endpoint_t *tiles;
     const dc_gpu_water_tile_t *locations;
     uint32_t count, width, height;
+    bool bulk;
 } water_domain_t;
 
 static bool error(char *err, uint32_t cap, const char *message) {
@@ -259,7 +260,7 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
         error(err, cap, "Liquid seam owners have different marker correction settings or parity");
         return DC_LIQUID_SEAM_REJECTED;
     }
-    if (schedule && schedule->phase_count == 0u) {
+    if (schedule && schedule->phase_count == 0u && !domain->bulk) {
         commit_water_clock(gpu, schedule);
         commit_water_clock(peer, schedule);
         return DC_LIQUID_SEAM_COMMITTED;
@@ -322,8 +323,14 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
         axis == DC_LIQUID_SEAM_X ? DC_WATER_SEAM_HORIZONTAL : DC_WATER_SEAM_VERTICAL;
     if (transport) record_water_phases(gpu, scratch, range, occupancy, seam_axis, plan != NULL);
     else dc_gpu_record_dense_projection(gpu, scratch->sets, width, height, full.step_scale, 0u, DC_PRESSURE_PASS_COUNT);
-    if (publish)
-        dc_gpu_record_water_publication(gpu, &scratch->publication, width, height, count, thermal, cycles != 0u);
+    if (domain->bulk) dc_gpu_record_bulk_domain(gpu, scratch->sets[0], width, height, seconds);
+    if (publish) {
+        if (domain->bulk) fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        dc_gpu_record_water_publication(gpu, &scratch->publication, width, height, count, thermal,
+                                        cycles != 0u, domain->bulk);
+    }
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
@@ -360,7 +367,7 @@ static dc_liquid_seam_result_t run_seam(dc_liquid_seam_endpoint_t first, dc_liqu
     const dc_gpu_water_tile_t locations[] = {tile_location(first, 0, 0, 0),
         tile_location(second, !vertical, vertical, 1)};
     const water_domain_t domain = {first.gpu, second.gpu, endpoints, locations, SEAM_TILES,
-        DC_CHUNK_SIDE * (1u + !vertical), DC_CHUNK_SIDE * (1u + vertical)};
+        DC_CHUNK_SIDE * (1u + !vertical), DC_CHUNK_SIDE * (1u + vertical), false};
     return run_water_domain(&domain, axis, seconds, previous_normal, samples, plan, publish, NULL, err, cap);
 }
 
@@ -436,7 +443,7 @@ static bool cohort_domain(const dc_liquid_seam_endpoint_t *tiles, uint32_t count
             (uint32_t)((uint64_t)tiles[tile].coord.y - (uint64_t)min.y), tiles[tile].gpu == peer);
     if (!connected_tiles(locations, count)) return false;
     *domain = (water_domain_t){gpu, peer, tiles, locations, count,
-        ((uint32_t)dx + 1u) * DC_CHUNK_SIDE, ((uint32_t)dy + 1u) * DC_CHUNK_SIDE};
+        ((uint32_t)dx + 1u) * DC_CHUNK_SIDE, ((uint32_t)dy + 1u) * DC_CHUNK_SIDE, false};
     return true;
 }
 
@@ -481,6 +488,9 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
         error(err, cap, "Paired tick requires complete, aligned owner mappings");
         return DC_LIQUID_SEAM_REJECTED;
     }
+    domain.bulk = gpu->bulk_phase_work_possible || peer->bulk_phase_work_possible;
+    if (domain.bulk && (!dc_gpu_ensure_bulk_phase_pipeline(gpu, err, cap) ||
+                        !dc_gpu_ensure_bulk_phase_pipeline(peer, err, cap))) return DC_LIQUID_SEAM_REJECTED;
     if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, true, err, cap)) {
         dc_liquid_seam_result_t result = run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds,
             NULL, NULL, NULL, true, &schedule, err, cap);
@@ -488,8 +498,13 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
             result = dc_gpu_resolve_liquid_seam(gpu, peer, err, cap);
             if (result == DC_LIQUID_SEAM_COMMITTED && err && cap) err[0] = '\0';
         }
-        if (result == DC_LIQUID_SEAM_COMMITTED &&
-            dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, false, err, cap)) return result;
+        if (result == DC_LIQUID_SEAM_COMMITTED) {
+            if (domain.bulk) {
+                dc_gpu_mark_bulk_step(gpu);
+                dc_gpu_mark_bulk_step(peer);
+            }
+            if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, false, err, cap)) return result;
+        }
     }
     gpu->liquid_seam_orphaned = peer->liquid_seam_orphaned = true;
     return DC_LIQUID_SEAM_UNCONFIRMED;

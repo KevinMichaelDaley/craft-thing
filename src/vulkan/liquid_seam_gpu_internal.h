@@ -45,6 +45,6 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
     fr_renderer_compute_t *compute, const VkDescriptorBufferInfo scratch[DC_WATER_PUBLICATION_SCRATCH_BINDINGS],
     char *err, uint32_t cap);
 void dc_gpu_record_water_publication(dc_gpu_t *gpu, const fr_renderer_compute_t *compute,
-    uint32_t width, uint32_t height, uint32_t tiles, bool thermal, bool markers);
+    uint32_t width, uint32_t height, uint32_t tiles, bool thermal, bool markers, bool bulk);
 
 #endif

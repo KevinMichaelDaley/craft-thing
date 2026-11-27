@@ -4,16 +4,17 @@
 #include "thermal_gpu_internal.h"
 
 typedef struct {
-    uint32_t width, height, tiles, thermal, markers;
+    uint32_t width, height, tiles, thermal, markers, bulk;
 } water_publication_push_t;
 
-_Static_assert(sizeof(water_publication_push_t) == 5u * sizeof(uint32_t), "Water publication push mismatch");
+_Static_assert(sizeof(water_publication_push_t) == 6u * sizeof(uint32_t), "Water publication push mismatch");
 _Static_assert(sizeof(dc_gpu_water_tile_t) == 7u * sizeof(uint32_t), "Water publication tile layout mismatch");
 
 bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
     fr_renderer_compute_t *compute, const VkDescriptorBufferInfo scratch[DC_WATER_PUBLICATION_SCRATCH_BINDINGS],
     char *err, uint32_t cap) {
-    enum { OWNER_BINDINGS = 7u, BINDINGS = DC_WATER_PUBLICATION_SCRATCH_BINDINGS + 2u * OWNER_BINDINGS };
+    enum { OWNER_BINDINGS = 7u, BULK_BINDING = DC_WATER_PUBLICATION_SCRATCH_BINDINGS + 2u * OWNER_BINDINGS,
+           BINDINGS = BULK_BINDING + 2u };
     VkDescriptorBufferInfo buffers[BINDINGS];
     memcpy(buffers, scratch, DC_WATER_PUBLICATION_SCRATCH_BINDINGS * sizeof(*buffers));
     const dc_gpu_t *owners[] = {gpu, peer};
@@ -29,6 +30,7 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
         out[4] = (VkDescriptorBufferInfo){markers.records, 0, VK_WHOLE_SIZE};
         out[5] = (VkDescriptorBufferInfo){markers.counts, 0, VK_WHOLE_SIZE};
         out[6] = (VkDescriptorBufferInfo){owner->marker_grid_buffer, 0, VK_WHOLE_SIZE};
+        buffers[BULK_BINDING + i] = (VkDescriptorBufferInfo){owner->bulk_phase_buffer, 0, VK_WHOLE_SIZE};
     }
     if (compute->pipeline) {
         dc_gpu_seam_bind_buffers(gpu, compute->descriptor, buffers, BINDINGS);
@@ -43,8 +45,8 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
 }
 
 void dc_gpu_record_water_publication(dc_gpu_t *gpu, const fr_renderer_compute_t *compute,
-    uint32_t width, uint32_t height, uint32_t tiles, bool thermal, bool markers) {
-    const water_publication_push_t push = {width, height, tiles, thermal, markers};
+    uint32_t width, uint32_t height, uint32_t tiles, bool thermal, bool markers, bool bulk) {
+    const water_publication_push_t push = {width, height, tiles, thermal, markers, bulk};
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         compute->pipeline_layout, 0, 1, &compute->descriptor, 0, NULL);

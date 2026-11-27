@@ -142,7 +142,6 @@ bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float se
         if (!fr_renderer_begin(gpu)) return error(err, cap, "Cannot record paired owner physics");
         if (before_water) record_before_water(gpu);
         else {
-            dc_gpu_record_bulk_phase(gpu, seconds);
             record_particles_and_heat(gpu);
         }
         stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);

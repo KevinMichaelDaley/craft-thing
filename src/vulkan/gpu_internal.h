@@ -618,6 +618,9 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu);
 bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float seconds,
     bool before_water, char *err, uint32_t cap);
 void dc_gpu_record_bulk_phase(dc_gpu_t *gpu, float seconds);
+void dc_gpu_record_bulk_domain(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    uint32_t width, uint32_t height, float seconds);
+void dc_gpu_mark_bulk_step(dc_gpu_t *gpu);
 bool dc_gpu_ensure_bulk_phase_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_liquid_seam_destroy(dc_gpu_t *gpu);
 void dc_gpu_seam_projection_destroy(dc_gpu_t *gpu);
