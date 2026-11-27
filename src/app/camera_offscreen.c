@@ -281,6 +281,22 @@ static bool camera_needs_chunk(const dc_level_view_t *view, dc_chunk_coord_t coo
         (view->transfer_pending && same_coord(view->transfer_to, coord));
 }
 
+static uint64_t axis_distance(int64_t coordinate, int64_t origin, unsigned width) {
+    if (coordinate < origin) return (uint64_t)origin - (uint64_t)coordinate;
+    uint64_t offset = (uint64_t)coordinate - (uint64_t)origin;
+    return offset < width ? 0u : offset - width + 1u;
+}
+
+/* Cadence in nominal 60 Hz world ticks. Zero denotes a dormant room. */
+static unsigned room_period(dc_chunk_coord_t coord, dc_chunk_coord_t origin) {
+    uint64_t dx = axis_distance(coord.x, origin.x, VIEW_CHUNKS_X);
+    uint64_t dy = axis_distance(coord.y, origin.y, VIEW_CHUNKS_Y);
+    if (dx <= VIEW_CHUNKS_X && dy <= VIEW_CHUNKS_Y) return 4u;
+    if (dx <= 2u * VIEW_CHUNKS_X && dy <= 2u * VIEW_CHUNKS_Y) return 12u;
+    if (dx <= 4u * VIEW_CHUNKS_X && dy <= 4u * VIEW_CHUNKS_Y) return 24u;
+    return 0u;
+}
+
 static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, bool closing,
     char *err, uint32_t cap) {
     if (camera->bond) return dc_camera_bond_service(view, closing, err, cap);
@@ -291,7 +307,13 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
     bool coupled = camera->water_face != 0u;
     bool required = coupled || camera->rigid_group;
     bool attached = coupled && face_in_view(view, camera->coord, camera->water_face);
+    unsigned period = room_period(camera->coord, view->origin);
+    if (camera->parking && !dc_level_offscreen_owns(view, camera->coord)) {
+        dc_camera_offscreen_retry(camera);
+        camera->parking = false;
+    }
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
+        if (!required && !needed && !period && !closing) return true;
         if (closing || (coupled ? !attached : !independent) || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
             (needed && camera->time.seconds >= view->world_seconds)) {
             dc_camera_offscreen_release(camera);
@@ -326,7 +348,13 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
             return dc_level_offscreen_publish(view, camera->coord, camera->generation, err, cap);
         return true;
     }
-    if (!closing && independent && !dc_offscreen_advance(camera->workspace,
+    if (!closing && independent && !needed && !period) {
+        camera->time = time;
+        camera->parking = dc_level_offscreen_publish(view, camera->coord, camera->generation, err, cap);
+        return camera->parking;
+    }
+    bool due = needed || view->world_seconds - time.seconds >= period / 60.;
+    if (!closing && independent && due && !dc_offscreen_advance(camera->workspace,
         view->world_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
         if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
             dc_camera_offscreen_release(camera);
