@@ -39,12 +39,17 @@ bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {
 #define PASS() ++g_pass
 
 enum { FORWARD = 12, REVERSE = 16, SHALLOW = 21, BLOCKED = 26, BACKPRESSURE = 31,
-       CORRECTION = 36, DONORS = 4 };
+       CORRECTION = 36, DISPLACEMENT = 40, RETAINED = 44, DONORS = 4 };
 static const uint32_t donor_stock = 49152u;
 static const VkDeviceSize pressure_bytes = 2u * DC_CHUNK_CELLS * sizeof(float);
+static const VkDeviceSize paired_cells_bytes = 2u * DC_CHUNK_CELLS * sizeof(dc_cell_t);
 
 static uint32_t index_on_line(bool y_axis, uint32_t normal, uint32_t lane, uint32_t width) {
     return y_axis ? normal * width + lane : lane * width + normal;
+}
+
+static uint32_t seam_cell(bool y_axis, uint32_t tile, uint32_t lane) {
+    return index_on_line(y_axis, tile ? 0u : DC_CHUNK_SIDE - 1u, lane, DC_CHUNK_SIDE);
 }
 
 static void seed_basin(dc_chunk_t *first, dc_chunk_t *second, fr_bulk_phase_chunk_t *bulk,
@@ -80,7 +85,11 @@ static void seed_basin(dc_chunk_t *first, dc_chunk_t *second, fr_bulk_phase_chun
         chunks[tile]->marker_count = 1;
         chunks[tile]->markers[0] = (dc_marker_t){
             y_axis ? lane : normal, y_axis ? normal : lane, 100u + tile, DC_MARKER_INSIDE};
+        chunks[tile]->cells[seam_cell(y_axis, tile, DISPLACEMENT)] =
+            (dc_cell_t){.material = DC_MATERIAL_AIR, .fluid_mass = tile == (uint32_t)y_axis ? donor_stock : 0u};
     }
+    chunks[y_axis]->cells[seam_cell(y_axis, y_axis, RETAINED)] =
+        (dc_cell_t){.material = DC_MATERIAL_AIR, .fluid_mass = donor_stock};
     if (!y_axis) {
         /* The dry pocket keeps the outside marker near a free surface. The earlier
          * wet cell wins seeding in its two-cell block, leaving the seam marker outside. */
@@ -148,6 +157,20 @@ static void seed_apertures(dc_gpu_t *gpu, bool y_axis, uint32_t x, uint32_t y) {
     }
 }
 
+static void seed_rigid_displacement(dc_gpu_t *gpu, bool y_axis, uint32_t x, uint32_t y) {
+    uint32_t *occupancy = gpu->occupancy_mapped;
+    const uint32_t cells = gpu->width * gpu->height;
+    const uint32_t normal = y_axis ? 0u : DC_CHUNK_SIDE - 1u;
+    const uint32_t base = y * gpu->width + x;
+    const uint32_t displaced = base + index_on_line(y_axis, normal, DISPLACEMENT, gpu->width);
+    const uint32_t retained = base + index_on_line(y_axis, normal, RETAINED, gpu->width);
+    occupancy[displaced] = 1u;
+    occupancy[retained] = 1u;
+    occupancy[2u * cells + displaced] = DC_FLUID_FULL;
+    occupancy[2u * cells + retained] = DC_FLUID_FULL;
+    gpu->rigid_occupancy_present = true;
+}
+
 static bool native_water_passes(dc_gpu_t *gpu, float step_seconds, VkBuffer pressure_readback) {
     gpu->fluid_step_scale = step_seconds * 60.f;
     gpu->timed_fluid = true;
@@ -156,13 +179,18 @@ static bool native_water_passes(dc_gpu_t *gpu, float step_seconds, VkBuffer pres
         VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_projection_begin(gpu);
+    fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+    const VkBufferCopy displaced = {.dstOffset = pressure_bytes, .size = paired_cells_bytes};
+    vkCmdCopyBuffer(gpu->command, gpu->chunk_buffer, pressure_readback, 1, &displaced);
+    fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COPY_BIT, 0,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 0);
     dc_gpu_record_pressure_passes(gpu, 0, DC_PRESSURE_PASS_COUNT);
-    gpu->rigid_occupancy_present = true;
     dc_gpu_record_fluid_transport(gpu, 0u, 5u);
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
     const VkBufferCopy pressure = {.size = pressure_bytes};
-    const VkBufferCopy advected = {.dstOffset = pressure_bytes, .size = 2u * DC_CHUNK_CELLS * sizeof(dc_cell_t)};
+    const VkBufferCopy advected = {.dstOffset = pressure_bytes + paired_cells_bytes, .size = paired_cells_bytes};
     vkCmdCopyBuffer(gpu->command, gpu->pressure_a_buffer, pressure_readback, 1, &pressure);
     vkCmdCopyBuffer(gpu->command, gpu->chunk_buffer, pressure_readback, 1, &advected);
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COPY_BIT, 0,
@@ -222,8 +250,19 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     }
     seed_apertures(owners[0].gpu, y_axis, DC_CHUNK_SIDE, 0);
     owners[0].gpu->rigid_occupancy_present = true;
+    const dc_liquid_seam_endpoint_t occupied = owners[y_axis];
+    seed_rigid_displacement(occupied.gpu, y_axis, occupied.tile_x * DC_CHUNK_SIDE,
+                            occupied.tile_y * DC_CHUNK_SIDE);
     ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
                                       plan, g_err, sizeof(g_err)));
+    const int32_t displaced_stock = y_axis ? -(int32_t)donor_stock : (int32_t)donor_stock;
+    ASSERT_INT_EQ(plan->displaced_fp[DISPLACEMENT], displaced_stock);
+    ASSERT_INT_EQ(plan->crossing_fp[DISPLACEMENT], displaced_stock);
+    ASSERT_INT_EQ(plan->advected_fp[DISPLACEMENT], 0);
+    ASSERT_EQ(plan->pressure_work[DISPLACEMENT], 0.f);
+    ASSERT_INT_EQ(plan->cells[y_axis][seam_cell(y_axis, y_axis, DISPLACEMENT)].final_fp, 0u);
+    ASSERT_INT_EQ(plan->cells[!y_axis][seam_cell(y_axis, !y_axis, DISPLACEMENT)].final_fp, donor_stock);
+    ASSERT_INT_EQ(plan->cells[y_axis][seam_cell(y_axis, y_axis, RETAINED)].final_fp, donor_stock);
 
     for (uint32_t i = 0; i < DONORS; ++i) {
         uint32_t first_donor = index_on_line(y_axis, 62u - i, FORWARD, DC_CHUNK_SIDE);
@@ -389,15 +428,18 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     for (unsigned owner = 0; owner < 2; ++owner)
         ASSERT_TRUE(upload_payload(mono, owner, chunks[owner], &colors[owner], heat[owner], y_axis));
     seed_apertures(mono, y_axis, 0, 0);
-    ASSERT_TRUE(dc_gpu_make_mapped_buffer(mono, pressure_bytes + 2u * DC_CHUNK_CELLS * sizeof(dc_cell_t),
+    seed_rigid_displacement(mono, y_axis, 0u, y_axis ? DC_CHUNK_SIDE : 0u);
+    ASSERT_TRUE(dc_gpu_make_mapped_buffer(mono, pressure_bytes + 2u * paired_cells_bytes,
                                          &readback, &memory, &mapped, g_err, sizeof(g_err)));
     ASSERT_TRUE(native_water_passes(mono, step_seconds, readback));
     double total_heat_initial = 0., total_heat_final = 0.;
     double pigment_initial[3] = {0}, pigment_final[3] = {0};
     int32_t stock_delta[2][DC_CHUNK_SIDE] = {{0}};
     int32_t crossing[2][DC_CHUNK_SIDE] = {{0}};
+    int32_t displaced_delta[DC_CHUNK_SIDE] = {0};
     int32_t advected_delta[DC_CHUNK_SIDE] = {0};
-    const dc_cell_t *advected = (const dc_cell_t *)((const char *)mapped + pressure_bytes);
+    const dc_cell_t *displaced = (const dc_cell_t *)((const char *)mapped + pressure_bytes);
+    const dc_cell_t *advected = displaced + 2u * DC_CHUNK_CELLS;
     g_err[0] = '\0';
     for (unsigned owner = 0; owner < 2; ++owner) {
         ASSERT_TRUE(dc_gpu_download_chunk(mono, owner, download, g_err, sizeof(g_err)));
@@ -437,9 +479,11 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
                 }
                 stock_delta[owner][lane] += (int32_t)cell.final_fp - (int32_t)cell.initial_fp;
                 crossing[owner][lane] += (int32_t)cell.crossing_in_fp - (int32_t)cell.crossing_out_fp;
-                if (owner == 1u)
-                    advected_delta[lane] += (int32_t)advected[DC_CHUNK_CELLS + index].fluid_mass -
-                                           (int32_t)cell.initial_fp;
+                if (owner == 1u) {
+                    const uint32_t atlas = DC_CHUNK_CELLS + index;
+                    displaced_delta[lane] += (int32_t)displaced[atlas].fluid_mass - (int32_t)cell.initial_fp;
+                    advected_delta[lane] += (int32_t)advected[atlas].fluid_mass - (int32_t)displaced[atlas].fluid_mass;
+                }
             }
     }
 
@@ -452,6 +496,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         ASSERT_INT_EQ(stock_delta[1][lane], crossing[1][lane]);
         ASSERT_INT_EQ(plan->crossing_fp[lane], -stock_delta[0][lane]);
         ASSERT_INT_EQ(plan->crossing_fp[lane], stock_delta[1][lane]);
+        ASSERT_INT_EQ(plan->displaced_fp[lane], displaced_delta[lane]);
         ASSERT_INT_EQ(plan->advected_fp[lane], advected_delta[lane]);
         const uint32_t a = index_on_line(y_axis, 63, lane, width);
         const uint32_t b = index_on_line(y_axis, 64, lane, width);

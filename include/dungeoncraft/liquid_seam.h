@@ -63,6 +63,8 @@ typedef struct {
     dc_liquid_seam_sample_t projection[DC_CHUNK_SIDE];
     /** Signed Q16 volume across each lane after advection and marker correction. */
     int32_t crossing_fp[DC_CHUNK_SIDE];
+    /** Signed Q16 volume across each lane during rigid displacement. */
+    int32_t displaced_fp[DC_CHUNK_SIDE];
     /** Signed Q16 volume across each lane during advection. */
     int32_t advected_fp[DC_CHUNK_SIDE];
     float pressure_work[DC_CHUNK_SIDE];
