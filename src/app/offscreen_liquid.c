@@ -100,7 +100,7 @@ static bool touches_resident(const dc_level_view_t *view, dc_chunk_coord_t coord
 
 typedef struct {
     uint64_t west, east, north, south;
-    bool active;
+    bool active, visited;
 } water_region_tile_t;
 
 /* Tiles on different clocks can share a dispatch when the only open paths
@@ -108,7 +108,7 @@ typedef struct {
 static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_seam_endpoint_t *tiles,
                                  uint32_t count, uint32_t residents, char *err, uint32_t cap) {
     water_region_tile_t regions[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS] = {0};
-    uint32_t queue[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS], queued = 0;
+    uint32_t queue[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS];
     _Static_assert(DC_CHUNK_SIDE == 64, "Water boundary mask needs one bit per cell");
     for (uint32_t t = 0; t < count; ++t) {
         dc_gpu_t *gpu = tiles[t].gpu;
@@ -132,20 +132,26 @@ static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_s
             if (!y) r->north |= UINT64_C(1) << x;
             if (y == DC_CHUNK_SIDE - 1u) r->south |= UINT64_C(1) << x;
         }
-        if (r->active) queue[queued++] = t;
     }
-    for (uint32_t next = 0; next < queued; ++next) {
-        uint32_t t = queue[next];
-        if (t < residents && view->table.slots[tiles[t].slot].time.seconds != view->world_seconds)
-            return false;
-        for (uint32_t n = 0; n < count; ++n) {
-            dc_liquid_seam_axis_t axis;
-            bool first;
-            if (regions[n].active || !shared_face(tiles[t].coord, tiles[n].coord, &axis, &first)) continue;
-            const water_region_tile_t *a = &regions[first ? t : n], *b = &regions[first ? n : t];
-            if (!(axis == DC_LIQUID_SEAM_X ? a->east & b->west : a->south & b->north)) continue;
-            regions[n].active = true;
-            queue[queued++] = n;
+    for (uint32_t seed = 0; seed < count; ++seed) {
+        if (regions[seed].visited || !regions[seed].active) continue;
+        const double epoch = seed < residents ? view->table.slots[tiles[seed].slot].time.seconds : view->world_seconds;
+        regions[seed].visited = true;
+        uint32_t queued = 1;
+        queue[0] = seed;
+        for (uint32_t next = 0; next < queued; ++next) {
+            uint32_t t = queue[next];
+            double owner_time = t < residents ? view->table.slots[tiles[t].slot].time.seconds : view->world_seconds;
+            if (owner_time != epoch) return false;
+            for (uint32_t n = 0; n < count; ++n) {
+                dc_liquid_seam_axis_t axis;
+                bool first;
+                if (regions[n].visited || !shared_face(tiles[t].coord, tiles[n].coord, &axis, &first)) continue;
+                const water_region_tile_t *a = &regions[first ? t : n], *b = &regions[first ? n : t];
+                if (!(axis == DC_LIQUID_SEAM_X ? a->east & b->west : a->south & b->north)) continue;
+                regions[n].visited = true;
+                queue[queued++] = n;
+            }
         }
     }
     return true;
