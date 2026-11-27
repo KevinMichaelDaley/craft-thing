@@ -11,10 +11,7 @@ dc_level_view_t *dc_level_view_create_smoke_box(const char *directory,uint64_t s
     dc_ground_profile_t ground={.width=1,.soil_depth=1,.surface=&surface};
     dc_level_view_t *view=dc_level_view_create_ground(directory,seed,&ground,err,cap);
     if(view&&dc_level_view_setup_smoke_box(view,err,cap)) return view;
-    if(view) {
-        dc_stream_destroy(view->stream);dc_gpu_destroy(view->gpu);
-        dc_chunk_table_destroy(&view->table);free(view);
-    }
+    dc_level_view_discard(view);
     return NULL;
 }
 static bool valve(dc_level_view_t *view,uint32_t index,bool closed,char *err,uint32_t cap) {
