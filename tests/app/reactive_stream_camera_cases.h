@@ -432,7 +432,7 @@ static void test_camera_heated_water_returns_with_its_energy(void) { check_camer
 static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(CAMERA_BULK); }
 static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(CAMERA_HEAT|CAMERA_BULK|CAMERA_REOPEN); }
 
-static void test_two_evicted_sealed_rooms_return_at_the_world_clock(void) {
+static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
     char directory[] = "build/camera_two_rooms_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -456,6 +456,21 @@ static void test_two_evicted_sealed_rooms_return_at_the_world_clock(void) {
         dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[0]));
     ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[1]));
+    if (sleep_and_prefetch) {
+        ASSERT_TRUE(dc_level_view_pan_pixels(view, 3 * VIEW_WIDTH, 0) &&
+            dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        uint64_t deadline = SDL_GetTicks64() + 5000u;
+        while ((dc_level_offscreen_owns(view, rooms[0]) || dc_level_offscreen_owns(view, rooms[1])) &&
+               SDL_GetTicks64() < deadline) {
+            ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+            SDL_Delay(1);
+        }
+        ASSERT_TRUE(!dc_level_offscreen_owns(view, rooms[0]) && !dc_level_offscreen_owns(view, rooms[1]));
+        ASSERT_TRUE(dc_level_view_pan_pixels(view, -3 * VIEW_WIDTH, 0) &&
+            dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        ASSERT_TRUE(!dc_level_chunk_visible(view, rooms[0]) && !dc_level_chunk_visible(view, rooms[1]));
+        ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[0]) && dc_level_offscreen_owns(view, rooms[1]));
+    }
     ASSERT_TRUE(dc_level_view_step_timed(view, .0625f, err, sizeof(err)) &&
         dc_level_view_tick(view, err, sizeof(err)) &&
         dc_level_view_pan_pixels(view, -2 * VIEW_WIDTH, 0) &&
@@ -472,6 +487,14 @@ static void test_two_evicted_sealed_rooms_return_at_the_world_clock(void) {
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     free(chunk);
     PASS();
+}
+
+static void test_two_evicted_sealed_rooms_return_at_the_world_clock(void) {
+    check_two_evicted_sealed_rooms(false);
+}
+
+static void test_distant_rooms_sleep_and_prefetch_before_camera_return(void) {
+    check_two_evicted_sealed_rooms(true);
 }
 
 static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) {

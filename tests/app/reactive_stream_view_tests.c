@@ -368,6 +368,11 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--camera-sleep") == 0) {
+        RUN(test_distant_rooms_sleep_and_prefetch_before_camera_return);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera-cache") == 0) {
         RUN(test_two_evicted_sealed_rooms_return_at_the_world_clock);
         printf("%d passed, %d failed\n", g_pass, g_fail);
@@ -484,6 +489,7 @@ int main(int argc, char **argv) {
     RUN(test_camera_keeps_other_authored_components_with_their_owner);
     RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
     RUN(test_two_evicted_sealed_rooms_return_at_the_world_clock);
+    RUN(test_distant_rooms_sleep_and_prefetch_before_camera_return);
     RUN(test_camera_reopens_shared_gas_stock_and_pressure);
     RUN(test_camera_reopens_grains_after_they_cross_the_owner_face);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
