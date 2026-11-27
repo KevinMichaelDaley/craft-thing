@@ -23,3 +23,7 @@ Compare exact GPU fields and native/seam results and demonstrate a reduction in 
 **2026-11-27T16:36:52Z**
 
 The same 24-tick native capture showed an additional 19.676–20.047 ms for the phase-zero pressure passes. Downward aperture setup was around 1.2 ms on the native grid. A second timestamp capture separates lateral and upward displacement, the projected-velocity field pass, and the two hydrostatic-head passes.
+
+**2026-11-27T16:52:22Z**
+
+Native instrumented near-camera baseline mean/p95 141.223/206.443 ms. Rigid occupancy and velocity were host-coherent system memory. Reserving mapped local capacity for both reduced phase-zero setup to 14.940–18.200 ms and near mean/p95 to 96.521/125.170 ms. Committed constrained-budget regression and allocation order through 88238843. RED 2 failures out of 3, final 3 pass under synchronization validation. Exact solver/seam, production performance and full regression run scheduled on persistent hidden :93.

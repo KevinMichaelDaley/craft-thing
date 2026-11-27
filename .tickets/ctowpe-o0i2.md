@@ -35,3 +35,7 @@ A sampled real 1920x1080 FIFO presentation measured 156 writev calls on the pres
 **2026-11-27T16:36:52Z**
 
 In an isolated diagnostic retaining the real Vulkan swapchain and identical pixels, the unmodified X11 transfer measured 54.410 ms mean and 65.572 p95. A normal memcpy into host storage worsened the result (227.023/382.915). Streaming loads from the NVIDIA mapping into host storage before forwarding the same iovecs reduced it to 16.916/31.907 ms. Warmup memcmp verified 26,697,596 staged bytes for the streaming run, including repeated transfers after partial writes. This remains an experimental measurement. Actual populated half-native camera measurements are queued; the production presenter is unchanged.
+
+**2026-11-27T16:52:22Z**
+
+Hidden Xephyr :93, populated 960x540 internal render with real 1920x1080 swapchain and experimental streaming-read staging. Near mean/p95 58.172/92.748 ms, middle 52.997/95.085, far 49.405/86.017. All 16 active owners advanced 2.000000104 s. Warmup compared 8,394,780 bytes. This diagnostic improves presentation but misses the 33.333 ms gate. No interposition shipped.
