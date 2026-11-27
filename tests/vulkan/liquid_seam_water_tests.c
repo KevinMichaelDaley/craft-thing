@@ -42,7 +42,7 @@ static void seed_basin(dc_chunk_t *first, dc_chunk_t *second, fr_bulk_phase_chun
             uint32_t i = index_on_line(y_axis, local, lane, DC_CHUNK_SIDE);
             chunks[tile]->cells[i].material = DC_MATERIAL_AIR;
             if (lane == BACKPRESSURE && tile == 1u) bulk->oil_fp[i] = DC_FLUID_FULL;
-            float speed = lane == REVERSE ? -9.f : lane == SHALLOW ? 0.65f : 9.f;
+            float speed = lane == REVERSE ? -9.f : lane == SHALLOW ? 0.65f : 8.25f;
             if (y_axis) chunks[tile]->face_velocity[i].y = speed;
             else chunks[tile]->face_velocity[i].x = speed;
         }
@@ -179,11 +179,21 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
 
     ASSERT_EQ(plan->thermal_enabled, y_axis);
     float far_pigment = 0.f;
+    bool mixed_pigment = false;
     for (uint32_t i = 1; i < DC_CHUNK_SIDE; ++i) {
         uint32_t index = index_on_line(y_axis, i, FORWARD, DC_CHUNK_SIDE);
-        if (plan->cells[1][index].crossing_in_fp) far_pigment += plan->payload[1][index].final_color[0];
+        if (!plan->cells[1][index].crossing_in_fp) continue;
+        const float *color = plan->payload[1][index].final_color;
+        far_pigment += color[0];
+        bool differs_from_each_donor = true;
+        for (uint32_t donor = 0; donor < DONORS; ++donor) {
+            uint32_t source = index_on_line(y_axis, 62u - donor, FORWARD, DC_CHUNK_SIDE);
+            if (fabsf(color[1] - colors[0].water[source][1]) < 1e-5f) differs_from_each_donor = false;
+        }
+        mixed_pigment |= differs_from_each_donor;
     }
     ASSERT_TRUE(far_pigment > 0.f);
+    ASSERT_TRUE(mixed_pigment);
     for (unsigned owner = 0; owner < 2; ++owner)
         for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
             const dc_water_seam_payload_t *payload = &plan->payload[owner][i];
@@ -229,6 +239,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
                                          &readback, &memory, &mapped, g_err, sizeof(g_err)));
     ASSERT_TRUE(native_water_passes(mono, step_seconds, readback));
     double total_heat_initial = 0., total_heat_final = 0.;
+    double pigment_initial[3] = {0}, pigment_final[3] = {0};
     int32_t stock_delta[2][DC_CHUNK_SIDE] = {{0}};
     int32_t crossing[2][DC_CHUNK_SIDE] = {{0}};
     for (unsigned owner = 0; owner < 2; ++owner) {
@@ -250,12 +261,18 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
                 ASSERT_TRUE(fabsf(payload->final_excess_heat - (y_axis ? read_heat[index] : 0.f)) < 1e-5f);
                 total_heat_initial += payload->initial_excess_heat;
                 total_heat_final += payload->final_excess_heat;
+                for (unsigned component = 0; component < 3; ++component) {
+                    pigment_initial[component] += (double)payload->initial_color[component] * cell.initial_fp;
+                    pigment_final[component] += (double)payload->final_color[component] * cell.final_fp;
+                }
                 stock_delta[owner][lane] += (int32_t)cell.final_fp - (int32_t)cell.initial_fp;
                 crossing[owner][lane] += (int32_t)cell.crossing_in_fp - (int32_t)cell.crossing_out_fp;
             }
     }
 
     ASSERT_TRUE(fabs(total_heat_initial - total_heat_final) < 1e-4);
+    for (unsigned component = 0; component < 3; ++component)
+        ASSERT_TRUE(fabs(pigment_initial[component] - pigment_final[component]) < 0.1);
     const float *pressure = mapped;
     for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane) {
         ASSERT_INT_EQ(stock_delta[0][lane], crossing[0][lane]);

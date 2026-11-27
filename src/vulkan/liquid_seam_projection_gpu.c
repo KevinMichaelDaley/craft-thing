@@ -21,7 +21,8 @@ enum {
     OCCUPANCY_PLANES = 5,
     CELL_COVERAGE = 2,
     X_FACE_COVERAGE = 3,
-    Y_FACE_COVERAGE = 4
+    Y_FACE_COVERAGE = 4,
+    READBACK_ONLY = 2
 };
 
 typedef struct {
@@ -59,9 +60,9 @@ static const struct {
     [CROSSINGS] = {0, DC_WATER_SEAM_CROSSING_BINDING, SEAM_CELLS * sizeof(seam_crossing_t)},
     [WATER_COLOR] = {0, 32, SEAM_CELLS * sizeof(seam_color_t)},
     [THERMAL_CONTROL] = {0, 36, (DC_THERMAL_WATER_COUNT_WORD + 1u) * sizeof(uint32_t)},
-    [INITIAL_COLOR] = {0, 0, SEAM_CELLS * sizeof(seam_color_t)},
+    [INITIAL_COLOR] = {READBACK_ONLY, 0, SEAM_CELLS * sizeof(seam_color_t)},
     [BULK_PHASE] = {0, 37, SEAM_TILES * sizeof(fr_bulk_phase_chunk_t)},
-    [INITIAL_CELLS] = {0, 0, SEAM_CELLS * sizeof(dc_cell_t)}
+    [INITIAL_CELLS] = {READBACK_ONLY, 0, SEAM_CELLS * sizeof(dc_cell_t)}
 };
 
 struct dc_gpu_seam_projection {
@@ -112,7 +113,7 @@ static bool create_descriptors(dc_gpu_t *gpu, struct dc_gpu_seam_projection *scr
     VkWriteDescriptorSet writes[BUFFER_COUNT];
     uint32_t count = 0;
     for (unsigned i = 0; i < BUFFER_COUNT; ++i) {
-        if (i == INITIAL_CELLS || i == INITIAL_COLOR) continue;
+        if (buffer_layout[i].set == READBACK_ONLY) continue;
         buffers[i] = (VkDescriptorBufferInfo){scratch->buffer, scratch->offset[i], buffer_layout[i].size};
         writes[count++] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = scratch->sets[buffer_layout[i].set], .dstBinding = buffer_layout[i].binding,
@@ -175,31 +176,31 @@ static bool prepare_transport(dc_gpu_t *gpu, bool thermal, char *err, uint32_t c
     return true;
 }
 
-static void copy_atlas_tile(VkCommandBuffer command, dc_liquid_seam_endpoint_t endpoint,
+static void copy_atlas_tile(VkCommandBuffer command, uint32_t slot,
                             VkBuffer source, VkBuffer target, VkDeviceSize target_base,
                             uint32_t tile, VkDeviceSize tile_bytes) {
-    const VkBufferCopy region = {endpoint.slot * tile_bytes, target_base + tile * tile_bytes, tile_bytes};
+    const VkBufferCopy region = {slot * tile_bytes, target_base + tile * tile_bytes, tile_bytes};
     vkCmdCopyBuffer(command, source, target, 1u, &region);
 }
 
 static void copy_transport_fields(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
                                   dc_liquid_seam_endpoint_t endpoint, uint32_t tile) {
     const dc_gpu_t *source = endpoint.gpu;
-    copy_atlas_tile(command, endpoint, source->chunk_buffer, scratch->buffer, scratch->offset[INITIAL_CELLS],
+    copy_atlas_tile(command, endpoint.slot, source->chunk_buffer, scratch->buffer, scratch->offset[INITIAL_CELLS],
                     tile, DC_CHUNK_CELLS * sizeof(dc_cell_t));
-    copy_atlas_tile(command, endpoint, source->bulk_phase_buffer, scratch->buffer, scratch->offset[BULK_PHASE],
+    copy_atlas_tile(command, endpoint.slot, source->bulk_phase_buffer, scratch->buffer, scratch->offset[BULK_PHASE],
                     tile, sizeof(fr_bulk_phase_chunk_t));
     const VkDeviceSize color_bytes = DC_CHUNK_CELLS * sizeof(seam_color_t);
-    copy_atlas_tile(command, endpoint, source->water_color_buffer, scratch->buffer,
+    copy_atlas_tile(command, endpoint.slot, source->water_color_buffer, scratch->buffer,
                     scratch->offset[WATER_COLOR], tile, color_bytes);
-    copy_atlas_tile(command, endpoint, source->water_color_buffer, scratch->buffer,
+    copy_atlas_tile(command, endpoint.slot, source->water_color_buffer, scratch->buffer,
                     scratch->offset[INITIAL_COLOR], tile, color_bytes);
 
     VkBuffer live_heat = fr_thermal_gpu_water_buffer(source);
     if (live_heat) {
         const VkDeviceSize heat_bytes = DC_CHUNK_CELLS * sizeof(float);
-        copy_atlas_tile(command, endpoint, live_heat, scratch->water_heat.buffer, 0u, tile, heat_bytes);
-        copy_atlas_tile(command, endpoint, live_heat, scratch->water_heat.buffer,
+        copy_atlas_tile(command, endpoint.slot, live_heat, scratch->water_heat.buffer, 0u, tile, heat_bytes);
+        copy_atlas_tile(command, endpoint.slot, live_heat, scratch->water_heat.buffer,
                         SEAM_TILES * heat_bytes, tile, heat_bytes);
     }
 }
@@ -208,7 +209,7 @@ static void copy_projection_tile(VkCommandBuffer command, const struct dc_gpu_se
                                  dc_liquid_seam_endpoint_t endpoint, uint32_t tile,
                                  dc_liquid_seam_axis_t axis, uint32_t width, bool transport) {
     const dc_gpu_t *source = endpoint.gpu;
-    copy_atlas_tile(command, endpoint, source->chunk_buffer, scratch->buffer, scratch->offset[CELLS],
+    copy_atlas_tile(command, endpoint.slot, source->chunk_buffer, scratch->buffer, scratch->offset[CELLS],
                     tile, DC_CHUNK_CELLS * sizeof(dc_cell_t));
     if (transport) copy_transport_fields(command, scratch, endpoint, tile);
 

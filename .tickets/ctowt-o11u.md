@@ -1,6 +1,6 @@
 ---
 id: ctowt-o11u
-status: in_progress
+status: closed
 deps: [ctowt-iyyp]
 links: []
 created: 2026-11-27T06:30:47Z
@@ -20,3 +20,9 @@ Include each owner cell's expected and final water color and thermal excess. Car
 
 Check heat and pigment against native monolithic transport and preserve the live source fields. Exercise thermal-enabled and unheated owners.
 
+
+## Notes
+
+**2026-11-27T06:42:23Z**
+
+Both RTX configurations match native projected mass, pressure work, and per-cell pigment and heat. A long crossing mixes distinct donors in a receiving cell, total pigment and excess heat are conserved, and the live owners retain their original fields. The plan includes the complete expected/final cell payload for the separate durable commit ticket ctowt-7388.
