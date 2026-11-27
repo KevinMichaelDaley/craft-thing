@@ -44,7 +44,7 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
     memset(gpu->water_color_mapped,0,(size_t)color_bytes);
     VkDeviceSize bulk_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*sizeof(fr_bulk_phase_chunk_t);
-    if(!dc_gpu_make_mapped_buffer(gpu,bulk_bytes,&gpu->bulk_phase_buffer,
+    if(!dc_gpu_make_hydro_buffer(gpu,DC_HYDRO_BULK,bulk_bytes,&gpu->bulk_phase_buffer,
         &gpu->bulk_phase_memory,&gpu->bulk_phase_mapped,err,cap)) return false;
     memset(gpu->bulk_phase_mapped,0,(size_t)bulk_bytes);
     if(!dc_gpu_make_mapped_buffer(gpu,128,&gpu->thermal_control_buffer,
@@ -55,7 +55,7 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->fluid_a_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_b_buffer,
                &gpu->fluid_b_memory, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, bytes * 2, &gpu->velocity_buffer,
+           dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_VELOCITY, bytes * 2, &gpu->velocity_buffer,
                &gpu->velocity_memory, &gpu->velocity_mapped, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->pressure_a_buffer,
                &gpu->pressure_a_memory, err, cap) &&

@@ -36,13 +36,14 @@ uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
 
 static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
-                               bool staging, char *err, uint32_t cap) {
+                               bool staging, bool addressable, char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
+    if (addressable) info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     if (vkCreateBuffer(gpu->device, &info, NULL, buffer) != VK_SUCCESS)
         return error(err, cap, "Cannot create GPU chunk buffer");
     VkMemoryRequirements req;
@@ -58,7 +59,10 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
             !(flags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {type=i;break;}
     }
     if (type == UINT32_MAX) return error(err, cap, "No host-coherent GPU chunk memory");
+    const VkMemoryAllocateFlagsInfo flags = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+        .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
     VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = addressable ? &flags : NULL,
         .allocationSize = req.size, .memoryTypeIndex = type };
     if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) != VK_SUCCESS) {
         VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -87,22 +91,23 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap) {
-    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,false,err,cap);
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,false,false,err,cap);
 }
 bool dc_gpu_make_staging_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                 VkDeviceMemory *memory, void **mapped,
                                 char *err, uint32_t cap) {
-    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,true,err,cap);
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,true,false,err,cap);
 }
 
-bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
-                               VkDeviceMemory *memory, char *err, uint32_t cap) {
+static bool make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                               VkDeviceMemory *memory, bool addressable, char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE };
+    if (addressable) info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     if (vkCreateBuffer(gpu->device, &info, NULL, buffer) != VK_SUCCESS)
         return error(err, cap, "Cannot create device-local GPU buffer");
     VkMemoryRequirements req;
@@ -113,7 +118,10 @@ bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
         if (!(req.memoryTypeBits & (1u << i)) ||
             !(props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
             continue;
+        const VkMemoryAllocateFlagsInfo flags = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+            .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
         VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = addressable ? &flags : NULL,
             .allocationSize = req.size, .memoryTypeIndex = i };
         if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) == VK_SUCCESS) {
             if (vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS)
@@ -125,6 +133,22 @@ bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     return error(err, cap, "Cannot allocate device-local GPU memory");
 }
 
+bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                               VkDeviceMemory *memory, char *err, uint32_t cap) {
+    return make_device_buffer(gpu, bytes, buffer, memory, false, err, cap);
+}
+
+bool dc_gpu_make_hydro_buffer(dc_gpu_t *gpu, uint32_t field, VkDeviceSize bytes, VkBuffer *buffer,
+    VkDeviceMemory *memory, void **mapped, char *err, uint32_t cap) {
+    if (field >= DC_HYDRO_BUFFERS) return error(err, cap, "Invalid liquid neighborhood field");
+    bool okay = mapped ? make_mapped_buffer(gpu, bytes, buffer, memory, mapped, false, true, err, cap) :
+                         make_device_buffer(gpu, bytes, buffer, memory, true, err, cap);
+    if (!okay) return false;
+    VkBufferDeviceAddressInfo info = {.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = *buffer};
+    gpu->hydro_addresses[field] = vkGetBufferDeviceAddress(gpu->device, &info);
+    return gpu->hydro_addresses[field] || error(err, cap, "Cannot address liquid neighborhood field");
+}
+
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     gpu->chunk_velocity = calloc((size_t)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS,
                                   sizeof(*gpu->chunk_velocity));
@@ -134,8 +158,8 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
     VkDeviceSize particle_bytes = (VkDeviceSize)dc_gpu_slot_capacity(gpu) *
         DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
-    return dc_gpu_make_device_buffer(gpu, chunk_bytes, &gpu->chunk_buffer,
-               &gpu->chunk_memory, err, cap) &&
+    return dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_CELLS, chunk_bytes, &gpu->chunk_buffer,
+               &gpu->chunk_memory, NULL, err, cap) &&
            dc_gpu_make_staging_buffer(gpu, chunk_bytes, &gpu->chunk_staging_buffer,
                &gpu->chunk_staging_memory, &gpu->chunk_mapped, err, cap) &&
            dc_gpu_make_device_buffer(gpu, particle_bytes, &gpu->particle_buffer,
@@ -145,7 +169,7 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
            dc_gpu_make_mapped_buffer(gpu, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t),
                &gpu->particle_count_buffer, &gpu->particle_count_memory,
                &gpu->particle_count_mapped, err, cap) &&
-           dc_gpu_make_mapped_buffer(gpu, page_bytes, &gpu->page_buffer,
+           dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_PAGES, page_bytes, &gpu->page_buffer,
                &gpu->page_memory, &gpu->page_mapped, err, cap) &&
            dc_gpu_halo_buffers_init(gpu, err, cap) &&
            dc_gpu_fluid_buffers_init(gpu, err, cap) &&

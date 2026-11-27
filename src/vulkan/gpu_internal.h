@@ -6,6 +6,7 @@
 
 #include "dungeoncraft/contact_work_layout.h"
 #include "dungeoncraft/gpu.h"
+#include "dungeoncraft/hydro_peer_layout.h"
 #include "dungeoncraft/presentation.h"
 #include "dungeoncraft/color.h"
 #include "ferrum/structural/gpu.h"
@@ -240,6 +241,7 @@ struct dc_gpu {
     VkBuffer thermal_control_buffer;
     VkDeviceMemory thermal_control_memory;
     void *thermal_control_mapped;
+    VkDeviceAddress hydro_addresses[DC_HYDRO_BUFFERS];
     VkBuffer shape_color_buffer;
     VkDeviceMemory shape_color_memory;
     void *shape_color_mapped;
@@ -521,6 +523,8 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 bool dc_gpu_make_staging_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                 VkDeviceMemory *memory, void **mapped,
                                 char *err, uint32_t cap);
+bool dc_gpu_make_hydro_buffer(dc_gpu_t *gpu, uint32_t field, VkDeviceSize bytes, VkBuffer *buffer,
+    VkDeviceMemory *memory, void **mapped, char *err, uint32_t cap);
 bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, char *err, uint32_t cap);
 /** Forget upload evidence after a fluid simulation or authoring mutation. */

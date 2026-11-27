@@ -216,11 +216,12 @@ static void copy_atlas_tile(VkCommandBuffer command, uint32_t slot,
 }
 
 static void copy_transport_fields(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
-                                  dc_liquid_seam_endpoint_t endpoint, uint32_t tile) {
+                                  dc_liquid_seam_endpoint_t endpoint, uint32_t tile, bool staged_bulk) {
     const dc_gpu_t *source = endpoint.gpu;
     copy_atlas_tile(command, endpoint.slot, source->chunk_buffer, scratch->buffer, scratch->offset[INITIAL_CELLS],
                     tile, DC_CHUNK_CELLS * sizeof(dc_cell_t));
-    copy_atlas_tile(command, endpoint.slot, source->bulk_phase_buffer, scratch->buffer, scratch->offset[BULK_PHASE],
+    VkBuffer bulk = staged_bulk ? dc_gpu_hydro_bulk_stage(source)->buffer : source->bulk_phase_buffer;
+    copy_atlas_tile(command, endpoint.slot, bulk, scratch->buffer, scratch->offset[BULK_PHASE],
                     tile, sizeof(fr_bulk_phase_chunk_t));
     const VkDeviceSize color_bytes = DC_CHUNK_CELLS * sizeof(seam_color_t);
     copy_atlas_tile(command, endpoint.slot, source->water_color_buffer, scratch->buffer,
@@ -245,11 +246,12 @@ static void copy_transport_fields(VkCommandBuffer command, const struct dc_gpu_s
 }
 
 void dc_gpu_copy_projection_tile(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
-    dc_liquid_seam_endpoint_t endpoint, const dc_gpu_water_tile_t *location, uint32_t tile, bool transport) {
+    dc_liquid_seam_endpoint_t endpoint, const dc_gpu_water_tile_t *location, uint32_t tile, bool transport,
+    bool staged_bulk) {
     const dc_gpu_t *source = endpoint.gpu;
     copy_atlas_tile(command, endpoint.slot, source->chunk_buffer, scratch->buffer, scratch->offset[CELLS],
                     tile, DC_CHUNK_CELLS * sizeof(dc_cell_t));
-    if (transport) copy_transport_fields(command, scratch, endpoint, tile);
+    if (transport) copy_transport_fields(command, scratch, endpoint, tile, staged_bulk);
 
     VkBufferCopy velocity[DC_CHUNK_SIDE], occupancy[DC_CHUNK_SIDE];
     for (uint32_t row = 0; row < DC_CHUNK_SIDE; ++row) {

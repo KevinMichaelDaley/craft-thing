@@ -4,6 +4,11 @@
 #include "dungeoncraft/liquid_seam.h"
 #include "fluid_schedule.h"
 #include "renderer_internal.h"
+#include "body_address_gpu.h"
+
+const dc_gpu_address_buffer_t *dc_gpu_hydro_bulk_stage(const dc_gpu_t *gpu);
+bool dc_gpu_prepare_hydro_bulk_stage(dc_gpu_t *gpu, char *err, uint32_t cap);
+void dc_gpu_record_hydro_bulk_stages(dc_gpu_t *first, dc_gpu_t *second);
 
 typedef struct {
     uint32_t slot, x, y, width, height;

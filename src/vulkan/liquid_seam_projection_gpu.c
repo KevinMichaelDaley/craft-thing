@@ -311,7 +311,8 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
         VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     for (uint32_t tile = 0; tile < count; ++tile)
-        dc_gpu_copy_projection_tile(command, scratch, domain->tiles[tile], &domain->locations[tile], tile, transport);
+        dc_gpu_copy_projection_tile(command, scratch, domain->tiles[tile], &domain->locations[tile], tile,
+                                    transport, domain->bulk);
     if (schedule && schedule->first_phase != 0u) record_phase_backup(command, scratch);
     if (plan)
         vkCmdFillBuffer(command, scratch->buffer, scratch->offset[CROSSINGS], scratch->size[CROSSINGS], 0u);
@@ -459,6 +460,33 @@ dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoin
     return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, NULL, err, cap);
 }
 
+static void bind_hydro_peer(dc_gpu_t *gpu, const dc_gpu_t *peer, int32_t dx, int32_t dy, bool bulk) {
+    uint32_t *control = gpu->thermal_control_mapped;
+    control[DC_HYDRO_PEER_WIDTH] = peer->width;
+    control[DC_HYDRO_PEER_HEIGHT] = peer->height;
+    control[DC_HYDRO_PEER_OFFSET] = (uint32_t)dx;
+    control[DC_HYDRO_PEER_OFFSET+1u] = (uint32_t)dy;
+    memcpy(control + DC_HYDRO_PEER_ADDRESSES, peer->hydro_addresses, sizeof(peer->hydro_addresses));
+    if (bulk) {
+        memcpy(control + DC_HYDRO_PEER_ADDRESSES + 2u*DC_HYDRO_BULK,
+               &dc_gpu_hydro_bulk_stage(peer)->address, sizeof(VkDeviceAddress));
+        memcpy(control + DC_HYDRO_LOCAL_BULK_ADDRESS, &dc_gpu_hydro_bulk_stage(gpu)->address, sizeof(VkDeviceAddress));
+    }
+}
+
+static bool run_paired_rigid(const water_domain_t *domain, float seconds, char *err, uint32_t cap) {
+    const dc_gpu_water_tile_t *a = domain->locations, *b = a;
+    while (!b->context) ++b;
+    const int32_t dx = (int32_t)a->scratch_x - (int32_t)a->x - (int32_t)b->scratch_x + (int32_t)b->x;
+    const int32_t dy = (int32_t)a->scratch_y - (int32_t)a->y - (int32_t)b->scratch_y + (int32_t)b->y;
+    bind_hydro_peer(domain->gpu, domain->peer, dx, dy, domain->bulk);
+    bind_hydro_peer(domain->peer, domain->gpu, -dx, -dy, domain->bulk);
+    bool okay = dc_gpu_submit_paired_tick_stage(domain->gpu, domain->peer, seconds, true, err, cap);
+    memset((uint32_t *)domain->gpu->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, 16u*sizeof(uint32_t));
+    memset((uint32_t *)domain->peer->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, 16u*sizeof(uint32_t));
+    return okay;
+}
+
 static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, bool full_tick, char *err, uint32_t cap) {
     dc_gpu_water_tile_t locations[MAX_WATER_COHORT_TILES];
@@ -492,8 +520,10 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
     domain.bulk = gpu->bulk_phase_work_possible || peer->bulk_phase_work_possible;
     if (!fr_thermal_prepare_liquid_seam(gpu, peer, err, cap)) return DC_LIQUID_SEAM_REJECTED;
     if (domain.bulk && (!dc_gpu_ensure_bulk_phase_pipeline(gpu, err, cap) ||
-                        !dc_gpu_ensure_bulk_phase_pipeline(peer, err, cap))) return DC_LIQUID_SEAM_REJECTED;
-    if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, true, err, cap)) {
+                        !dc_gpu_ensure_bulk_phase_pipeline(peer, err, cap) ||
+                        !dc_gpu_prepare_hydro_bulk_stage(gpu, err, cap) ||
+                        !dc_gpu_prepare_hydro_bulk_stage(peer, err, cap))) return DC_LIQUID_SEAM_REJECTED;
+    if (run_paired_rigid(&domain, seconds, err, cap)) {
         dc_liquid_seam_result_t result = run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds,
             NULL, NULL, NULL, true, &schedule, err, cap);
         if (result == DC_LIQUID_SEAM_UNCONFIRMED) {

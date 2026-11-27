@@ -163,7 +163,10 @@ GPU_OBJ += build/sprite_gpu.o
 build/sprite_gpu.o: src/vulkan/sprite_gpu.c include/ferrum/renderer/sprite_gpu.h include/dungeoncraft/sprite_layout.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.comp.spv build/shaders/occlusion.comp.spv build/shaders/lighting.comp.spv
-$(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h
+$(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h include/dungeoncraft/hydro_peer_layout.h
+build/shaders/rigid_solver.comp.spv build/shaders/runtime/rigid_solver.comp.spv \
+build/shaders/pixel_hydro.comp.spv build/shaders/runtime/pixel_hydro.comp.spv \
+build/diagnostics/solver_motion_profile.comp.spv: include/dungeoncraft/hydro_peer_layout.h
 build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/renderer_resource.o: src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h

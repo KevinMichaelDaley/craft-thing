@@ -131,7 +131,7 @@ uint32_t dc_gpu_next_body_id(const dc_gpu_t *gpu) {
 
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     bool okay = dc_gpu_runtime_bodies_init(gpu,err,cap) &&
-           dc_gpu_make_mapped_buffer(gpu,
+           dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_OCCUPANCY,
                (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t) * 5,
                &gpu->occupancy_buffer, &gpu->occupancy_memory,
                &gpu->occupancy_mapped, err, cap) &&

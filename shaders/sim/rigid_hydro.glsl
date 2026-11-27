@@ -3,48 +3,97 @@ layout(set=0,binding=3,std430) readonly buffer HydroOccupancy { uint hydro_occup
 layout(set=0,binding=10,std430) readonly buffer HydroVelocity { vec2 hydro_velocity[]; };
 layout(set=0,binding=37,std430) buffer HydroBulk { uint hydro_bulk[]; };
 #include "../../include/dungeoncraft/bulk_phase_layout.h"
+#include "../../include/dungeoncraft/hydro_peer_layout.h"
 #include "rigid_clip.glsl"
 
 /* Grid-volume viscous relaxation per tick. The lowest material density is .6,
    so even complete immersion damps relative velocity by at most 1/20 per tick. */
 const float WATER_DRAG_RATE=.03;
 
+const uint HYDRO_PEER = 0x80000000u;
+layout(set=0,binding=36,std430) readonly buffer HydroControl {uint hydro_control[];};
+layout(buffer_reference,std430,buffer_reference_align=4) buffer HydroWords {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer HydroPairs {uvec2 pairs[];};
+uvec2 hydro_address(uint field) {
+    uint i=DC_HYDRO_PEER_ADDRESSES+2u*field;
+    return uvec2(hydro_control[i],hydro_control[i+1u]);
+}
+ivec2 hydro_offset() {return ivec2(hydro_control[DC_HYDRO_PEER_OFFSET],hydro_control[DC_HYDRO_PEER_OFFSET+1u]);}
+ivec2 hydro_peer_size() {return ivec2(hydro_control[DC_HYDRO_PEER_WIDTH],hydro_control[DC_HYDRO_PEER_HEIGHT]);}
+ivec2 hydro_low() {return hydro_control[DC_HYDRO_PEER_WIDTH]==0u?ivec2(0):min(ivec2(0),-hydro_offset());}
+ivec2 hydro_high() {
+    ivec2 size=ivec2(params.width,params.height);
+    return hydro_control[DC_HYDRO_PEER_WIDTH]==0u?size:max(size,hydro_peer_size()-hydro_offset());
+}
 uint hydro_page(ivec2 p) {
-    if(any(lessThan(p,ivec2(0))) || any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
-    return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+    if(all(greaterThanEqual(p,ivec2(0))) && all(lessThan(p,ivec2(params.width,params.height)))) {
+        uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+        if(page!=0u) return page;
+    }
+    if(hydro_control[DC_HYDRO_PEER_WIDTH]==0u) return 0u;
+    p+=hydro_offset();
+    ivec2 size=hydro_peer_size();
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,size))) return 0u;
+    uint page=HydroWords(hydro_address(DC_HYDRO_PAGES)).words[(p.y/64)*((size.x+63)/64)+p.x/64];
+    return page==0u?0u:page|HYDRO_PEER;
 }
 uint hydro_atlas(ivec2 p,uint page) {
-    return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);
+    return (page&HYDRO_PEER)|(((page&~HYDRO_PEER)-1u)*4096u+(uint(p.y)&63u)*64u+(uint(p.x)&63u));
+}
+uint hydro_index(ivec2 p,uint page) {
+    if((page&HYDRO_PEER)==0u) return uint(p.y)*params.width+uint(p.x);
+    p+=hydro_offset();
+    return HYDRO_PEER|(uint(p.y)*hydro_control[DC_HYDRO_PEER_WIDTH]+uint(p.x));
+}
+uvec2 hydro_cell(uint at) {
+    if((at&HYDRO_PEER)==0u) return hydro_cells[at];
+    return HydroPairs(hydro_address(DC_HYDRO_CELLS)).pairs[at&~HYDRO_PEER];
+}
+uint hydro_occupied(uint at) {
+    if((at&HYDRO_PEER)==0u) return hydro_occupancy[at];
+    return HydroWords(hydro_address(DC_HYDRO_OCCUPANCY)).words[at&~HYDRO_PEER];
+}
+vec2 hydro_flow(uint at) {
+    if((at&HYDRO_PEER)==0u) return hydro_velocity[at];
+    return uintBitsToFloat(HydroPairs(hydro_address(DC_HYDRO_VELOCITY)).pairs[at&~HYDRO_PEER]);
 }
 uint hydro_bulk_word(uint atlas,uint channel) {
-    return (atlas/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+
-        channel*4096u+atlas%4096u;
+    return (atlas&HYDRO_PEER)|(((atlas&~HYDRO_PEER)/4096u)*FR_BULK_CHUNK_CHANNELS*4096u+
+        channel*4096u+atlas%4096u);
+}
+uint hydro_bulk_at(uint word) {
+    if((word&HYDRO_PEER)==0u) {
+        uvec2 address=uvec2(hydro_control[DC_HYDRO_LOCAL_BULK_ADDRESS],hydro_control[DC_HYDRO_LOCAL_BULK_ADDRESS+1u]);
+        if(address!=uvec2(0)) return HydroWords(address).words[word];
+        return hydro_bulk[word];
+    }
+    return HydroWords(hydro_address(DC_HYDRO_BULK)).words[word&~HYDRO_PEER];
 }
 uint hydro_phase_volume(uint atlas,uint phase) {
     /* Retained stock occupies blocked solid capacity, not free liquid space. */
-    uint stock=hydro_bulk[hydro_bulk_word(atlas,phase-1u)];
-    uint retained=hydro_bulk[hydro_bulk_word(atlas,phase+1u)];
+    uint stock=hydro_bulk_at(hydro_bulk_word(atlas,phase-1u));
+    uint retained=hydro_bulk_at(hydro_bulk_word(atlas,phase+1u));
     return stock>retained?stock-retained:0u;
 }
 float hydro_liquid(uint atlas,uint index,out vec2 flow,out float density) {
-    float water=float(hydro_cells[atlas].y)/65536.;
+    float water=float(hydro_cell(atlas).y)/65536.;
     float oil=float(hydro_phase_volume(atlas,1u))/65536.;
     float slime=float(hydro_phase_volume(atlas,2u))/65536.;
     if(oil==0.&&slime==0.) {
-        flow=hydro_velocity[index];density=water>0.?1.:0.;
+        flow=hydro_flow(index);density=water>0.?1.:0.;
         return clamp(water,0.,1.);
     }
     float volume=water+oil+slime;
     float mass=water+oil*params.oil_density+slime*params.slime_density;
-    vec2 momentum=water*hydro_velocity[index];
-    uint oil_stock=hydro_bulk[hydro_bulk_word(atlas,0u)];
-    uint slime_stock=hydro_bulk[hydro_bulk_word(atlas,1u)];
+    vec2 momentum=water*hydro_flow(index);
+    uint oil_stock=hydro_bulk_at(hydro_bulk_word(atlas,0u));
+    uint slime_stock=hydro_bulk_at(hydro_bulk_word(atlas,1u));
     float oil_mobile=oil_stock>0u?float(hydro_phase_volume(atlas,1u))/float(oil_stock):0.;
     float slime_mobile=slime_stock>0u?float(hydro_phase_volume(atlas,2u))/float(slime_stock):0.;
-    momentum+=oil_mobile*vec2(uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,6u)]),
-        uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,7u)]));
-    momentum+=slime_mobile*vec2(uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,8u)]),
-        uintBitsToFloat(hydro_bulk[hydro_bulk_word(atlas,9u)]));
+    momentum+=oil_mobile*vec2(uintBitsToFloat(hydro_bulk_at(hydro_bulk_word(atlas,6u))),
+        uintBitsToFloat(hydro_bulk_at(hydro_bulk_word(atlas,7u))));
+    momentum+=slime_mobile*vec2(uintBitsToFloat(hydro_bulk_at(hydro_bulk_word(atlas,8u))),
+        uintBitsToFloat(hydro_bulk_at(hydro_bulk_word(atlas,9u))));
     flow=mass>0.?momentum/mass:vec2(0.);
     density=volume>0.?mass/volume:0.;
     return clamp(volume,0.,1.);
@@ -54,13 +103,13 @@ bool hydro_permeable(uint material) {
 }
 
 bool hydro_near_liquid(vec2 low,vec2 high) {
-    ivec2 begin=max(ivec2(floor(low))-1,ivec2(0));
-    ivec2 end=min(ivec2(ceil(high))+1,ivec2(params.width,params.height));
+    ivec2 begin=max(ivec2(floor(low))-1,hydro_low());
+    ivec2 end=min(ivec2(ceil(high))+1,hydro_high());
     for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
         ivec2 p=ivec2(x,y);uint page=hydro_page(p);
         if(page!=0u) {
             uint atlas=hydro_atlas(p,page);
-            if(hydro_cells[atlas].y!=0u||hydro_phase_volume(atlas,1u)!=0u||
+            if(hydro_cell(atlas).y!=0u||hydro_phase_volume(atlas,1u)!=0u||
                 hydro_phase_volume(atlas,2u)!=0u) return true;
         }
     }
@@ -68,26 +117,26 @@ bool hydro_near_liquid(vec2 low,vec2 high) {
 }
 
 bool hydro_pool_column(int x,int begin_y,out float level) {
-    int floor_y=-1;level=0;
-    for(int y=max(begin_y,0);y<int(params.height);y++) {
+    int floor_y=hydro_low().y-1;level=0;
+    for(int y=max(begin_y,hydro_low().y);y<hydro_high().y;y++) {
         ivec2 p=ivec2(x,y);uint page=hydro_page(p);
         if(page==0u) return false;
-        if(!hydro_permeable(hydro_cells[hydro_atlas(p,page)].x&0xffffu)) {floor_y=y;break;}
+        if(!hydro_permeable(hydro_cell(hydro_atlas(p,page)).x&0xffffu)) {floor_y=y;break;}
     }
-    if(floor_y<=0) return false;
+    if(floor_y<=hydro_low().y) return false;
     ivec2 bottom=ivec2(x,floor_y-1);uint bottom_page=hydro_page(bottom);
     if(bottom_page==0u) return false;
     uint bottom_at=hydro_atlas(bottom,bottom_page);
-    if(hydro_cells[bottom_at].y==0u&&hydro_phase_volume(bottom_at,1u)==0u&&
+    if(hydro_cell(bottom_at).y==0u&&hydro_phase_volume(bottom_at,1u)==0u&&
         hydro_phase_volume(bottom_at,2u)==0u) return false;
     float volume=0;
-    for(int y=floor_y-1;y>=0;y--) {
+    for(int y=floor_y-1;y>=hydro_low().y;y--) {
         ivec2 p=ivec2(x,y);uint page=hydro_page(p);
         if(page==0u) break;
         uint atlas=hydro_atlas(p,page);
-        if(!hydro_permeable(hydro_cells[atlas].x&0xffffu)) break;
-        if(hydro_occupancy[uint(y)*params.width+uint(x)]!=0u) return false;
-        volume+=float(hydro_cells[atlas].y+hydro_phase_volume(atlas,1u)+
+        if(!hydro_permeable(hydro_cell(atlas).x&0xffffu)) break;
+        if(hydro_occupied(hydro_index(p,page))!=0u) return false;
+        volume+=float(hydro_cell(atlas).y+hydro_phase_volume(atlas,1u)+
             hydro_phase_volume(atlas,2u))/65536.0;
     }
     level=float(floor_y)-volume;
@@ -97,12 +146,12 @@ bool hydro_pool_column(int x,int begin_y,out float level) {
 bool hydro_pool_surface(vec2 low,vec2 high,out float level) {
     /* Hydrostatic reconstruction uses clear columns outside the whole hull.
        It excludes the transient water films produced by geometric rezoning. */
-    int y=max(int(floor(low.y)),0);float total=0;uint count=0u;
+    int y=max(int(floor(low.y)),hydro_low().y);float total=0;uint count=0u;
     for(int side=-1;side<=1;side+=2) {
         int edge=side<0?int(floor(low.x)):int(ceil(high.x))-1;
         for(int distance=1;distance<=16;distance++) {
             int x=edge+side*distance;ivec2 p=ivec2(x,y);uint page=hydro_page(p);
-            if(page==0u||!hydro_permeable(hydro_cells[hydro_atlas(p,page)].x&0xffffu)) break;
+            if(page==0u||!hydro_permeable(hydro_cell(hydro_atlas(p,page)).x&0xffffu)) break;
             float sample_level;
             if(hydro_pool_column(x,y,sample_level)) {total+=sample_level;count++;}
         }
@@ -114,19 +163,19 @@ float hydro_sample(ivec2 p,out vec2 flow,out float density,out uint reaction_at)
     flow=vec2(0);density=0.;reaction_at=0xffffffffu;
     uint page=hydro_page(p);
     if(page==0u) return 0;
-    uint index=uint(p.y)*params.width+uint(p.x);
+    uint index=hydro_index(p,page);
     uint own_at=hydro_atlas(p,page);
     float own=hydro_liquid(own_at,index,flow,density);
     if(own>0.) reaction_at=own_at;
-    if(hydro_occupancy[index]==0u) return own;
+    if(hydro_occupied(index)==0u) return own;
     float sum=0,weight=0,density_sum=0.;vec2 neighbor_flow=vec2(0.);uint count=0u;
     for(int side=-1;side<=1;side+=2) {
         for(int distance=1;distance<=32;distance++) {
             ivec2 q=p+ivec2(side*distance,0);uint qpage=hydro_page(q);
             if(qpage==0u) break;
-            uint atlas=hydro_atlas(q,qpage),qi=uint(q.y)*params.width+uint(q.x);
-            if(!hydro_permeable(hydro_cells[atlas].x&0xffffu)) break;
-            if(hydro_occupancy[qi]!=0u) continue;
+            uint atlas=hydro_atlas(q,qpage),qi=hydro_index(q,qpage);
+            if(!hydro_permeable(hydro_cell(atlas).x&0xffffu)) break;
+            if(hydro_occupied(qi)!=0u) continue;
             vec2 sample_flow;float sample_density;
             float fraction=hydro_liquid(atlas,qi,sample_flow,sample_density);
             sum+=fraction;count++;weight+=fraction;
@@ -144,17 +193,23 @@ float hydro_sample(ivec2 p,out vec2 flow,out float density,out uint reaction_at)
 }
 
 void hydro_atomic_momentum(uint word,float delta) {
-    uint old=hydro_bulk[word];
+    uint old=hydro_bulk_at(word);
     for(;;) {
         uint next=floatBitsToUint(uintBitsToFloat(old)+delta);
-        uint observed=atomicCompSwap(hydro_bulk[word],old,next);
+        uint observed;
+        if((word&HYDRO_PEER)==0u) {
+            uvec2 address=uvec2(hydro_control[DC_HYDRO_LOCAL_BULK_ADDRESS],hydro_control[DC_HYDRO_LOCAL_BULK_ADDRESS+1u]);
+            if(address!=uvec2(0)) observed=atomicCompSwap(HydroWords(address).words[word],old,next);
+            else observed=atomicCompSwap(hydro_bulk[word],old,next);
+        }
+        else observed=atomicCompSwap(HydroWords(hydro_address(DC_HYDRO_BULK)).words[word&~HYDRO_PEER],old,next);
         if(observed==old) return;
         old=observed;
     }
 }
 void hydro_phase_reaction(uint atlas,vec2 impulse) {
     if(atlas==0xffffffffu) return;
-    float water=float(hydro_cells[atlas].y)/65536.;
+    float water=float(hydro_cell(atlas).y)/65536.;
     float oil=float(hydro_phase_volume(atlas,1u))/65536.*params.oil_density;
     float slime=float(hydro_phase_volume(atlas,2u))/65536.*params.slime_density;
     float total=water+oil+slime;
@@ -174,8 +229,8 @@ void hydro_impulse(uint slot,inout Body b) {
     vec2 origin=vec2(b.x_fp,b.y_fp)/65536.0,center=origin+b.center;
     if(!hydro_near_liquid(origin+low,origin+high)) return;
     float waterline;bool pooled=hydro_pool_surface(origin+low,origin+high,waterline);
-    ivec2 begin=max(ivec2(floor(origin+low)),ivec2(0));
-    ivec2 end=min(ivec2(ceil(origin+high)),ivec2(params.width,params.height));
+    ivec2 begin=max(ivec2(floor(origin+low)),hydro_low());
+    ivec2 end=min(ivec2(ceil(origin+high)),hydro_high());
     vec2 force=vec2(0),v=vec2(b.vx_fp,b.vy_fp)/65536.0;float torque=0;
     for(int y=begin.y;y<end.y;y++) for(int x=begin.x;x<end.x;x++) {
         ivec2 cell=ivec2(x,y);vec2 flow;float density;uint reaction_at;

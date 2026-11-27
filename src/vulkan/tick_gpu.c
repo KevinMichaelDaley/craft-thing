@@ -4,6 +4,7 @@
 
 #include "dungeoncraft/liquid_seam.h"
 #include "fluid_schedule.h"
+#include "liquid_seam_gpu_internal.h"
 #include "gpu_internal.h"
 #include "gas_gpu_internal.h"
 #include "ferrum/fire/gas_gpu.h"
@@ -150,6 +151,7 @@ bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float se
         if (before_water && (!dc_gpu_set_tick_seconds(gpu, seconds) ||
             !dc_gpu_runtime_bodies_service(gpu, err, cap))) return false;
         if (!fr_renderer_begin(gpu)) return error(err, cap, "Cannot record paired owner physics");
+        if (before_water && i == 0) dc_gpu_record_hydro_bulk_stages(first, second);
         if (before_water) record_before_water(gpu);
         else {
             stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

@@ -21,6 +21,7 @@ struct dc_gpu_liquid_seam {
     dc_gpu_t *pending_peer;
     const uint32_t *pending_receipt;
     bool pending_bulk;
+    dc_gpu_address_buffer_t hydro_bulk;
     bool pending_phases;
     dc_fluid_schedule_t pending_schedule;
 };
@@ -78,6 +79,34 @@ bool dc_gpu_liquid_owner_held(const dc_gpu_t *gpu) {
     return gpu && (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu));
 }
 
+const dc_gpu_address_buffer_t *dc_gpu_hydro_bulk_stage(const dc_gpu_t *gpu) {
+    return &gpu->liquid_seam->hydro_bulk;
+}
+
+bool dc_gpu_prepare_hydro_bulk_stage(dc_gpu_t *gpu, char *err, uint32_t cap) {
+    if (!dc_gpu_prepare_liquid_receipt(gpu, err, cap)) return false;
+    dc_gpu_address_buffer_t *stage = &gpu->liquid_seam->hydro_bulk;
+    return stage->buffer || dc_gpu_address_buffer_create(gpu,
+        (VkDeviceSize)dc_gpu_slot_capacity(gpu) * sizeof(fr_bulk_phase_chunk_t), false, stage, err, cap);
+}
+
+void dc_gpu_record_hydro_bulk_stages(dc_gpu_t *first, dc_gpu_t *second) {
+    const uint32_t *control = first->thermal_control_mapped;
+    if (!(control[DC_HYDRO_LOCAL_BULK_ADDRESS] | control[DC_HYDRO_LOCAL_BULK_ADDRESS+1u])) return;
+    dc_gpu_t *owners[] = {first, second};
+    fr_renderer_barrier(first->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
+        VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    for (unsigned i = 0; i < 2; ++i) {
+        const dc_gpu_address_buffer_t *stage = dc_gpu_hydro_bulk_stage(owners[i]);
+        VkBufferCopy copy = {.size = stage->bytes};
+        vkCmdCopyBuffer(first->command, owners[i]->bulk_phase_buffer, stage->buffer, 1u, &copy);
+    }
+    fr_renderer_barrier(first->command, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_READ_BIT);
+}
+
 static void clear_pending(struct dc_gpu_liquid_seam *seam) {
     if (seam->pending_peer) seam->pending_peer->liquid_seam_pending_owner = NULL;
     seam->pending_peer = NULL;
@@ -114,6 +143,7 @@ void dc_gpu_liquid_seam_destroy(dc_gpu_t *gpu) {
         clear_pending(seam);
     }
     release_explicit_plan(gpu, seam);
+    dc_gpu_address_buffer_destroy(gpu, &seam->hydro_bulk);
     free(seam);
     gpu->liquid_seam = NULL;
 }

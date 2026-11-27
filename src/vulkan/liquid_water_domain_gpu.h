@@ -52,6 +52,7 @@ bool dc_gpu_prepare_water_projection(dc_gpu_t *gpu, uint32_t width, uint32_t hei
     char *err, uint32_t cap);
 bool dc_gpu_prepare_water_transport(dc_gpu_t *gpu, bool occupancy, bool thermal, char *err, uint32_t cap);
 void dc_gpu_copy_projection_tile(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
-    dc_liquid_seam_endpoint_t endpoint, const dc_gpu_water_tile_t *location, uint32_t tile, bool transport);
+    dc_liquid_seam_endpoint_t endpoint, const dc_gpu_water_tile_t *location, uint32_t tile, bool transport,
+    bool staged_bulk);
 
 #endif
