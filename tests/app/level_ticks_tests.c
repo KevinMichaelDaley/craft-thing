@@ -137,6 +137,60 @@ static void test_equal_ticks_share_one_presentation_batch(void) {
     PASS();
 }
 
+static void test_equal_ticks_completed_before_present_failure_are_not_replayed(void) {
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    g_frame.reject_present = true;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    ASSERT_EQ(g_frame.steps, 2u);
+    g_frame.reject_present = false;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    dc_level_view_discard(view);
+    printf("Equal batch requested %u ticks across two presents and completed %u\n",
+           g_frame.presented_steps, g_frame.steps);
+    ASSERT_EQ(g_frame.presents, 2u);
+    ASSERT_EQ(g_frame.presented_steps, 2u);
+    ASSERT_EQ(g_frame.steps, 2u);
+    PASS();
+}
+
+static void test_partial_equal_batch_retries_only_its_unfinished_suffix(void) {
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    for (unsigned i = 0; i < 3; ++i)
+        ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    g_frame.reject_step = 2;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    ASSERT_EQ(g_frame.steps, 1u);
+    g_frame.reject_step = 0;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    dc_level_view_discard(view);
+    printf("Partial equal batch completed %u ticks across two attempts\n", g_frame.steps);
+    ASSERT_EQ(g_frame.presents, 2u);
+    ASSERT_EQ(g_frame.presented_steps, 5u);
+    ASSERT_EQ(g_frame.steps, 3u);
+    PASS();
+}
+
+static void test_failed_present_before_simulation_keeps_the_equal_batch(void) {
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    g_frame.reject_step = 1;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    ASSERT_EQ(g_frame.steps, 0u);
+    g_frame.reject_step = 0;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    dc_level_view_discard(view);
+    ASSERT_EQ(g_frame.presents, 2u);
+    ASSERT_EQ(g_frame.presented_steps, 4u);
+    ASSERT_EQ(g_frame.steps, 2u);
+    PASS();
+}
+
 static void test_invalid_time_is_rejected_without_changing_valid_requests(void) {
     dc_level_view_t *view = ready_view(false);
     ASSERT_TRUE(view);
@@ -228,6 +282,9 @@ static void test_player_actions_receive_the_same_ordered_time_as_physics(void) {
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
+    RUN(test_equal_ticks_completed_before_present_failure_are_not_replayed);
+    RUN(test_partial_equal_batch_retries_only_its_unfinished_suffix);
+    RUN(test_failed_present_before_simulation_keeps_the_equal_batch);
     RUN(test_invalid_time_is_rejected_without_changing_valid_requests);
     RUN(test_mixed_ticks_are_consumed_before_retrying_failed_present);
     RUN(test_loading_frame_does_not_build_catch_up_debt);
