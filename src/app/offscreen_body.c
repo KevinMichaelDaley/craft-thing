@@ -74,6 +74,13 @@ static bool free_slot(const dc_gpu_t *gpu, uint32_t i) {
         owner->state != DC_BODY_OWNER_RETIRED && owner->state != DC_BODY_OWNER_RESERVED;
 }
 
+bool dc_offscreen_collect_bond_group(dc_gpu_t *gpu, uint32_t id, dc_offscreen_bond_group_t *group) {
+    (void)gpu;
+    (void)id;
+    (void)group;
+    return false;
+}
+
 bool dc_offscreen_move_bodies(dc_gpu_t *from, dc_gpu_t *to, dc_chunk_coord_t coord, char *err, uint32_t cap) {
     if (!from || !to || from == to || from->device_lifetime != to->device_lifetime ||
         from->runtime_body_consumers != to->runtime_body_consumers || vkQueueWaitIdle(from->queue) != VK_SUCCESS)

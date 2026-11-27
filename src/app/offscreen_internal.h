@@ -5,6 +5,20 @@
 
 enum { OFFSCREEN_SIDE = 3u, OFFSCREEN_SLOTS = OFFSCREEN_SIDE * OFFSCREEN_SIDE };
 
+enum { DC_OFFSCREEN_BOND_CAPACITY = 192u };
+typedef struct {
+    uint32_t slot, id, member_generation;
+} dc_offscreen_bond_member_t;
+
+typedef struct {
+    dc_offscreen_bond_member_t members[2u * DC_OFFSCREEN_BOND_CAPACITY];
+    dc_chunk_coord_t pages[OFFSCREEN_SLOTS];
+    uint32_t member_count, page_count;
+} dc_offscreen_bond_group_t;
+
+/** Collect a live connected assembly and the pages touched by its current geometry. */
+bool dc_offscreen_collect_bond_group(dc_gpu_t *gpu, uint32_t id, dc_offscreen_bond_group_t *group);
+
 struct dc_offscreen {
     dc_gpu_t *gpu;
     dc_chunk_coord_t origin;

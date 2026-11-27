@@ -14,7 +14,7 @@ static bool camera_has_live_bond(dc_gpu_t *gpu, uint32_t first, uint32_t second)
     return false;
 }
 
-static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
+static void check_camera_bonded_assembly(bool inspect_group) {
     char directory[] = "build/camera_bonded_pan_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -50,6 +50,29 @@ static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
     for (unsigned i = 0; i < 90; ++i) ASSERT_TRUE(dc_gpu_rigid_step(view->gpu, err, sizeof(err)));
     const uint32_t first = FR_STRUCTURAL_BODY_ID_BASE + 1u;
     ASSERT_TRUE(camera_has_live_bond(view->gpu, first, first + 1u));
+    if (inspect_group) {
+        for (unsigned seed = 0; seed < 2; ++seed) {
+            dc_offscreen_bond_group_t group = {0};
+            ASSERT_TRUE(dc_offscreen_collect_bond_group(view->gpu, first + seed, &group));
+            ASSERT_EQ(group.member_count, 2u);
+            ASSERT_EQ(group.page_count, 2u);
+            unsigned pages = 0, members = 0;
+            for (unsigned i = 0; i < 2; ++i) {
+                ASSERT_TRUE(group.pages[i].x == origin.x || group.pages[i].x == origin.x + 1);
+                ASSERT_EQ(group.pages[i].y, origin.y);
+                pages |= 1u << (group.pages[i].x - origin.x);
+                ASSERT_TRUE(group.members[i].id == first || group.members[i].id == first + 1u);
+                members |= 1u << (group.members[i].id - first);
+                ASSERT_EQ(group.members[i].member_generation, graph.members[0].generation);
+                ASSERT_EQ(dc_gpu_body_record(view->gpu, group.members[i].slot)->body.id, group.members[i].id);
+            }
+            ASSERT_EQ(pages, 3u);
+            ASSERT_EQ(members, 3u);
+        }
+        ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+        PASS();
+        return;
+    }
     dc_gpu_body_motion_t motion;
     for (unsigned i = 0; i < 2; ++i) {
         ASSERT_TRUE(dc_gpu_read_body_motion(view->gpu, first + i, &motion, err, sizeof(err)));
@@ -92,5 +115,12 @@ static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
     ASSERT_EQ(view->world_seconds, 2.03125);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     PASS();
+}
+static void test_both_bond_endpoints_identify_the_same_members_and_pages(void) {
+    check_camera_bonded_assembly(true);
+}
+
+static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
+    check_camera_bonded_assembly(false);
 }
 #endif
