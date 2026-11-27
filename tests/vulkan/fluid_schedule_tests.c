@@ -72,11 +72,36 @@ static void test_untimed_ticks_ignore_elapsed_scale_but_retain_phase_debt(void) 
     PASS();
 }
 
+static void test_preview_matches_the_iterative_budget_at_float_boundaries(void) {
+    const float elapsed[] = {0.016666668f, 0.33333334f, 0.99999994f, 1.00000012f, 1.375f, 15.f};
+    const uint32_t intervals[] = {2u, 3u, 6u};
+    for (uint32_t i = 0; i < sizeof(intervals) / sizeof(intervals[0]); ++i) {
+        float budget = 0.f;
+        uint32_t phase = 0;
+        for (uint32_t step = 0; step < 31u; ++step) {
+            const float scale = elapsed[step % (sizeof(elapsed) / sizeof(elapsed[0]))];
+            const dc_fluid_schedule_t plan = dc_gpu_plan_fluid_tick(intervals[i], phase, budget, scale, true);
+            budget += scale * (6.f / (float)intervals[i]);
+            uint32_t count = 0;
+            while (budget >= 1.f) {
+                budget -= 1.f;
+                phase = (phase + 1u) % 6u;
+                ++count;
+            }
+            ASSERT_INT_EQ(plan.phase_count, count);
+            ASSERT_INT_EQ(plan.next_phase, phase);
+            ASSERT_EQ(plan.remaining_budget, budget);
+        }
+    }
+    PASS();
+}
+
 int main(void) {
     RUN(test_single_interval_runs_the_complete_cycle_at_elapsed_scale);
     RUN(test_reference_ticks_preserve_every_supported_phase_cadence);
     RUN(test_mixed_steps_keep_fractional_debt_and_wrap_only_scheduled_phases);
     RUN(test_untimed_ticks_ignore_elapsed_scale_but_retain_phase_debt);
+    RUN(test_preview_matches_the_iterative_budget_at_float_boundaries);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

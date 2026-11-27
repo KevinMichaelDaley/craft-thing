@@ -1494,7 +1494,7 @@ $(GPU_SOURCE_BINARIES): $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv bu
 $(GPU_SOURCE_BINARIES) $(GPU_OBJ) $(STREAM_OBJ): include/dungeoncraft/color.h
 $(GPU_OBJ): src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
-build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
+build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h src/vulkan/fluid_schedule.h
 
 build/fluid_transport_limits_tests: tests/vulkan/fluid_transport_limits_tests.c src/vulkan/fluid_transport_limits.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@

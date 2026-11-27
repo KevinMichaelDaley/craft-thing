@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "dungeoncraft/liquid_seam.h"
-#include "gpu_internal.h"
 #include "fluid_schedule.h"
+#include "gpu_internal.h"
 #include "gas_gpu_internal.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/combustion_gpu.h"

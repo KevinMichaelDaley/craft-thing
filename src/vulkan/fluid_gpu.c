@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "fluid_transport_limits.h"
 #include "ferrum/fire/bulk_phase.h"
+#include "fluid_schedule.h"
+#include "fluid_transport_limits.h"
 #include "gpu_internal.h"
 #include "subgroup_gpu.h"
 
@@ -417,7 +418,7 @@ void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase) {
 }
 
 void dc_gpu_record_fluid(dc_gpu_t *gpu) {
-    for (uint32_t phase = 0; phase < 6u; ++phase)
+    for (uint32_t phase = 0; phase < DC_FLUID_PHASES; ++phase)
         dc_gpu_record_fluid_phase(gpu, phase);
 }
 
