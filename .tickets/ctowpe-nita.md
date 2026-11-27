@@ -23,3 +23,7 @@ Skip line setup when there is no rigid occupancy on the line. Preserve exact wat
 **2026-11-27T17:13:55Z**
 
 RED exact masses match, but the first upward test prepared all 137 columns when only 64 had body occupancy.
+
+**2026-11-27T17:19:37Z**
+
+GREEN passes all 18 focused displacement cases under synchronization validation. On a 2048x1216 grid with a 64x64 occupied area, baseline GPU timestamps for upward/lateral were 6.927/2.235 ms with all pages and 7.077/2.274 with a missing page. Skipping unoccupied lines measured 0.425/0.313 and 0.403/0.327 ms with identical water in every resident cell. Repeated timings, seam checks and production camera gates are in progress. Refactor 1abdfaa8 has an independent full regression job on persistent hidden :93, serialized with the 8f26f761 run.
