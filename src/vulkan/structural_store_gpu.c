@@ -215,7 +215,7 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
         dc_chunk_t *chunk = chunks + header.reserved[0];
         memcpy(&chunk->coord, record, sizeof(chunk->coord));
         const dc_chunk_slot_t *owner = resident_chunk(resident, slot, chunk->coord);
-        if ((resident && !owner) || pending_chunk(gpu, chunk->coord)) continue;
+        if ((gas_admitted && !owner) || pending_chunk(gpu, chunk->coord)) continue;
         okay = dc_gpu_download_chunk(gpu, slot, chunk, err, cap) &&
                dc_gpu_checkpoint_chunk_valid(chunk);
         if (okay) {

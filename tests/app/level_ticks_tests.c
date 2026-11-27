@@ -132,12 +132,6 @@ bool __wrap_fr_gpu_reactive_export_chunk(dc_gpu_t *gpu, uint32_t slot,
     return true;
 }
 
-bool __wrap_fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu, uint32_t slot,
-    const dc_chunk_t *chunk, const fr_bulk_phase_chunk_t *bulk, char *err, uint32_t cap) {
-    (void)gpu; (void)slot; (void)chunk; (void)bulk; (void)err; (void)cap;
-    return true;
-}
-
 bool __wrap_fr_bulk_phase_gpu_export_chunk(dc_gpu_t *gpu, uint32_t slot,
     fr_bulk_phase_chunk_t *bulk, char *err, uint32_t cap) {
     (void)gpu; (void)slot; (void)err; (void)cap;

@@ -418,7 +418,7 @@ build/structural_streaming_tests: tests/structural/streaming_tests.c tests/struc
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/structural_store_tests: tests/structural/store_tests.c tests/structural/placement_tests.c Makefile include/ferrum/structural/gpu.h $(GPU_OBJ) $(CHUNK_OBJ) build/compound_body_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
-build/structure_checkpoint_time_tests: tests/structural/checkpoint_time_tests.c src/vulkan/structural_store_channels.c src/vulkan/structural_store_channels.h src/vulkan/gpu_internal.h include/dungeoncraft/chunk.h
+build/structure_checkpoint_time_tests: tests/structural/checkpoint_time_tests.c src/vulkan/structural_store_channels.c src/vulkan/structural_store_fluids.c src/vulkan/structural_store_channels.h src/vulkan/structural_store_fluids.h src/vulkan/gpu_internal.h include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -ffunction-sections -fdata-sections $(filter %.c,$^) -Wl,--gc-sections -o $@ -lm
 .PHONY: test_structure_checkpoint_time
@@ -771,7 +771,7 @@ LEVEL_TICK_CALLS += dc_players_prepare_view dc_players_present dc_players_step
 LEVEL_TICK_CALLS += dc_gpu_upload_streamed_chunk dc_gpu_download_chunk dc_gpu_shift_velocity
 LEVEL_TICK_CALLS += fr_renderer_upload_chunk_colors fr_renderer_download_chunk_colors
 LEVEL_TICK_CALLS += fr_gpu_reactive_import_chunk fr_gpu_reactive_export_chunk
-LEVEL_TICK_CALLS += fr_bulk_phase_gpu_import_chunk fr_bulk_phase_gpu_export_chunk
+LEVEL_TICK_CALLS += fr_bulk_phase_gpu_export_chunk
 LEVEL_TICK_CALLS += dc_stream_request_load dc_stream_request_save_snapshot dc_stream_poll
 build/level_ticks_tests: tests/app/level_ticks_tests.c src/app/level.c src/app/level.h src/app/level_internal.h src/app/view_config.h src/app/player_session_internal.h $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/level.c $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(LEVEL_TICK_CALLS),-Xlinker --wrap=$(fn))
@@ -2290,6 +2290,10 @@ build/reactive_chunk_gpu_tests: tests/vulkan/reactive_chunk_gpu_tests.c tests/vu
 test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reactive_chunk_gpu_tests build/reactive_chunk_tests build/reactive_stream_tests
 build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_level_structure_snapshots
+test: test_level_structure_snapshots
+test_level_structure_snapshots: build/reactive_stream_view_display_tests
+	DC_TEST_STRUCTURE_TIME_ONLY=1 ./build/reactive_stream_view_display_tests
 build/reactive_checkpoint_display_tests: tests/vulkan/reactive_checkpoint_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/reactive_archive_tests: tests/fire/reactive_archive_tests.c src/fire/reactive_archive.c src/fire/reactive_chunk.c $(REACTIVE_STATE_SRC) include/ferrum/fire/reactive_archive.h
@@ -2339,7 +2343,8 @@ build/structural_store_channels.o: src/vulkan/structural_store_channels.c src/vu
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/structural_store_fluids.o: src/vulkan/structural_store_fluids.c src/vulkan/structural_store_fluids.h src/vulkan/gpu_internal.h src/fire/bulk_phase_internal.h src/fire/gas_checkpoint_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/gpu.o build/chunk_gpu.o build/structural_store_channels.o: src/vulkan/structural_store_fluids.h
+build/gpu.o build/structural_store_chunk.o build/structural_store_channels.o: src/vulkan/structural_store_fluids.h
+build/structural_store_chunk.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/thermal_gpu_internal.h
 build/gpu.o build/chunk_gpu.o build/structural_store_gpu.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/structural_store_channels.h
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
@@ -2431,7 +2436,7 @@ build/combustion_body_feedback_tests: tests/vulkan/combustion_body_feedback_test
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/combustion_body_feedback_tests build/combustion_body_feedback_display_tests: tests/vulkan/rigid_coating_contact_cases.h tests/vulkan/submerged_coating_cases.h
 build/combustion_gpu_display_tests build/combustion_body_feedback_display_tests build/combustion_body_feedback_tests: build/diagnostics/body_storage_init.spv build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv $(RIGID_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_COMPONENT_SHADER) $(RENDERER_SHADERS)
-build/gas_display_tests build/gas_publication_display_tests: build/diagnostics/body_storage_init.spv \
+build/gas_display_tests build/gas_publication_display_tests build/reactive_stream_view_display_tests: build/diagnostics/body_storage_init.spv \
 	build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv \
 	$(RIGID_SHADER) $(SOLVER_SHADER) $(BROADPHASE_SHADER) $(CONTACT_SHADER) $(PROBE_SHADER) \
 	$(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) \

@@ -99,7 +99,8 @@ failed:
 
 bool dc_checkpoint_fluid_decode(const dc_chunk_t *chunks, uint32_t count,
     const uint8_t *bytes, size_t length, dc_checkpoint_fluid_t **out) {
-    if (!count || length < count || length > dc_checkpoint_fluid_max_bytes(count)) return false;
+    if (!chunks || !bytes || !out || !count || length < count ||
+        length > dc_checkpoint_fluid_max_bytes(count)) return false;
     dc_checkpoint_fluid_t *records = calloc(count, sizeof(*records));
     if (!records) return false;
     size_t used = count;

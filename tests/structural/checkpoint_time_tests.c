@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../../src/vulkan/structural_store_channels.h"
 
@@ -95,10 +96,57 @@ static void test_old_layouts_stay_untimed_and_invalid_clocks_are_rejected(void) 
     PASS();
 }
 
+static void test_fluid_channel_can_record_empty_stock_without_a_clock(void) {
+    const uint8_t packet[42] = {[32] = 2, [40] = 1};
+    FILE *file = tmpfile();
+    ASSERT_TRUE(file && fwrite(packet, sizeof(packet), 1, file) == 1);
+    rewind(file);
+    dc_checkpoint_channels_t channels = {0};
+    ASSERT_TRUE(dc_checkpoint_channels_read(file, DC_STRUCTURE_FLUID_VERSION, &channels));
+    fclose(file);
+    ASSERT_TRUE(dc_checkpoint_channels_decode_times(&channels, 2));
+    ASSERT_TRUE(!channels.chunk_times);
+    dc_chunk_t *chunks = calloc(2, sizeof(*chunks));
+    ASSERT_TRUE(chunks);
+    dc_checkpoint_fluid_t *stock = NULL;
+    ASSERT_TRUE(dc_checkpoint_fluid_decode(chunks, 2, channels.fluid_bytes, channels.fluid_length, &stock));
+    ASSERT_TRUE(stock[0].known && !stock[0].gas && !stock[0].bulk);
+    ASSERT_TRUE(!stock[1].known);
+    dc_checkpoint_fluid_destroy(stock, 2);
+    free(chunks);
+    free(channels.fluid_bytes);
+    PASS();
+}
+
+static void test_fluid_channel_rejects_truncation_and_bulk_bound_to_wrong_water(void) {
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
+    const size_t length = 1 + sizeof(*bulk);
+    uint8_t *packet = malloc(length);
+    ASSERT_TRUE(chunk && bulk && packet);
+    chunk->cells[3].fluid_mass = 60000;
+    bulk->oil_fp[3] = 6000;
+    packet[0] = 5;
+    memcpy(packet + 1, bulk, sizeof(*bulk));
+    dc_checkpoint_fluid_t *stock = NULL;
+    ASSERT_TRUE(!dc_checkpoint_fluid_decode(chunk, 1, packet, length - 1, &stock) && !stock);
+    ASSERT_TRUE(!dc_checkpoint_fluid_decode(chunk, 1, packet, length, &stock) && !stock);
+    chunk->cells[3].fluid_mass = 50000;
+    ASSERT_TRUE(dc_checkpoint_fluid_decode(chunk, 1, packet, length, &stock));
+    ASSERT_EQ(stock[0].bulk->oil_fp[3], 6000u);
+    dc_checkpoint_fluid_destroy(stock, 1);
+    free(packet);
+    free(bulk);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     RUN(test_reads_timed_checkpoint_channel);
     RUN(test_round_trips_and_hashes_a_mixed_clock_table);
     RUN(test_old_layouts_stay_untimed_and_invalid_clocks_are_rejected);
+    RUN(test_fluid_channel_can_record_empty_stock_without_a_clock);
+    RUN(test_fluid_channel_rejects_truncation_and_bulk_bound_to_wrong_water);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

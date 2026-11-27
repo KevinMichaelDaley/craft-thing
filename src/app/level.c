@@ -26,8 +26,12 @@ static bool save_world_clock(dc_level_view_t *view, char *err, uint32_t cap) {
     return !view->save || dc_world_save_store_clock(view->save, view->world_seconds, err, cap);
 }
 
+static bool initialize_queued_gas(dc_level_view_t *view, char *err, uint32_t cap) {
+    return !view->stream_ambient_gas || fr_gas_gpu_initialize_queued(view->gpu, err, cap);
+}
+
 static bool save_level_structure(dc_level_view_t *view, char *err, uint32_t cap) {
-    return save_world_clock(view, err, cap) &&
+    return initialize_queued_gas(view, err, cap) && save_world_clock(view, err, cap) &&
            fr_gpu_save_level_structure(view->gpu, view->body_path, &view->table,
                                        view->gas_admitted, err, cap);
 }
@@ -416,6 +420,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
 }
 
 static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (!initialize_queued_gas(view, err, cap)) return false;
     bool trace=getenv("DC_SAVE_TRACE")!=NULL;
     uint64_t stage=SDL_GetTicks64(),structure_ms=0,chunk_ms=0;
     uint64_t parts[6]={0};
@@ -673,8 +678,6 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);
     if (!process_results(view, err, cap)) return false;
-    /* A newly loaded chunk can go straight to a sleeping save. */
-    if (view->stream_ambient_gas && !fr_gas_gpu_initialize_queued(view->gpu, err, cap)) return false;
     if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];

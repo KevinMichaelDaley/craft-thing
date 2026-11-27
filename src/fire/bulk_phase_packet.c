@@ -76,15 +76,8 @@ static bool valid_cell(const dc_chunk_t *chunk,uint32_t index,uint32_t oil,uint3
 bool fr_bulk_phase_chunk_encode(const dc_chunk_t *chunk,
     const fr_bulk_phase_chunk_t *phase,uint8_t *bytes,size_t capacity) {
     size_t length=fr_bulk_phase_chunk_bytes();
-    if(!chunk||!phase||!bytes||capacity<length) return false;
-    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
-        if(!valid_cell(chunk,i,phase->oil_fp[i],phase->slime_fp[i],
-            phase->oil_retained_fp[i],phase->slime_retained_fp[i])||
-            !bulk_phase_heat_valid(phase->oil_fp[i],phase->slime_fp[i],
-                phase->oil_excess[i],phase->slime_excess[i])||
-            !bulk_phase_momentum_valid(phase->oil_fp[i],phase->slime_fp[i],
-                phase->oil_momentum_x[i],phase->oil_momentum_y[i],
-                phase->slime_momentum_x[i],phase->slime_momentum_y[i])) return false;
+    if (!chunk || !phase || !bytes || capacity < length || !bulk_phase_chunk_valid(chunk, phase))
+        return false;
     memcpy(bytes,"BLP3",4);put32(bytes+4,3u);put32(bytes+8,DC_CHUNK_CELLS);put32(bytes+12,0u);
     for(uint32_t k=0;k<FR_BULK_CHUNK_CHANNELS;k++) for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         put32(bytes+payload_offset(k,i),channel_word(phase,k,i));

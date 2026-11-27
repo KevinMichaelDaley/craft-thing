@@ -111,7 +111,9 @@ static bool structure_time_gpu(dc_gpu_t **gpu, char *err, uint32_t cap) {
     return dc_gpu_create(gpu, 64, 64, "build/shaders/pattern.comp.spv", err, cap);
 }
 
-static void test_structure_reopen_uses_its_own_gas_and_bulk(void) {
+typedef enum { STOCK_CONFLICT, STOCK_LEGACY, STOCK_INTERRUPTED } stock_reopen_t;
+
+static void check_structure_stock_reopen(stock_reopen_t route) {
     char directory[] = "build/structure_stock_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t view = {0};
@@ -143,30 +145,52 @@ static void test_structure_reopen_uses_its_own_gas_and_bulk(void) {
     ASSERT_TRUE(fr_gas_gpu_import_checkpoint(view.gpu, slot, gas, err, sizeof(err)));
     view.table.slots[slot].time = (dc_chunk_time_t){.seconds = 5., .known = true};
     view.gas_admitted[slot] = true;
-    ASSERT_TRUE(save_level_structure(&view, err, sizeof(err)));
+    if (route == STOCK_LEGACY)
+        ASSERT_TRUE(fr_gpu_save_structure_with_chunk_times(view.gpu, view.body_path,
+                    &view.table, err, sizeof(err)));
+    else
+        ASSERT_TRUE(save_level_structure(&view, err, sizeof(err)));
     dc_gpu_destroy(view.gpu);
     dc_chunk_table_destroy(&view.table);
 
     view.stream = dc_stream_create(directory, 42, 4);
     ASSERT_TRUE(view.stream);
-    chunk->cells[0].material = DC_MATERIAL_AIR;
-    chunk->cells[cell].fluid_mass = 10000;
-    bulk->oil_fp[cell] = 28000;
-    gas->cells[cell][0] = .002f;
-    gas->gates[cell] = 2;
-    ASSERT_TRUE(dc_stream_request_save_snapshot(view.stream, chunk, NULL, NULL, NULL,
-                                                gas, bulk, (dc_chunk_time_t){9., true}, 1));
-    dc_stream_result_t result = {0};
-    ASSERT_TRUE(receive(view.stream, &result));
-    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
-    dc_stream_result_release(&result);
+    if (route != STOCK_INTERRUPTED) {
+        dc_chunk_time_t stream_time = {.seconds = 5., .known = true};
+        if (route == STOCK_CONFLICT) {
+            chunk->cells[0].material = DC_MATERIAL_AIR;
+            chunk->cells[cell].fluid_mass = 10000;
+            bulk->oil_fp[cell] = 28000;
+            gas->cells[cell][0] = .002f;
+            gas->gates[cell] = 2;
+            stream_time.seconds = 9.;
+        }
+        ASSERT_TRUE(dc_stream_request_save_snapshot(view.stream, chunk, NULL, NULL, NULL,
+                                                    gas, bulk, stream_time, 1));
+        dc_stream_result_t result = {0};
+        ASSERT_TRUE(receive(view.stream, &result));
+        ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+        dc_stream_result_release(&result);
+    }
 
     view.gpu = NULL;
     memset(view.gas_admitted, 0, sizeof(view.gas_admitted));
     ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
-    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
     ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
+    if (route == STOCK_INTERRUPTED) {
+        const uint64_t first_generation = view.table.next_generation;
+        ASSERT_TRUE(!publish_timed_chunk(&view, coord, &slot, err, sizeof(err)));
+        ASSERT_TRUE(strstr(err, "Invalid cold gas checkpoint import"));
+        ASSERT_TRUE(!dc_chunk_table_find(&view.table, coord, &slot));
+        ASSERT_TRUE(view.table.next_generation > first_generation);
+        ASSERT_TRUE(save_level_structure(&view, err, sizeof(err)));
+        dc_gpu_destroy(view.gpu);
+        view.gpu = NULL;
+        ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     ASSERT_TRUE(publish_timed_chunk(&view, coord, &slot, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(view.gpu, slot, chunk, err, sizeof(err)));
     ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view.gpu, slot, bulk, err, sizeof(err)));
@@ -190,6 +214,18 @@ static void test_structure_reopen_uses_its_own_gas_and_bulk(void) {
     free(bulk);
     free(chunk);
     PASS();
+}
+
+static void test_structure_reopen_uses_its_own_gas_and_bulk(void) {
+    check_structure_stock_reopen(STOCK_CONFLICT);
+}
+
+static void test_legacy_structure_reopen_keeps_matching_stream_stock(void) {
+    check_structure_stock_reopen(STOCK_LEGACY);
+}
+
+static void test_pending_stock_survives_failed_publication_and_missing_stream(void) {
+    check_structure_stock_reopen(STOCK_INTERRUPTED);
 }
 
 static void test_staged_structure_reopen_retains_times_when_pending_slots_move(void) {
@@ -288,5 +324,7 @@ int main(void) {
     }
     RUN(test_staged_structure_reopen_retains_times_when_pending_slots_move);
     RUN(test_structure_reopen_uses_its_own_gas_and_bulk);
+    RUN(test_legacy_structure_reopen_keeps_matching_stream_stock);
+    RUN(test_pending_stock_survives_failed_publication_and_missing_stream);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
