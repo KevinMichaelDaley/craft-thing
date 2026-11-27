@@ -813,7 +813,7 @@ static void check_close_before_slot_eviction(bool move_back) {
     char directory[] = "build/room_close_pending_evict_XXXXXX", path[256], err[128] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t view = {.world_seconds = 2.};
-    const dc_chunk_coord_t coord = {-HALO_CHUNKS-1, 3};
+    const dc_chunk_coord_t coord = {-HALO_CHUNKS-1, 0};
     dc_chunk_owner_t owner = {13, 7};
     uint32_t slot;
     uint64_t generation;
