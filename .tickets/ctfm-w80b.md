@@ -26,3 +26,7 @@ Offscreen simulation code is active in current build; two-screen pan, seam trans
 **2026-11-27T21:06:03Z**
 
 Runtime validation at f90a75ca on the persistent hidden Xephyr :93 display: all 31 fluid solver cases and all eight pressure/marker cases passed with Vulkan synchronization validation. All ten GPU dependency checks passed. The full-suite prebuild completed 679 requested artifacts without a compiler warning or error. The aggregate make test run is executing its camera, reopen and structure snapshot cases first; this integration result remains pending. The nine accepted production performance results are recorded on ctowpe-vtlh.
+
+**2026-11-27T22:37:33Z**
+
+The previous aggregate passed all 45 structure snapshots on persistent Xephyr :93 and stopped at command 213 of 264. ctowpe-x0yo corrected the diagnostic's readback of the native aperture buffer. Its four focused modes now pass synchronization validation. The full suite restarted at code revision d105fc10; its result is pending.
