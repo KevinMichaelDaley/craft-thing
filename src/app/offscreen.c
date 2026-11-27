@@ -118,10 +118,14 @@ bool dc_offscreen_admit(dc_offscreen_t *workspace, const dc_stream_result_t *sou
     return true;
 }
 
+float dc_offscreen_step_seconds(double remaining) {
+    const double interval = fmin(remaining, OFFSCREEN_MAX_STEP_SECONDS);
+    const float seconds = (float)interval;
+    return (double)seconds > interval ? nextafterf(seconds, 0.f) : seconds;
+}
+
 static bool prepare_step(dc_offscreen_t *workspace, double goal, double *completed, char *err, uint32_t cap) {
-    double interval = fmin(goal - workspace->time.seconds, OFFSCREEN_MAX_STEP_SECONDS);
-    float seconds = (float)interval;
-    if ((double)seconds > interval) seconds = nextafterf(seconds, 0.f);
+    const float seconds = dc_offscreen_step_seconds(goal - workspace->time.seconds);
     *completed = workspace->time.seconds + (double)seconds;
     if (*completed <= workspace->time.seconds || !dc_gpu_set_tick_seconds(workspace->gpu, seconds))
         return error(err, cap, "Offscreen interval cannot advance the confirmed clock");

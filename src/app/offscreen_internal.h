@@ -78,6 +78,9 @@ typedef struct dc_level_offscreen_handoff {
 dc_level_offscreen_result_t dc_camera_bond_result(dc_level_view_t *view, dc_level_offscreen_handoff_t *lease,
     const dc_stream_result_t *result, char *err, uint32_t cap);
 
+/** Next native elapsed step, rounded down to the remaining confirmed interval. */
+float dc_offscreen_step_seconds(double remaining);
+
 /** Resolve a world coordinate to the bounded workspace atlas. */
 bool dc_offscreen_page_at(const dc_offscreen_t *workspace, dc_chunk_coord_t coord, uint32_t *slot);
 /** Check that the sealed room contains a complete independently movable body group. */

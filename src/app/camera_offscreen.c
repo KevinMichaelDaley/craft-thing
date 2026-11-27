@@ -442,6 +442,25 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
     return true;
 }
 
+static unsigned replay_rounds(const dc_level_view_t *view, const due_rooms_t *due) {
+    if (due->count * CAMERA_WORKSPACE_STEPS_PER_TICK <= DC_CAMERA_WORKSPACE_LIMIT ||
+        !view->pending_steps || view->end_run - view->first_run != 1u)
+        return CAMERA_WORKSPACE_STEPS_PER_TICK;
+
+    const dc_level_step_run_t *runs = view->step_runs ? view->step_runs : &view->inline_step;
+    const dc_level_step_run_t run = runs[view->first_run];
+    const double next_world = view->world_seconds + (double)run.seconds * run.count;
+    for (unsigned i = 0; i < due->count; ++i) {
+        const dc_camera_offscreen_t *room = due->rooms[i];
+        const dc_offscreen_t *workspace = room->workspace;
+        const double start = workspace->time.seconds;
+        const double next = start + dc_offscreen_step_seconds(workspace->due_seconds - start);
+        if (next_world - next >= room_period(room->coord, view->origin) / 60.)
+            return CAMERA_WORKSPACE_STEPS_PER_TICK;
+    }
+    return 1u;
+}
+
 bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap) {
     due_rooms_t due = {0};
     dc_camera_offscreen_t *selected[DC_CAMERA_WORKSPACE_LIMIT] = {0};
@@ -482,7 +501,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     }
     dc_offscreen_t *workspaces[DC_CAMERA_WORKSPACE_LIMIT];
     for (unsigned i = 0; i < due.count; ++i) workspaces[i] = due.rooms[i]->workspace;
-    if (dc_offscreen_advance_due_group(workspaces, due.count, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap))
+    if (dc_offscreen_advance_due_group(workspaces, due.count, replay_rounds(view, &due), err, cap))
         return true;
     for (unsigned i = 0; i < due.count; ++i) {
         dc_camera_offscreen_t *room = due.rooms[i];
