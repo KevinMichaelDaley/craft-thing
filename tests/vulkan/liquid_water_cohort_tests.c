@@ -555,6 +555,12 @@ static void check_bulk_crossing(bool vertical, bool reverse, bool moving_body) {
         }
     }
     const float elapsed[] = {1.f/240.f, 1.f/60.f, 1.f/60.f};
+    if (moving_body) {
+        dc_liquid_seam_endpoint_t stale[] = {endpoints[0], endpoints[1]};
+        ++stale[1].coord.y;
+        ASSERT_EQ(dc_gpu_tick_water_cohort(stale, 2, elapsed[1], g_err, sizeof(g_err)),
+                  DC_LIQUID_SEAM_REJECTED);
+    }
     for (unsigned tick = 0; tick < sizeof(elapsed)/sizeof(*elapsed); ++tick) {
         ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, elapsed[tick]) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
         g_lose_ack = tick == 1u;

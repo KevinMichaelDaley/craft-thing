@@ -166,7 +166,12 @@ RENDERER_SHADERS = build/shaders/lighting_subgroup.comp.spv build/shaders/scene.
 $(GPU_OBJ): $(RENDERER_SHADERS) src/vulkan/gpu_internal.h include/dungeoncraft/hydro_peer_layout.h
 build/shaders/rigid_solver.comp.spv build/shaders/runtime/rigid_solver.comp.spv \
 build/shaders/pixel_hydro.comp.spv build/shaders/runtime/pixel_hydro.comp.spv \
-build/diagnostics/solver_motion_profile.comp.spv: include/dungeoncraft/hydro_peer_layout.h
+build/diagnostics/solver_motion_profile.comp.spv: include/dungeoncraft/hydro_peer_layout.h shaders/sim/rigid_peer.glsl
+build/shaders/contacts.comp.spv build/shaders/runtime/contacts.comp.spv \
+build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.spv \
+build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv \
+build/diagnostics/contacts_terrain_scan.comp.spv build/diagnostics/runtime_contacts_terrain_scan.comp.spv: \
+	shaders/sim/rigid_peer.glsl include/dungeoncraft/hydro_peer_layout.h include/dungeoncraft/terrain_flags.h
 build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/renderer_resource.o: src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h

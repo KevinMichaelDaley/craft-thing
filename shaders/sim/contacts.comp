@@ -1,9 +1,12 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #define DC_RUNTIME_ROOT_READONLY 1
 #include "../../include/dungeoncraft/contact_work_layout.h"
+#include "../../include/dungeoncraft/terrain_flags.h"
 #ifdef DC_CONTACT_PIXEL_MODULE
 layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=true;
 #else
@@ -13,6 +16,7 @@ layout(constant_id=1) const bool CONTACT_PIXEL_ONLY=false;
 #include "rigid_body.glsl"
 #include "contact_boundary.glsl"
 #include "contact_geometry.glsl"
+#include "rigid_peer.glsl"
 #ifndef DC_CONTACT_GROUP_LANES
 #define DC_CONTACT_GROUP_LANES 16
 #endif
@@ -148,7 +152,20 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
                 }
                 continue;
             }
-        } else contact_kind = BOUNDARY_CONTACT;
+        } else {
+            uint peer_page = hydro_peer_page(ivec2(x,y));
+            if (peer_page == 0u) contact_kind = BOUNDARY_CONTACT;
+            else {
+                uint atlas = ((peer_page & ~HYDRO_PEER) - 1u) * 4096u + cell_feature;
+                material = HydroPairs(hydro_address(DC_HYDRO_CELLS)).pairs[atlas].x & 0xffffu;
+                if (material == 0u || material == 3u) continue;
+                /* Granular contacts require the owning particle and solver scratch. */
+                if (DC_CELL_LIQUID_PERMEABLE(material)) {
+                    material = 0xffffffffu;
+                    contact_kind = BOUNDARY_CONTACT;
+                } else contact_kind = TERRAIN_CONTACT;
+            }
+        }
         vec2 offset = vec2((ivec2(x, y) << 16) - current) / 65536.0;
         if(any(lessThan(offset+vec2(1),shape_low-vec2(contact_skin)))||
            any(greaterThan(offset,shape_high+vec2(contact_skin)))) continue;
