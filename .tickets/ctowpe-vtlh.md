@@ -39,3 +39,7 @@ Latest profiled native near camera averaged 151.364 ms, p95 216.584. In its 60 m
 **2026-11-27T17:09:41Z**
 
 Native 88238843 ran the full near/middle/far workload with production dispatch and default presentation. Mean/p95 was 95.165/121.557, 93.551/119.526, and 87.842/114.234 ms. All bands had 16 active owners. World-clock advancement was 2.000000104 seconds per band. The oldest owner lag was 0.0667/0.0667/0.2667 seconds. Allocation priority is verified and closed; the aggregate regression suite is being run on the newer hydrostatic shader revision.
+
+**2026-11-27T17:21:46Z**
+
+Instrumented the same production 1280x720 exact concave workload at 8f26f761 on hidden :93. Over 30 measured frames, the host presentation call averaged 38.405 ms including GPU waiting. GPU rigid work averaged 8.039 ms, fluid 5.315 ms and MPM 2.394 ms; solver work (within rigid) was 6.668 ms. Mean acquire and fence calls were 0.002/0.004 ms. Detailed timestamps add overhead, so acceptance times come from the separate uninstrumented run.
