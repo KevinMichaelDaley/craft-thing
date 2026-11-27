@@ -1430,6 +1430,7 @@ test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_
 	./build/probe_feature_tests
 	./build/fluid_recording_tests
 	./build/fluid_schedule_tests
+	./build/fluid_tick_schedule_tests
 	./build/native_demo_controls_tests
 	./build/extraction_stats_tests
 	./build/body_address_feature_tests
@@ -1546,6 +1547,11 @@ test_gpu_tools: build/fluid_recording_tests
 build/fluid_schedule_tests: tests/vulkan/fluid_schedule_tests.c build/fluid_schedule.o src/vulkan/fluid_schedule.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/fluid_schedule.o -o $@
 test_gpu_tools: build/fluid_schedule_tests
+FLUID_TICK_RECORD_CALLS = dc_gpu_record_tick_water_source dc_gpu_record_rigid dc_gpu_record_rigid_refresh \
+	dc_gpu_record_fluid_phase dc_gpu_record_bulk_phase dc_gpu_record_mpm fr_thermal_record_step vkCmdPipelineBarrier2
+build/fluid_tick_schedule_tests: tests/vulkan/fluid_tick_schedule_tests.c $(GPU_OBJ) $(CHUNK_OBJ) src/vulkan/fluid_schedule.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(FLUID_TICK_RECORD_CALLS),-Xlinker --wrap=$(fn))
+test_gpu_tools: build/fluid_tick_schedule_tests
 build/native_demo_controls_tests: tests/app/native_demo_controls_tests.c tests/app/native_demo_controls.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 test_gpu_tools: build/native_demo_controls_tests
