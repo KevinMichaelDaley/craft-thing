@@ -1484,6 +1484,7 @@ test_gpu_tools: build/contact_shader_contract_tests build/shaders/runtime/rigid_
 	./build/mpm_layout_tests
 	./build/probe_feature_tests
 	./build/fluid_recording_tests
+	./build/slot_page_tests
 	./build/fluid_schedule_tests
 	./build/fluid_tick_schedule_tests
 	./build/native_demo_controls_tests
@@ -1600,6 +1601,9 @@ test: build/fluid_color_sync_tests
 build/fluid_recording_tests: tests/vulkan/fluid_recording_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdPipelineBarrier2 -Wl,--wrap=vkCmdBindDescriptorSets
 test_gpu_tools: build/fluid_recording_tests
+build/slot_page_tests: tests/vulkan/slot_page_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_make_mapped_buffer
+test_gpu_tools: build/slot_page_tests
 build/fluid_schedule_tests: tests/vulkan/fluid_schedule_tests.c build/fluid_schedule.o src/vulkan/fluid_schedule.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/fluid_schedule.o -o $@
 test_gpu_tools: build/fluid_schedule_tests
