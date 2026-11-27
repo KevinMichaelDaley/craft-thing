@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -8,6 +9,45 @@
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
     return false;
+}
+
+static int nearby_delta(const uint32_t words[2], int64_t origin) {
+    uint64_t bits = words[0] | ((uint64_t)words[1] << 32);
+    int64_t chunk;
+    memcpy(&chunk, &bits, sizeof(chunk));
+    if (chunk == origin) return 0;
+    if (chunk > origin) return bits - (uint64_t)origin == 1u ? 1 : 2;
+    return (uint64_t)origin - bits == 1u ? -1 : -2;
+}
+
+typedef enum { OUTSIDE_ROOM, INSIDE_ROOM, SPANS_ROOM } room_relation_t;
+
+static room_relation_t room_relation(const dc_gpu_body_record_t *body, dc_chunk_coord_t coord) {
+    int dx = nearby_delta(body->chunk_x, coord.x), dy = nearby_delta(body->chunk_y, coord.y);
+    if (dx == 2 || dx == -2 || dy == 2 || dy == -2) return OUTSIDE_ROOM;
+    const float px = dx * DC_CHUNK_SIDE + (float)body->local_x_fp / DC_FLUID_FULL;
+    const float py = dy * DC_CHUNK_SIDE + (float)body->local_y_fp / DC_FLUID_FULL;
+    const float c = cosf(body->angle), s = sinf(body->angle);
+    float xmin = INFINITY, ymin = INFINITY, xmax = -INFINITY, ymax = -INFINITY;
+    uint32_t pieces = body->piece_count ? body->piece_count : 1u;
+    for (uint32_t p = 0; p < pieces; ++p) {
+        const dc_gpu_body_shape_t *shape = body->piece_count ? body->pieces + p : &body->shape;
+        for (uint32_t i = 0; i < (shape->count ? shape->count : 4u); ++i) {
+            float x = shape->count ? (float)shape->vertices[i].x_fp / DC_FLUID_FULL :
+                (i == 1u || i == 2u ? (float)body->body.width : 0.f);
+            float y = shape->count ? (float)shape->vertices[i].y_fp / DC_FLUID_FULL :
+                (i >= 2u ? (float)body->body.height : 0.f);
+            x -= body->center[0];
+            y -= body->center[1];
+            float wx = px + body->center[0] + c*x - s*y;
+            float wy = py + body->center[1] + s*x + c*y;
+            xmin = fminf(xmin, wx); xmax = fmaxf(xmax, wx);
+            ymin = fminf(ymin, wy); ymax = fmaxf(ymax, wy);
+        }
+    }
+    if (xmax <= 0 || ymax <= 0 || xmin >= DC_CHUNK_SIDE || ymin >= DC_CHUNK_SIDE) return OUTSIDE_ROOM;
+    if (xmin >= 0 && ymin >= 0 && xmax <= DC_CHUNK_SIDE && ymax <= DC_CHUNK_SIDE) return INSIDE_ROOM;
+    return SPANS_ROOM;
 }
 
 bool dc_offscreen_body_island(dc_gpu_t *gpu, dc_chunk_coord_t coord) {
@@ -21,15 +61,9 @@ bool dc_offscreen_body_island(dc_gpu_t *gpu, dc_chunk_coord_t coord) {
         if (!record->body.active || record->reserved[0] || (record->piece_count & DC_GPU_PIXEL_BODY_FLAG) ||
             owner->source_transaction.low || owner->source_transaction.high ||
             (record->motion_flags & (DC_BODY_MOTION_REACTIVE_MASS | DC_BODY_MOTION_THERMAL_GRID))) return false;
-        uint64_t x = record->chunk_x[0] | ((uint64_t)record->chunk_x[1] << 32);
-        uint64_t y = record->chunk_y[0] | ((uint64_t)record->chunk_y[1] << 32);
-        if (x != (uint64_t)coord.x || y != (uint64_t)coord.y) return false;
-        /* The sum of the two side lengths bounds the rotated hull about its anchor. */
-        int32_t radius = (int32_t)(record->body.width + record->body.height) * DC_FLUID_FULL;
-        int32_t extent = DC_CHUNK_SIDE * DC_FLUID_FULL;
-        if (record->local_x_fp < radius || record->local_y_fp < radius ||
-            record->local_x_fp > extent-radius || record->local_y_fp > extent-radius) return false;
-        found = true;
+        room_relation_t relation = room_relation(record, coord);
+        if (relation == SPANS_ROOM) return false;
+        if (relation == INSIDE_ROOM) found = true;
     }
     return found;
 }
@@ -50,7 +84,7 @@ bool dc_offscreen_move_bodies(dc_gpu_t *from, dc_gpu_t *to, dc_chunk_coord_t coo
         return error(err, cap, "Rigid handoff requires a complete independent group");
     uint32_t needed = 0, available = 0, capacity = dc_gpu_body_capacity(to);
     for (uint32_t i = 0; i < from->body_count; ++i) {
-        if (!from->body_ids[i]) continue;
+        if (!from->body_ids[i] || room_relation(dc_gpu_body_record(from, i), coord) != INSIDE_ROOM) continue;
         if (dc_gpu_find_body_record(to, from->body_ids[i])) return error(err, cap, "Rigid handoff ID already exists");
         ++needed;
     }
@@ -60,7 +94,7 @@ bool dc_offscreen_move_bodies(dc_gpu_t *from, dc_gpu_t *to, dc_chunk_coord_t coo
 
     uint32_t next = 0;
     for (uint32_t i = 0; i < from->body_count; ++i) {
-        if (!from->body_ids[i]) continue;
+        if (!from->body_ids[i] || room_relation(dc_gpu_body_record(from, i), coord) != INSIDE_ROOM) continue;
         while (!free_slot(to, next)) ++next;
         dc_gpu_body_record_t *source = dc_gpu_body_record(from, i);
         *dc_gpu_body_record(to, next) = *source;
