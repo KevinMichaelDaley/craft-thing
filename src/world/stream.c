@@ -182,7 +182,8 @@ static bool load_gas_checkpoint(FILE *file,size_t bytes,fr_gas_checkpoint_chunk_
 
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc_chunk_coord_t coord,
     dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,
-    fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk,dc_stream_chunk_time_t *completed) {
+    fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk,dc_stream_chunk_time_t *completed,
+    bool *generated) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     chunk->coord=coord;
@@ -196,6 +197,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
     if (!file && errno == ENOENT) {
         if (stream->ground_surface) {
             if (!dc_generate_chunk_ground(coord,&stream->ground,chunk)) {free(chunk);return NULL;}
+            *generated = true;
             return chunk;
         }
 #ifdef DC_NATIVE_VIEW
@@ -206,6 +208,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
 #else
         dc_generate_chunk(stream->seed, coord, chunk);
 #endif
+        *generated = true;
         return chunk;
     }
     if (!file) { free(chunk); return NULL; }
@@ -324,7 +327,10 @@ static int worker_main(void *arg) {
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
             result.colors=calloc(1,sizeof(*result.colors));
-            result.chunk = result.colors?load_chunk(stream,job.staging,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas,&result.bulk,&result.time):NULL;
+            if (result.colors) {
+                result.chunk = load_chunk(stream, job.staging, job.coord, result.colors, &result.reactive,
+                    &result.water_excess, &result.gas, &result.bulk, &result.time, &result.generated);
+            }
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
             result.kind = save_chunk(stream,job.staging,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,

@@ -2,6 +2,8 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "dungeoncraft/color.h"
 #include "dungeoncraft/world_save.h"
 
 enum { WORLD_DIRECTORY_LIMIT = 900, WORLD_PATH_CAP = 1024 };
@@ -19,15 +22,28 @@ enum { CHUNK_PREFIX_LENGTH = sizeof("chunk_") - 1, CHUNK_COORD_LENGTH = 16,
 static const char draft_name[] = ".level-save-draft";
 static const char committed_name[] = ".level-save-committed";
 static const char publish_name[] = ".level-save-publish";
+static const char clock_temp_name[] = DC_WORLD_CLOCK_RECORD ".tmp";
 
 struct dc_world_save {
     int root;
     bool staging;
+    bool clock_cached;
+    double stored_clock;
     char directory[WORLD_DIRECTORY_LIMIT + 1];
     char draft[WORLD_PATH_CAP];
 };
 
 typedef enum { SYNC_FILES, PUBLISH_FILES, DISCARD_FILES } file_action_t;
+
+typedef struct {
+    char magic[4];
+    uint32_t version;
+    double seconds;
+    uint64_t checksum;
+} world_clock_record_t;
+
+enum { WORLD_CLOCK_VERSION = 1 };
+_Static_assert(sizeof(world_clock_record_t) == 24, "World clock record layout changed");
 
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -39,6 +55,7 @@ static bool valid_file(const char *name, bool discard) {
     if (discard && length > 4 && strcmp(name + length - 4, ".tmp") == 0)
         length -= 4;
     if ((length == sizeof(DC_WORLD_BODY_RECORD) - 1 && strncmp(name, DC_WORLD_BODY_RECORD, length) == 0) ||
+        (length == sizeof(DC_WORLD_CLOCK_RECORD) - 1 && strncmp(name, DC_WORLD_CLOCK_RECORD, length) == 0) ||
         (length == sizeof(DC_WORLD_PLAYER_RECORD) - 1 && strncmp(name, DC_WORLD_PLAYER_RECORD, length) == 0))
         return true;
     if (length != CHUNK_NAME_LENGTH || strncmp(name, "chunk_", CHUNK_PREFIX_LENGTH) != 0 ||
@@ -143,6 +160,7 @@ bool dc_world_save_begin(dc_world_save_t *save, char *err, uint32_t cap) {
     if (!recover(save->root) || mkdirat(save->root, draft_name, 0700) != 0)
         return error(err, cap, "Cannot create world save staging");
     save->staging = true;
+    save->clock_cached = false;
     return true;
 }
 
@@ -151,12 +169,77 @@ const char *dc_world_save_directory(const dc_world_save_t *save, bool staging) {
     return staging ? (save->staging ? save->draft : NULL) : save->directory;
 }
 
+static bool valid_clock(double seconds) {
+    return isfinite(seconds) && seconds >= 0.;
+}
+
+static uint64_t clock_checksum(const world_clock_record_t *record) {
+    return dc_color_hash(UINT64_C(14695981039346656037), record,
+                         offsetof(world_clock_record_t, checksum));
+}
+
+bool dc_world_save_load_clock(const dc_world_save_t *save, double *seconds, char *err, uint32_t cap) {
+    if (!save || !seconds) return error(err, cap, "Missing world clock destination");
+    int fd = openat(save->root, DC_WORLD_CLOCK_RECORD, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) {
+        if (errno != ENOENT) return error(err, cap, "Cannot open world clock");
+        *seconds = 0.;
+        return true;
+    }
+    struct stat status;
+    FILE *file = fstat(fd, &status) == 0 && S_ISREG(status.st_mode) ? fdopen(fd, "rb") : NULL;
+    if (!file) {
+        close(fd);
+        return error(err, cap, "Cannot read world clock");
+    }
+    world_clock_record_t record;
+    bool okay = fread(&record, sizeof(record), 1, file) == 1 && fgetc(file) == EOF && !ferror(file);
+    if (fclose(file) != 0 || !okay || memcmp(record.magic, "DWC1", 4) != 0 ||
+        record.version != WORLD_CLOCK_VERSION || !valid_clock(record.seconds) ||
+        record.checksum != clock_checksum(&record))
+        return error(err, cap, "Invalid world clock snapshot");
+    *seconds = record.seconds;
+    return true;
+}
+
+static bool write_clock(int directory, double seconds, bool durable) {
+    if (unlinkat(directory, clock_temp_name, 0) != 0 && errno != ENOENT) return false;
+    int fd = openat(directory, clock_temp_name, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (fd < 0) return false;
+    world_clock_record_t record = {.magic = {'D','W','C','1'}, .version = WORLD_CLOCK_VERSION, .seconds = seconds};
+    record.checksum = clock_checksum(&record);
+    FILE *file = fdopen(fd, "wb");
+    bool okay = file && fwrite(&record, sizeof(record), 1, file) == 1 &&
+                fflush(file) == 0 && (!durable || fsync(fd) == 0);
+    if ((file ? fclose(file) : close(fd)) != 0) okay = false;
+    if (!okay || renameat(directory, clock_temp_name, directory, DC_WORLD_CLOCK_RECORD) != 0) {
+        unlinkat(directory, clock_temp_name, 0);
+        return false;
+    }
+    return !durable || fsync(directory) == 0;
+}
+
+bool dc_world_save_store_clock(dc_world_save_t *save, double seconds, char *err, uint32_t cap) {
+    if (!save || !valid_clock(seconds)) return error(err, cap, "Invalid world clock time");
+    if (save->clock_cached && save->stored_clock == seconds) return true;
+    int directory = save->staging ? openat(save->root, draft_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                                  : save->root;
+    if (directory < 0) return error(err, cap, "Cannot open world clock staging");
+    bool okay = write_clock(directory, seconds, !save->staging);
+    if (save->staging && close(directory) != 0) okay = false;
+    if (!okay) return error(err, cap, "Cannot save world clock");
+    save->stored_clock = seconds;
+    save->clock_cached = true;
+    return true;
+}
+
 bool dc_world_save_commit(dc_world_save_t *save, char *err, uint32_t cap) {
     if (!save || !save->staging) return error(err, cap, "Missing staged world save");
     if (!visit_files(save->root, draft_name, SYNC_FILES) ||
         renameat(save->root, draft_name, save->root, committed_name) != 0)
         return error(err, cap, "Cannot commit staged world save");
     save->staging = false;
+    save->clock_cached = false;
     return (fsync(save->root) == 0 && recover(save->root)) ||
            error(err, cap, "World save committed and needs recovery");
 }

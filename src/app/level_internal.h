@@ -15,6 +15,7 @@ struct dc_level_view {
     dc_gpu_t *gpu;
     dc_streamer_t *stream;
     dc_world_save_t *save;
+    double world_seconds;
     fr_player_inventory_t saved_inventory[FR_INPUT_PLAYERS];
     dc_chunk_table_t table;
     dc_chunk_coord_t origin,mapped_origin;

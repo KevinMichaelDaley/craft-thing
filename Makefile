@@ -687,7 +687,7 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 build/stream.o: src/world/stream.c src/world/stream_gas.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/world_save.o: src/world/world_save.c include/dungeoncraft/world_save.h
+build/world_save.o: src/world/world_save.c include/dungeoncraft/color.h include/dungeoncraft/world_save.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/world_save_tests: tests/world/world_save_tests.c src/app/player_inventory_save.c src/app/player_inventory_save.h build/world_save.o

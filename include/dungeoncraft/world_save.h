@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #define DC_WORLD_BODY_RECORD "rigid_bodies.bin"
+#define DC_WORLD_CLOCK_RECORD "world_clock.bin"
 #define DC_WORLD_PLAYER_RECORD "player_inventory.bin"
 
 typedef struct dc_world_save dc_world_save_t;
@@ -17,6 +18,12 @@ bool dc_world_save_begin(dc_world_save_t *save, char *err, uint32_t cap);
 
 /** Return the canonical directory or the active staging directory. */
 const char *dc_world_save_directory(const dc_world_save_t *save, bool staging);
+
+/** Read the canonical elapsed simulation time, starting at zero for an older world. */
+bool dc_world_save_load_clock(const dc_world_save_t *save, double *seconds, char *err, uint32_t cap);
+
+/** Write confirmed elapsed simulation time to the active save destination. */
+bool dc_world_save_store_clock(dc_world_save_t *save, double seconds, char *err, uint32_t cap);
 
 /** Commit the staged snapshot once all of its writers have finished. */
 bool dc_world_save_commit(dc_world_save_t *save, char *err, uint32_t cap);

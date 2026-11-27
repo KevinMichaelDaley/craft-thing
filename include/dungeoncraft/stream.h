@@ -28,6 +28,7 @@ typedef struct {
     fr_gas_checkpoint_chunk_t *gas;
     fr_bulk_phase_chunk_t *bulk;
     dc_stream_chunk_time_t time;
+    bool generated; /**< Chunk was created because no saved record existed. */
 } dc_stream_result_t;
 
 /** Start a worker thread for procedural generation and chunk disk I/O. */

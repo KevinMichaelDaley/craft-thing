@@ -21,6 +21,16 @@
 #include "view_config.h"
 
 static bool error(char *buf,uint32_t cap,const char *message);
+
+static bool save_world_clock(dc_level_view_t *view, char *err, uint32_t cap) {
+    return !view->save || dc_world_save_store_clock(view->save, view->world_seconds, err, cap);
+}
+
+static bool save_level_structure(dc_level_view_t *view, char *err, uint32_t cap) {
+    return save_world_clock(view, err, cap) &&
+           fr_gpu_save_structure_with_chunk_times(view->gpu, view->body_path, &view->table, err, cap);
+}
+
 bool dc_level_view_configure_atmosphere(dc_level_view_t *view, char *err, uint32_t cap) {
     const fr_gas_model_t model = {
         .gas_constant = {.25984, .29680, .18892, .46152, 0},
@@ -211,7 +221,7 @@ bool dc_level_view_place_structure(dc_level_view_t *view,
         if (view->table.slots[i].state == DC_SLOT_ACTIVE ||
             view->table.slots[i].state == DC_SLOT_SLEEPING)
             dc_chunk_table_mark_dirty(&view->table, i);
-    return fr_gpu_save_structure_with_chunk_times(view->gpu, view->body_path, &view->table, err, cap);
+    return save_level_structure(view, err, cap);
 }
 
 static dc_level_step_run_t *pending_runs(dc_level_view_t *view) {
@@ -356,7 +366,13 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }
-            view->table.slots[index].time = restored ? checkpoint_time : result.time;
+            dc_chunk_time_t time = restored ? checkpoint_time : result.time;
+            if (!restored && result.generated) {
+                time = (dc_chunk_time_t){.seconds = view->world_seconds, .known = true};
+            }
+            /* Older snapshots may have a chunk timestamp without an epoch record. */
+            if (time.known && time.seconds > view->world_seconds) view->world_seconds = time.seconds;
+            view->table.slots[index].time = time;
             if(view->closing) {
                 view->closing_structure_saved=false;
                 view->save_color_stale[index]=true;
@@ -383,7 +399,7 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             pending |= slot->state == DC_SLOT_SLEEPING && slot->dirty && !slot->pinned;
         }
         if (pending && (!view->closing || !view->closing_structure_saved)) {
-            if(!fr_gpu_save_structure_with_chunk_times(view->gpu,view->body_path,&view->table,err,cap)) return false;
+            if (!save_level_structure(view, err, cap)) return false;
             if(view->closing) view->closing_structure_saved=true;
         }
     }
@@ -392,6 +408,7 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
+        if (!save_world_clock(view, err, cap)) return false;
         dc_chunk_t chunk = { .coord = slot->coord };
         dc_chunk_colors_t colors;
         uint64_t generation;
@@ -525,7 +542,8 @@ dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t see
     dc_level_view_t *view = calloc(1, sizeof(*view));
     if (!view) { error(err, cap, "Out of memory creating level view"); return NULL; }
     view->save = dc_world_save_open(directory, err, cap);
-    if (!view->save || !dc_player_inventory_load(view->save, view->saved_inventory, err, cap)) goto fail;
+    if (!view->save || !dc_world_save_load_clock(view->save, &view->world_seconds, err, cap) ||
+        !dc_player_inventory_load(view->save, view->saved_inventory, err, cap)) goto fail;
     view->origin.y = INITIAL_CHUNK_Y;
     view->mapped_origin.y = INITIAL_CHUNK_Y;
     if (!dc_chunk_table_init(&view->table, DC_GPU_CHUNK_SLOTS)) goto fail;
@@ -588,6 +606,7 @@ bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t 
 }
 
 static void advance_resident_chunks(dc_level_view_t *view, double seconds) {
+    view->world_seconds += seconds;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_ACTIVE) continue;
@@ -1040,7 +1059,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     view->closing=true;
     uint64_t save_start=SDL_GetTicks64();
     if (okay) {
-        okay = fr_gpu_save_structure_with_chunk_times(view->gpu,view->body_path,&view->table,err,cap);
+        okay = save_level_structure(view, err, cap);
         view->closing_structure_saved = okay;
     }
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save final structure%llums\n",
@@ -1078,7 +1097,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         SDL_Delay(1);
     }
     if(okay&&!view->closing_structure_saved)
-        okay=fr_gpu_save_structure_with_chunk_times(view->gpu,view->body_path,&view->table,err,cap);
+        okay = save_level_structure(view, err, cap);
     dc_stream_destroy(view->stream);
     if (okay && staged) okay = dc_world_save_commit(view->save, err, cap);
     dc_world_save_close(view->save);
