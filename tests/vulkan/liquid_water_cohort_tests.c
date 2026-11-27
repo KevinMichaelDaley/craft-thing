@@ -93,14 +93,18 @@ static bool download(dc_liquid_seam_endpoint_t tile, water_tile_t *state) {
     return true;
 }
 
-static void seed_apertures(dc_liquid_seam_endpoint_t center) {
+static void set_apertures(dc_liquid_seam_endpoint_t center, uint32_t x_coverage, uint32_t y_coverage) {
     dc_gpu_t *gpu = center.gpu;
     uint32_t *occupancy = gpu->occupancy_mapped;
     const uint32_t cells = gpu->width * gpu->height;
     const uint32_t base = center.tile_y * DC_CHUNK_SIDE * gpu->width + center.tile_x * DC_CHUNK_SIDE;
-    occupancy[3u * cells + base + 56u * gpu->width + 63u] = 3u * DC_FLUID_FULL / 4u;
-    occupancy[4u * cells + base + 63u * gpu->width + 56u] = DC_FLUID_FULL / 4u;
+    occupancy[3u * cells + base + 56u * gpu->width + 63u] = x_coverage;
+    occupancy[4u * cells + base + 63u * gpu->width + 56u] = y_coverage;
     gpu->rigid_occupancy_present = true;
+}
+
+static void seed_apertures(dc_liquid_seam_endpoint_t center) {
+    set_apertures(center, 3u * DC_FLUID_FULL / 4u, DC_FLUID_FULL / 4u);
 }
 
 static int compare_markers(const void *a, const void *b) {
@@ -318,10 +322,27 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
         for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) ASSERT_TRUE(upload(tiles[tile], &initial[tile]));
         seed_apertures(tiles[CENTER]);
         for (uint32_t step = 0; step < TICKS; ++step) {
+            if (step == 3u) set_apertures(tiles[CENTER], DC_FLUID_FULL, 0u);
             const bool lose_ack = step == 2u;
             if (lose_ack) {
                 const uint32_t phase = resident->fluid_phase, tick = resident->fluid_tick;
                 const float budget = resident->fluid_phase_budget;
+                if (phase != 0u) {
+                    ASSERT_TRUE(!dc_gpu_tick_step(resident, g_err, sizeof(g_err)));
+                    ASSERT_TRUE(!dc_gpu_set_fluid_interval(offscreen, intervals[i]));
+                    ASSERT_TRUE(!dc_gpu_set_page(offscreen, 1u, 0u, UINT32_MAX, g_err, sizeof(g_err)));
+                    float *color = (float *)offscreen->water_color_mapped +
+                        ((tiles[SOUTH].slot + 1u) * DC_CHUNK_CELLS - 1u) * 4u;
+                    const float saved = *color;
+                    *color = NAN;
+                    ASSERT_EQ(dc_gpu_step_water_cohort(tiles, TILE_COUNT, elapsed[step] / 60.f, g_err, sizeof(g_err)),
+                              DC_LIQUID_SEAM_REJECTED);
+                    ASSERT_EQ(resident->fluid_phase, phase);
+                    ASSERT_EQ(offscreen->fluid_phase, phase);
+                    ASSERT_EQ(resident->fluid_phase_budget, budget);
+                    ASSERT_TRUE(isnan(*color));
+                    *color = saved;
+                }
                 g_lose_ack = true;
                 ASSERT_EQ(dc_gpu_step_water_cohort(tiles, TILE_COUNT, elapsed[step] / 60.f, g_err, sizeof(g_err)),
                           DC_LIQUID_SEAM_UNCONFIRMED);
@@ -371,6 +392,7 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
         for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) ASSERT_TRUE(upload(monolithic[tile], &initial[tile]));
         seed_apertures(monolithic[CENTER]);
         for (uint32_t step = 0; step < TICKS; ++step) {
+            if (step == 3u) set_apertures(monolithic[CENTER], DC_FLUID_FULL, 0u);
             const float seconds = elapsed[step] / 60.f;
             ASSERT_TRUE(native_water_tick(mono, seconds * 60.f));
             water_tick_t *result = &split[i][step];

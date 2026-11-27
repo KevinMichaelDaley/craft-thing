@@ -22,7 +22,7 @@ enum {
     PRESSURE_WORK, PRESSURE_STENCIL, INITIAL_CELLS, APERTURE_PREFIX, APERTURE_TREE,
     CROSSINGS, WATER_COLOR, INITIAL_COLOR, THERMAL_CONTROL, BULK_PHASE, PUBLICATION_RECEIPT, PUBLICATION_TILES,
     MARKER_A, MARKER_B, COUNT_A, COUNT_B, MARKER_GRID, SLOT_SEED, PREVIOUS_STOCK,
-    PROJECTED_VELOCITY, DISPLACEMENT_CROSSINGS, ADVECTION_CROSSINGS, BUFFER_COUNT
+    PROJECTED_VELOCITY, DISPLACEMENT_CROSSINGS, ADVECTION_CROSSINGS, PHASE_BACKUP, BUFFER_COUNT
 };
 
 struct dc_gpu_seam_projection {
@@ -35,6 +35,9 @@ struct dc_gpu_seam_projection {
     VkPipeline correction;
     fr_renderer_compute_t publication;
     dc_gpu_address_buffer_t water_heat;
+    dc_gpu_t *phase_peer;
+    dc_chunk_coord_t phase_first_coord;
+    bool restore_phase;
     uint32_t width, height, tiles;
     VkDeviceSize offset[BUFFER_COUNT], size[BUFFER_COUNT];
     void *mapped;

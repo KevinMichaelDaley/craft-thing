@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dungeoncraft/liquid_seam.h"
 #include "ferrum/fire/bulk_phase.h"
 #include "fluid_schedule.h"
 #include "fluid_transport_limits.h"
@@ -251,6 +252,8 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
     if (!chunk_dx && !chunk_dy) {
         return true;
     }
+    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+        return error(err, cap, "Cannot shift velocity during a coupled water cycle");
     for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(gpu); ++slot)
         gpu->preserve_shifted_slot[slot] = gpu->slot_page[slot] != UINT32_MAX;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
@@ -359,13 +362,18 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
     ++gpu->fluid_tick;
 }
 
-void dc_gpu_record_water_seam_correction(dc_gpu_t *gpu, VkDescriptorSet descriptor,
-    VkPipeline pipeline, uint32_t width, uint32_t height, uint32_t slots, float step_scale, uint32_t axis) {
-    uint32_t push[8] = {width, height, 4u, gpu->fluid_tick & 1u, 0u,
-                        dc_gpu_float_bits(step_scale), 0u, axis};
+void dc_gpu_record_water_seam_mass(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    VkPipeline pipeline, uint32_t width, uint32_t height, uint32_t slots) {
+    const uint32_t push[8] = {width, height, 4u};
     record_mass_pass(gpu, descriptor, pipeline, slots, push);
-    /* Both owners' active marker banks are gathered into bank A. */
-    dc_gpu_record_marker_domain(gpu, descriptor, width, height, slots, 0u, step_scale);
+}
+
+void dc_gpu_record_water_seam_correction(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    VkPipeline pipeline, uint32_t width, uint32_t height, uint32_t slots, float step_scale, uint32_t axis,
+    uint32_t tick, uint32_t source_ping) {
+    uint32_t push[8] = {width, height, 0u, tick & 1u, 0u,
+                        dc_gpu_float_bits(step_scale), 0u, axis};
+    dc_gpu_record_marker_domain(gpu, descriptor, width, height, slots, source_ping, tick, step_scale);
     record_mass_relaxation(gpu, descriptor, pipeline, slots, push);
 }
 
@@ -403,17 +411,13 @@ void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     if (phase == 0u) dc_gpu_record_projection_begin(gpu);
-    const uint32_t pressure_stop = DC_PRESSURE_PASS_COUNT;
-    if (phase == 0u) dc_gpu_record_pressure_passes(gpu, 0u,
-        pressure_stop < 10u ? pressure_stop : 10u);
-    else if (phase == 1u) dc_gpu_record_pressure_passes(gpu, 10u,
-        pressure_stop < 25u ? pressure_stop : 25u);
-    else if (phase == 2u) dc_gpu_record_pressure_passes(gpu, 25u,
-        pressure_stop < 40u ? pressure_stop : 40u);
-    else if (phase == 3u) {
-        dc_gpu_record_pressure_passes(gpu, 40u, pressure_stop);
-        dc_gpu_record_fluid_transport(gpu, 0u, 3u);
-    } else if (phase == 4u) dc_gpu_record_fluid_transport(gpu, 3u, 5u);
+    if (phase < 4u) {
+        uint32_t first, stop;
+        dc_gpu_fluid_pressure_range(phase, &first, &stop);
+        dc_gpu_record_pressure_passes(gpu, first, stop);
+    }
+    if (phase == 3u) dc_gpu_record_fluid_transport(gpu, 0u, 3u);
+    else if (phase == 4u) dc_gpu_record_fluid_transport(gpu, 3u, 5u);
     else if (phase == 5u) record_fluid_correction(gpu);
 }
 
@@ -451,6 +455,8 @@ bool dc_gpu_fluid_max_divergence(dc_gpu_t *gpu, float *divergence,
 
 bool dc_gpu_fluid_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "GPU context is null");
+    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+        return error(err, cap, "Cannot advance a single owner during a coupled water cycle");
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset fluid command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };

@@ -2,6 +2,7 @@
 #define DUNGEONCRAFT_LIQUID_SEAM_GPU_INTERNAL_H
 
 #include "dungeoncraft/liquid_seam.h"
+#include "fluid_schedule.h"
 #include "renderer_internal.h"
 
 typedef struct {
@@ -36,12 +37,14 @@ void dc_gpu_seam_bind_buffers(dc_gpu_t *gpu, VkDescriptorSet set,
     const VkDescriptorBufferInfo *buffers, uint32_t count);
 bool dc_gpu_prepare_liquid_receipt(dc_gpu_t *gpu, char *err, uint32_t cap);
 dc_liquid_seam_result_t dc_gpu_submit_liquid_seam(dc_gpu_t *gpu, dc_gpu_t *peer,
-    const uint32_t *receipt, bool bulk, char *err, uint32_t cap);
+    const uint32_t *receipt, bool bulk, const dc_fluid_schedule_t *schedule, char *err, uint32_t cap);
+void dc_gpu_complete_water_phases(dc_gpu_t *gpu, dc_gpu_t *peer,
+    const dc_fluid_schedule_t *schedule, bool committed);
 
 bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
     fr_renderer_compute_t *compute, const VkDescriptorBufferInfo scratch[DC_WATER_PUBLICATION_SCRATCH_BINDINGS],
     char *err, uint32_t cap);
 void dc_gpu_record_water_publication(dc_gpu_t *gpu, const fr_renderer_compute_t *compute,
-    uint32_t width, uint32_t height, uint32_t tiles, bool thermal);
+    uint32_t width, uint32_t height, uint32_t tiles, bool thermal, bool markers);
 
 #endif

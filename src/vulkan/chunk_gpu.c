@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dungeoncraft/liquid_seam.h"
 #include "ferrum/fire/bulk_phase.h"
 #include "gpu_internal.h"
 #include "gas_gpu_internal.h"
@@ -405,6 +406,8 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         if (slot != UINT32_MAX) gpu->preserve_shifted_slot[slot] = false;
         return true;
     }
+    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+        return error(err, cap, "Cannot change page mappings during a coupled water cycle");
     fr_gas_gpu_invalidate_cache(gpu);
     gpu->body_refresh_pending = true;
     if (slot != UINT32_MAX && gpu->slot_page[slot] != UINT32_MAX &&

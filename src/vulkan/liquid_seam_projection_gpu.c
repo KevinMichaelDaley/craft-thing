@@ -107,12 +107,12 @@ static void read_water_plan(const struct dc_gpu_seam_projection *scratch, dc_liq
     }
 }
 
-static bool prepare_publication(dc_gpu_t *gpu, dc_gpu_t *peer, bool thermal,
+static bool prepare_publication(dc_gpu_t *gpu, dc_gpu_t *peer, bool thermal, uint32_t marker_ping,
                                 char *err, uint32_t cap) {
     struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
     const unsigned fields[] = {PUBLICATION_RECEIPT, INITIAL_CELLS, CELLS, INITIAL_COLOR, WATER_COLOR,
-                               VELOCITY, OCCUPANCY, BULK_PHASE, THERMAL_CONTROL, MARKER_B, COUNT_B, MARKER_GRID,
-                               PUBLICATION_TILES};
+        VELOCITY, OCCUPANCY, BULK_PHASE, THERMAL_CONTROL, marker_ping ? MARKER_B : MARKER_A,
+        marker_ping ? COUNT_B : COUNT_A, MARKER_GRID, PUBLICATION_TILES};
     _Static_assert(sizeof(fields) / sizeof(fields[0]) == DC_WATER_PUBLICATION_SCRATCH_BINDINGS,
                    "Water publication scratch binding count mismatch");
     VkDescriptorBufferInfo buffers[DC_WATER_PUBLICATION_SCRATCH_BINDINGS];
@@ -139,9 +139,98 @@ static void record_stage_readback(VkCommandBuffer command, const struct dc_gpu_s
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_COPY_BIT, 0, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 0);
 }
 
+static uint32_t completed_cycles(const dc_fluid_schedule_t *schedule) {
+    return (schedule->first_phase + schedule->phase_count) / DC_FLUID_PHASES;
+}
+
+static void commit_water_clock(dc_gpu_t *gpu, const dc_fluid_schedule_t *schedule) {
+    gpu->fluid_phase = schedule->next_phase;
+    gpu->fluid_phase_budget = schedule->remaining_budget;
+    gpu->fluid_step_scale = schedule->step_scale;
+    gpu->fluid_tick += completed_cycles(schedule);
+}
+
+void dc_gpu_complete_water_phases(dc_gpu_t *gpu, dc_gpu_t *peer,
+    const dc_fluid_schedule_t *schedule, bool committed) {
+    struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
+    scratch->restore_phase = !committed && schedule->first_phase != 0u;
+    if (!committed) return;
+    commit_water_clock(gpu, schedule);
+    commit_water_clock(peer, schedule);
+    const bool held = schedule->next_phase != 0u;
+    gpu->water_cycle_peer = held ? peer : NULL;
+    peer->water_cycle_peer = held ? gpu : NULL;
+    scratch->phase_peer = held ? peer : NULL;
+}
+
+static void record_phase_backup(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch) {
+    const unsigned fields[] = {PREVIOUS_VERTICAL, HEAD, PRESSURE};
+    VkBufferCopy regions[3];
+    VkDeviceSize backup = scratch->offset[PHASE_BACKUP];
+    for (unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) {
+        const VkDeviceSize field = scratch->offset[fields[i]];
+        const VkDeviceSize size = scratch->size[fields[i]];
+        regions[i] = scratch->restore_phase ? (VkBufferCopy){backup, field, size} :
+                                             (VkBufferCopy){field, backup, size};
+        backup += size;
+    }
+    vkCmdCopyBuffer(command, scratch->buffer, scratch->buffer, 3u, regions);
+}
+
+static void record_water_phases(dc_gpu_t *gpu, const struct dc_gpu_seam_projection *scratch,
+    const dc_fluid_schedule_t *schedule, bool occupancy, uint32_t axis, bool audit) {
+    const uint32_t width = scratch->width, height = scratch->height;
+    const float scale = schedule->step_scale;
+    uint32_t tick = gpu->fluid_tick, source_ping = 0;
+    for (uint32_t i = 0; i < schedule->phase_count; ++i) {
+        const uint32_t phase = (schedule->first_phase + i) % DC_FLUID_PHASES;
+        if (phase == 0u) {
+            if (occupancy)
+                dc_gpu_record_water_displacement(gpu, scratch->sets[0], scratch->displacement, width, height, axis);
+            if (audit) record_stage_readback(gpu->command, scratch, DISPLACEMENT_CROSSINGS, false);
+        }
+        if (phase < 4u) {
+            uint32_t first, stop;
+            dc_gpu_fluid_pressure_range(phase, &first, &stop);
+            dc_gpu_record_dense_projection(gpu, scratch->sets, width, height, scale, first, stop);
+        }
+        if (phase == 3u)
+            dc_gpu_record_water_seam_transport(gpu, scratch->sets[0], scratch->transport, width, height,
+                                               scale, occupancy, axis, 0u, 3u);
+        else if (phase == 4u) {
+            dc_gpu_record_water_seam_transport(gpu, scratch->sets[0], scratch->transport, width, height,
+                                               scale, occupancy, axis, 3u, 4u);
+            if (audit) record_stage_readback(gpu->command, scratch, ADVECTION_CROSSINGS, true);
+            dc_gpu_record_water_seam_mass(gpu, scratch->sets[0], scratch->correction, width, height, scratch->tiles);
+            fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        } else if (phase == 5u) {
+            dc_gpu_record_water_seam_correction(gpu, scratch->sets[0], scratch->correction,
+                width, height, scratch->tiles, scale, axis, tick++, source_ping);
+            source_ping ^= 1u;
+        }
+    }
+}
+
+static bool same_water_cycle(const water_domain_t *domain, const dc_fluid_schedule_t *schedule) {
+    const dc_gpu_t *gpu = domain->gpu, *peer = domain->peer;
+    if (!schedule || schedule->first_phase == 0u)
+        return !gpu->water_cycle_peer && !peer->water_cycle_peer;
+    const struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
+    return gpu->water_cycle_peer == peer && peer->water_cycle_peer == gpu && scratch &&
+        scratch->phase_peer == peer && scratch->tiles == domain->count &&
+        scratch->width == domain->width && scratch->height == domain->height &&
+        scratch->phase_first_coord.x == domain->tiles[0].coord.x &&
+        scratch->phase_first_coord.y == domain->tiles[0].coord.y &&
+        memcmp(projection_field(scratch, PUBLICATION_TILES), domain->locations,
+               scratch->size[PUBLICATION_TILES]) == 0;
+}
+
 static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
     dc_liquid_seam_axis_t axis, float seconds, const float *previous_normal,
-    dc_liquid_seam_sample_t *samples, dc_water_seam_plan_t *plan, bool publish, char *err, uint32_t cap) {
+    dc_liquid_seam_sample_t *samples, dc_water_seam_plan_t *plan, bool publish,
+    const dc_fluid_schedule_t *schedule, char *err, uint32_t cap) {
     if ((!samples && !plan && !publish) || !(seconds > 0.f) || seconds > .25f) {
         error(err, cap, "Invalid liquid seam projection endpoints or interval");
         return DC_LIQUID_SEAM_REJECTED;
@@ -150,6 +239,10 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
     if (dc_gpu_liquid_seam_pending(gpu) || dc_gpu_liquid_seam_pending(peer)) {
         error(err, cap, "A liquid seam receipt is still pending");
         return DC_LIQUID_SEAM_UNCONFIRMED;
+    }
+    if (!same_water_cycle(domain, schedule)) {
+        error(err, cap, "A coupled water cycle requires its original ordered tile mappings");
+        return DC_LIQUID_SEAM_REJECTED;
     }
     if (previous_normal)
         for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane)
@@ -164,6 +257,11 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
         error(err, cap, "Liquid seam owners have different marker correction settings or parity");
         return DC_LIQUID_SEAM_REJECTED;
     }
+    if (schedule && schedule->phase_count == 0u) {
+        commit_water_clock(gpu, schedule);
+        commit_water_clock(peer, schedule);
+        return DC_LIQUID_SEAM_COMMITTED;
+    }
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS) {
         error(err, cap, "Cannot synchronize liquid seam projection endpoints");
         return DC_LIQUID_SEAM_REJECTED;
@@ -171,16 +269,19 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
     const bool thermal = gpu->thermal != NULL;
     const bool occupancy = gpu->rigid_occupancy_present || peer->rigid_occupancy_present;
     const uint32_t width = domain->width, height = domain->height, count = domain->count;
+    const dc_fluid_schedule_t full = {.phase_count = DC_FLUID_PHASES, .step_scale = seconds * 60.f};
+    const dc_fluid_schedule_t *range = schedule ? schedule : &full;
+    const uint32_t cycles = completed_cycles(range);
     if (!dc_gpu_prepare_water_projection(gpu, width, height, count, err, cap) ||
         (transport && !dc_gpu_prepare_water_transport(gpu, occupancy, thermal, err, cap)) ||
-        (publish && !prepare_publication(gpu, peer, thermal, err, cap)))
+        (publish && !prepare_publication(gpu, peer, thermal, cycles & 1u, err, cap)))
         return DC_LIQUID_SEAM_REJECTED;
     if (!fr_renderer_begin(gpu)) {
         error(err, cap, "Cannot begin liquid seam projection");
         return DC_LIQUID_SEAM_REJECTED;
     }
 
-    const struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
+    struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
     uint32_t *receipt = projection_field(scratch, PUBLICATION_RECEIPT);
     if (publish) *receipt = 0u;
     uint32_t *pages = projection_field(scratch, PAGES), *slots = projection_field(scratch, SLOT_PAGES);
@@ -198,6 +299,7 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
     }
     if (publish) memcpy(projection_field(scratch, PUBLICATION_TILES), domain->locations,
                         scratch->size[PUBLICATION_TILES]);
+    if (schedule && schedule->first_phase == 0u) scratch->phase_first_coord = domain->tiles[0].coord;
     const VkCommandBuffer command = gpu->command;
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT,
@@ -206,6 +308,7 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     for (uint32_t tile = 0; tile < count; ++tile)
         dc_gpu_copy_projection_tile(command, scratch, domain->tiles[tile], &domain->locations[tile], tile, transport);
+    if (schedule && schedule->first_phase != 0u) record_phase_backup(command, scratch);
     if (plan)
         vkCmdFillBuffer(command, scratch->buffer, scratch->offset[CROSSINGS], scratch->size[CROSSINGS], 0u);
     if (previous_normal) override_normal(gpu, axis, width, previous_normal);
@@ -215,26 +318,17 @@ static dc_liquid_seam_result_t run_water_domain(const water_domain_t *domain,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     const uint32_t seam_axis = !plan ? 0u :
         axis == DC_LIQUID_SEAM_X ? DC_WATER_SEAM_HORIZONTAL : DC_WATER_SEAM_VERTICAL;
-    if (transport && occupancy)
-        dc_gpu_record_water_displacement(gpu, scratch->sets[0], scratch->displacement, width, height, seam_axis);
-    if (plan) record_stage_readback(command, scratch, DISPLACEMENT_CROSSINGS, false);
-    dc_gpu_record_dense_projection(gpu, scratch->sets, width, height, seconds * 60.f);
-    if (transport) {
-        dc_gpu_record_water_seam_transport(gpu, scratch->sets[0], scratch->transport, width, height,
-                                            seconds * 60.f, occupancy, seam_axis);
-        if (plan) record_stage_readback(command, scratch, ADVECTION_CROSSINGS, true);
-        dc_gpu_record_water_seam_correction(gpu, scratch->sets[0], scratch->correction,
-                                            width, height, count, seconds * 60.f, seam_axis);
-    }
+    if (transport) record_water_phases(gpu, scratch, range, occupancy, seam_axis, plan != NULL);
+    else dc_gpu_record_dense_projection(gpu, scratch->sets, width, height, full.step_scale, 0u, DC_PRESSURE_PASS_COUNT);
     if (publish)
-        dc_gpu_record_water_publication(gpu, &scratch->publication, width, height, count, thermal);
+        dc_gpu_record_water_publication(gpu, &scratch->publication, width, height, count, thermal, cycles != 0u);
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_READ_BIT);
 
     if (publish) {
-        dc_liquid_seam_result_t result = dc_gpu_submit_liquid_seam(gpu, peer, receipt, false, err, cap);
+        dc_liquid_seam_result_t result = dc_gpu_submit_liquid_seam(gpu, peer, receipt, false, schedule, err, cap);
         if (result != DC_LIQUID_SEAM_COMMITTED) return result;
     } else if (!fr_renderer_submit(gpu)) {
         error(err, cap, "Liquid seam projection did not complete");
@@ -265,7 +359,7 @@ static dc_liquid_seam_result_t run_seam(dc_liquid_seam_endpoint_t first, dc_liqu
         tile_location(second, !vertical, vertical, 1)};
     const water_domain_t domain = {first.gpu, second.gpu, endpoints, locations, SEAM_TILES,
         DC_CHUNK_SIDE * (1u + !vertical), DC_CHUNK_SIDE * (1u + vertical)};
-    return run_water_domain(&domain, axis, seconds, previous_normal, samples, plan, publish, err, cap);
+    return run_water_domain(&domain, axis, seconds, previous_normal, samples, plan, publish, NULL, err, cap);
 }
 
 bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
@@ -352,10 +446,24 @@ dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoin
         error(err, cap, "Water cohort requires distinct connected tiles in two mapped contexts");
         return DC_LIQUID_SEAM_REJECTED;
     }
-    return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, err, cap);
+    return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, NULL, err, cap);
 }
 
 dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap) {
-    return dc_gpu_execute_water_cohort(tiles, count, seconds, err, cap);
+    dc_gpu_water_tile_t locations[MAX_WATER_COHORT_TILES];
+    water_domain_t domain;
+    if (!(seconds > 0.f) || seconds > .25f || !cohort_domain(tiles, count, locations, &domain)) {
+        error(err, cap, "Invalid coupled water tick endpoints or interval");
+        return DC_LIQUID_SEAM_REJECTED;
+    }
+    const dc_gpu_t *gpu = domain.gpu, *peer = domain.peer;
+    if (gpu->fluid_interval != peer->fluid_interval || gpu->fluid_phase != peer->fluid_phase ||
+        gpu->fluid_phase_budget != peer->fluid_phase_budget) {
+        error(err, cap, "Coupled water phase clocks do not agree");
+        return DC_LIQUID_SEAM_REJECTED;
+    }
+    const dc_fluid_schedule_t schedule = dc_gpu_plan_fluid_tick(gpu->fluid_interval, gpu->fluid_phase,
+        gpu->fluid_phase_budget, seconds * 60.f, true);
+    return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, &schedule, err, cap);
 }

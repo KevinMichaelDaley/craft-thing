@@ -110,6 +110,8 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
     if (dc_gpu_liquid_seam_pending(gpu))
         return error(err, cap, "Cannot present an owner with an unresolved liquid seam");
+    if (steps && gpu->water_cycle_peer)
+        return error(err, cap, "Cannot advance a single owner during a coupled water cycle");
     const char *trace_setting=getenv("DC_FRAME_TIMINGS");
     bool trace_waits=trace_setting&&strcmp(trace_setting,"0")!=0;
     uint64_t setup_begin=trace_waits?SDL_GetPerformanceCounter():0;

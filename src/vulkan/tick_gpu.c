@@ -204,6 +204,8 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     if (!capture) return error(err, cap, "Invalid GPU tick capture");
     if (dc_gpu_liquid_seam_pending(gpu))
         return error(err, cap, "Cannot advance an owner with an unresolved liquid seam");
+    if (gpu && gpu->water_cycle_peer)
+        return error(err, cap, "Cannot advance a single owner during a coupled water cycle");
     if(!tick_submit(gpu,capture,err,cap)) return false;
     return !gpu->gas||fr_gas_gpu_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f,err,cap);
 }
@@ -211,6 +213,8 @@ bool dc_gpu_tick_capture(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
 bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if (dc_gpu_liquid_seam_pending(gpu))
         return error(err, cap, "Cannot advance an owner with an unresolved liquid seam");
+    if (gpu && gpu->water_cycle_peer)
+        return error(err, cap, "Cannot advance a single owner during a coupled water cycle");
     const char *timings=getenv("DC_FRAME_TIMINGS");
     if(gpu&&fr_combustion_gpu_enabled(gpu)&&timings&&strcmp(timings,"0")!=0) {
         dc_gpu_tick_capture_t capture;
@@ -240,6 +244,7 @@ bool dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
 bool dc_gpu_set_fluid_interval(dc_gpu_t *gpu, uint32_t interval) {
     if (!gpu || (interval != 1u && interval != 2u &&
                  interval != 3u && interval != 6u)) return false;
+    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu)) return false;
     gpu->fluid_interval = interval;
     gpu->fluid_phase = 0u;
     gpu->fluid_phase_budget = 0.0f;

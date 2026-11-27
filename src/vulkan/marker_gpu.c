@@ -82,12 +82,12 @@ static void marker_barrier(dc_gpu_t *gpu) {
 }
 
 void dc_gpu_record_marker_domain(dc_gpu_t *gpu, VkDescriptorSet descriptor,
-    uint32_t width, uint32_t height, uint32_t slots, uint32_t source_ping, float step_scale) {
+    uint32_t width, uint32_t height, uint32_t slots, uint32_t source_ping, uint32_t tick, float step_scale) {
     marker_barrier(gpu);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->marker_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &descriptor, 0, NULL);
-    uint32_t push[7] = {width, height, 0, source_ping, gpu->fluid_tick,
+    uint32_t push[7] = {width, height, 0, source_ping, tick,
                         dc_gpu_float_bits(step_scale), slots};
     const uint32_t marker_groups = (slots * DC_MARKERS_PER_CHUNK + 255u) / 256u;
     const uint32_t groups[4] = {
@@ -104,7 +104,7 @@ void dc_gpu_record_marker_domain(dc_gpu_t *gpu, VkDescriptorSet descriptor,
 
 void dc_gpu_record_markers(dc_gpu_t *gpu) {
     dc_gpu_record_marker_domain(gpu, gpu->descriptor, gpu->width, gpu->height,
-        dc_gpu_slot_capacity(gpu), gpu->marker_ping, gpu->fluid_step_scale);
+        dc_gpu_slot_capacity(gpu), gpu->marker_ping, gpu->fluid_tick, gpu->fluid_step_scale);
     gpu->marker_ping ^= 1u;
 }
 

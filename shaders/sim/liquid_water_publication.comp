@@ -38,7 +38,7 @@ layout(set = 0, binding = 26, std430) buffer SecondMarkerGrid { uint second_mark
 
 struct Location { uint slot, x, y, width, scratch_x, scratch_y, context; };
 layout(set = 0, binding = 12, std430) readonly buffer Tiles { Location locations[]; };
-layout(push_constant) uniform Params { uint width, height, tiles, thermal; } params;
+layout(push_constant) uniform Params { uint width, height, tiles, thermal, markers; } params;
 
 shared uint invalid, before_low, before_high, after_low, after_high;
 
@@ -77,7 +77,7 @@ bool valid_cell(uint atlas, uint tile, uint local, Location owner, uint grid) {
         !finite_velocity(final_velocity[grid]) ||
         any(notEqual(floatBitsToUint(current_color), floatBitsToUint(initial_color[atlas]))))
         return false;
-    if (local == 0u) {
+    if (local == 0u && params.markers != 0u) {
         const uint live_markers = second ? second_marker_counts[owner.slot] : first_marker_counts[owner.slot];
         if (live_markers > MARKER_CAPACITY || final_marker_counts[tile] > MARKER_CAPACITY) return false;
     }
@@ -132,7 +132,6 @@ void main() {
         const uint live = owner.slot * CELLS + local;
         const uint live_grid = owner_grid(owner, point);
         const uint grid = scratch_grid(owner, point);
-        const uint marker_count = final_marker_counts[tile];
         const uint marker = owner.slot * MARKER_CAPACITY + local;
         const uint scratch_marker = tile * MARKER_CAPACITY + local;
         if (second) {
@@ -140,17 +139,23 @@ void main() {
             second_color[live] = final_color[atlas];
             second_velocity[live_grid] = final_velocity[grid];
             if (params.thermal != 0u) second_heat[live] = scratch_heat[atlas];
-            second_marker_grid[live] = final_marker_grid[atlas];
-            if (local == 0u) second_marker_counts[owner.slot] = marker_count;
-            if (local < marker_count) second_markers[marker] = final_markers[scratch_marker];
+            if (params.markers != 0u) {
+                const uint count = final_marker_counts[tile];
+                second_marker_grid[live] = final_marker_grid[atlas];
+                if (local == 0u) second_marker_counts[owner.slot] = count;
+                if (local < count) second_markers[marker] = final_markers[scratch_marker];
+            }
         } else {
             first_cells[live].y = final_cells[atlas].y;
             first_color[live] = final_color[atlas];
             first_velocity[live_grid] = final_velocity[grid];
             if (params.thermal != 0u) first_heat[live] = scratch_heat[atlas];
-            first_marker_grid[live] = final_marker_grid[atlas];
-            if (local == 0u) first_marker_counts[owner.slot] = marker_count;
-            if (local < marker_count) first_markers[marker] = final_markers[scratch_marker];
+            if (params.markers != 0u) {
+                const uint count = final_marker_counts[tile];
+                first_marker_grid[live] = final_marker_grid[atlas];
+                if (local == 0u) first_marker_counts[owner.slot] = count;
+                if (local < count) first_markers[marker] = final_markers[scratch_marker];
+            }
         }
     }
     /* The completion receipt follows every lane's live storage writes. */

@@ -71,9 +71,9 @@ void dc_gpu_record_transport_sweep(dc_gpu_t *gpu, VkDescriptorSet descriptor, Vk
 
 void dc_gpu_record_water_seam_transport(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     const VkPipeline pipelines[4], uint32_t width, uint32_t height,
-    float step_scale, bool occupancy, uint32_t axis) {
+    float step_scale, bool occupancy, uint32_t axis, uint32_t first, uint32_t stop) {
     uint32_t push[8] = {width, height, 0, 0, 0, dc_gpu_float_bits(step_scale), step_scale > 1.0001f, axis};
-    for (uint32_t mode = 0; mode < 4u; ++mode) {
+    for (uint32_t mode = first; mode < stop; ++mode) {
         push[2] = mode;
         dc_gpu_record_transport_sweep(gpu, descriptor, pipelines[mode], push, sizeof(push), occupancy);
     }

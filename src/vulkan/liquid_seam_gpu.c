@@ -21,6 +21,8 @@ struct dc_gpu_liquid_seam {
     dc_gpu_t *pending_peer;
     const uint32_t *pending_receipt;
     bool pending_bulk;
+    bool pending_phases;
+    dc_fluid_schedule_t pending_schedule;
 };
 
 _Static_assert(sizeof(dc_liquid_seam_flux_t) == 3u * sizeof(int32_t), "Liquid lane layout mismatch");
@@ -76,6 +78,7 @@ static void clear_pending(struct dc_gpu_liquid_seam *seam) {
     if (seam->pending_peer) seam->pending_peer->liquid_seam_pending_owner = NULL;
     seam->pending_peer = NULL;
     seam->pending_receipt = NULL;
+    seam->pending_phases = false;
 }
 
 static void release_explicit_plan(dc_gpu_t *gpu, struct dc_gpu_liquid_seam *seam) {
@@ -90,6 +93,11 @@ static void release_explicit_plan(dc_gpu_t *gpu, struct dc_gpu_liquid_seam *seam
 }
 
 void dc_gpu_liquid_seam_destroy(dc_gpu_t *gpu) {
+    if (gpu->water_cycle_peer) {
+        gpu->water_cycle_peer->water_cycle_peer = NULL;
+        gpu->water_cycle_peer->liquid_seam_orphaned = true;
+        gpu->water_cycle_peer = NULL;
+    }
     dc_gpu_t *owner = gpu->liquid_seam_pending_owner;
     if (owner) {
         clear_pending(owner->liquid_seam);
@@ -170,6 +178,8 @@ static dc_liquid_seam_result_t complete_dispatch(dc_gpu_t *gpu, struct dc_gpu_li
                                                  char *err, uint32_t cap) {
     const uint32_t receipt = *seam->pending_receipt;
     if (receipt == DC_LIQUID_RECEIPT_REJECTED) {
+        if (seam->pending_phases)
+            dc_gpu_complete_water_phases(gpu, seam->pending_peer, &seam->pending_schedule, false);
         clear_pending(seam);
         return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam preflight rejected stock or carried fields");
     }
@@ -177,16 +187,20 @@ static dc_liquid_seam_result_t complete_dispatch(dc_gpu_t *gpu, struct dc_gpu_li
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam completion receipt is missing");
     activate_liquid_work(gpu, seam->pending_bulk);
     activate_liquid_work(seam->pending_peer, seam->pending_bulk);
+    if (seam->pending_phases)
+        dc_gpu_complete_water_phases(gpu, seam->pending_peer, &seam->pending_schedule, true);
     clear_pending(seam);
     return DC_LIQUID_SEAM_COMMITTED;
 }
 
 dc_liquid_seam_result_t dc_gpu_submit_liquid_seam(dc_gpu_t *gpu, dc_gpu_t *peer,
-    const uint32_t *receipt, bool bulk, char *err, uint32_t cap) {
+    const uint32_t *receipt, bool bulk, const dc_fluid_schedule_t *schedule, char *err, uint32_t cap) {
     struct dc_gpu_liquid_seam *seam = gpu->liquid_seam;
     seam->pending_peer = peer;
     seam->pending_receipt = receipt;
     seam->pending_bulk = bulk;
+    seam->pending_phases = schedule != NULL;
+    if (schedule) seam->pending_schedule = *schedule;
     peer->liquid_seam_pending_owner = gpu;
     if (!fr_renderer_submit(gpu))
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam submission was not confirmed");
@@ -214,6 +228,8 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     dc_gpu_t *gpu = first.gpu;
     if (dc_gpu_liquid_seam_pending(gpu) || dc_gpu_liquid_seam_pending(second.gpu))
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "A liquid seam receipt is still pending");
+    if (gpu->water_cycle_peer || second.gpu->water_cycle_peer)
+        return report(DC_LIQUID_SEAM_REJECTED, err, cap, "A coupled water cycle is still in progress");
     bool water = false, bulk = false;
     for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
         if (!valid_flux(flux[i].water) || !valid_flux(flux[i].oil) || !valid_flux(flux[i].slime))
@@ -246,5 +262,5 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_READ_BIT);
-    return dc_gpu_submit_liquid_seam(gpu, second.gpu, &plan->receipt, bulk, err, cap);
+    return dc_gpu_submit_liquid_seam(gpu, second.gpu, &plan->receipt, bulk, NULL, err, cap);
 }

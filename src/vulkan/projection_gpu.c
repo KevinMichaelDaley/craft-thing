@@ -75,14 +75,22 @@ void dc_gpu_record_projection_fields(dc_gpu_t *gpu) {
 }
 
 void dc_gpu_record_dense_projection(dc_gpu_t *gpu, const VkDescriptorSet sets[2],
-                                     uint32_t width, uint32_t height, float step_scale) {
+    uint32_t width, uint32_t height, float step_scale, uint32_t first, uint32_t stop) {
     uint32_t push[7] = {width, height, 5u, 0u, 0u, dc_gpu_float_bits(step_scale), 0u};
-    record_projection_pass(gpu, sets, push, 0u);
-    record_hydro_head(gpu, sets[0], width, height);
-    for (uint32_t pass = 0; pass < DC_PRESSURE_PASS_COUNT; ++pass) {
+    if (first == 0u) {
+        record_projection_pass(gpu, sets, push, 0u);
+        record_hydro_head(gpu, sets[0], width, height);
+    }
+    for (uint32_t pass = first; pass < stop; ++pass) {
         push[2] = pressure_phase(pass);
         record_projection_pass(gpu, sets, push, 0u);
     }
+}
+
+void dc_gpu_fluid_pressure_range(uint32_t phase, uint32_t *first, uint32_t *stop) {
+    const uint32_t cuts[] = {0u, 10u, 25u, 40u, DC_PRESSURE_PASS_COUNT};
+    *first = cuts[phase] < DC_PRESSURE_PASS_COUNT ? cuts[phase] : DC_PRESSURE_PASS_COUNT;
+    *stop = cuts[phase + 1u] < DC_PRESSURE_PASS_COUNT ? cuts[phase + 1u] : DC_PRESSURE_PASS_COUNT;
 }
 
 void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
