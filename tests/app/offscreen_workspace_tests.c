@@ -10,7 +10,7 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
-#include "../../src/app/offscreen.h"
+#include "../../src/app/level_internal.h"
 #include "../../src/app/offscreen_internal.h"
 
 static int g_pass, g_fail;
@@ -254,12 +254,20 @@ static void test_partial_water_cycle_holds_the_workspace_until_both_owners_finis
     dc_stream_result_t source = {.kind = DC_STREAM_LOADED, .coord = chunk.coord, .chunk = &chunk,
         .generation = 1u, .time = {.known = true}};
     ASSERT_TRUE(dc_offscreen_admit(workspace, &source, 1u, g_err, sizeof(g_err)));
+    dc_level_view_t view = {0};
+    dc_level_offscreen_handoff_t *handoff = calloc(1, sizeof(*handoff));
+    ASSERT_TRUE(handoff);
+    *handoff = (dc_level_offscreen_handoff_t){.workspace = workspace, .coord = chunk.coord,
+        .generation = 1u, .admitted = true};
+    view.offscreen_handoffs = handoff;
     ASSERT_TRUE(dc_gpu_set_fluid_interval(resident, 2u) && dc_gpu_set_fluid_interval(workspace->gpu, 2u));
     const dc_liquid_seam_endpoint_t tiles[] = {{.gpu = resident}, {.gpu = workspace->gpu, .coord = chunk.coord}};
     ASSERT_EQ(dc_gpu_step_water_cohort(tiles, 2u, 1.f / 60.f, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
     dc_stream_result_t snapshot = {0};
     ASSERT_TRUE(!dc_offscreen_snapshot(workspace, chunk.coord, 1u, &snapshot, g_err, sizeof(g_err)));
     ASSERT_TRUE(!snapshot.chunk);
+    ASSERT_TRUE(!dc_level_offscreen_cancel(&view, chunk.coord, 1u, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_level_offscreen_owns(&view, chunk.coord));
     ASSERT_TRUE(dc_offscreen_advance(workspace, .125, 1u, g_err, sizeof(g_err)));
     ASSERT_EQ(g_ticks, 0u);
     ASSERT_EQ(workspace->time.seconds, 0.);
@@ -273,6 +281,8 @@ static void test_partial_water_cycle_holds_the_workspace_until_both_owners_finis
     ASSERT_TRUE(dc_offscreen_admit(workspace, &next, 2u, g_err, sizeof(g_err)));
     ASSERT_TRUE(dc_offscreen_snapshot(workspace, chunk.coord, 1u, &snapshot, g_err, sizeof(g_err)));
     dc_stream_result_release(&snapshot);
+    ASSERT_TRUE(dc_level_offscreen_cancel(&view, chunk.coord, 1u, g_err, sizeof(g_err)));
+    ASSERT_TRUE(!dc_level_offscreen_owns(&view, chunk.coord));
     dc_offscreen_destroy(workspace);
     dc_gpu_destroy(resident);
     PASS();
