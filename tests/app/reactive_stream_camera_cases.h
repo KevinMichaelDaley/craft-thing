@@ -331,7 +331,7 @@ static void test_camera_heated_water_returns_with_its_energy(void) { check_camer
 static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(false, true, false); }
 static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(true, true, true); }
 
-static void check_two_screen_camera_pan(bool moving_body) {
+static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -386,6 +386,38 @@ static void check_two_screen_camera_pan(bool moving_body) {
     ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_EQ(view->world_seconds, 2.0625);
+    if (close_offscreen) {
+        dc_gpu_t *reference = NULL;
+        ASSERT_TRUE(dc_gpu_create_shared(&reference, view->gpu, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+            "build/shaders/pattern.comp.spv", err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_origin(reference, coord, err, sizeof(err)) &&
+            dc_gpu_set_rigid_solver(reference, true) &&
+            dc_gpu_upload_chunk(reference, 0u, chunk, err, sizeof(err)) &&
+            dc_gpu_set_page(reference, 0u, 0u, 0u, err, sizeof(err)) &&
+            fr_bulk_phase_gpu_import_chunk(reference, 0u, chunk, bulk, err, sizeof(err)) &&
+            dc_gpu_spawn_world_body(reference, initial, err, sizeof(err)) &&
+            dc_gpu_set_body_motion(reference, id, .125f, .0625f, 0u, err, sizeof(err)) &&
+            dc_gpu_set_tick_seconds(reference, .03125f));
+        ASSERT_TRUE(dc_gpu_tick_step(reference, err, sizeof(err)) && dc_gpu_tick_step(reference, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_world_body(reference, id, &returned, err, sizeof(err)) &&
+            dc_gpu_read_body_motion(reference, id, &motion, err, sizeof(err)));
+        dc_gpu_destroy(reference);
+        ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+        view = camera_test_view(directory, true, err, sizeof(err));
+        ASSERT_TRUE(view && dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, &slot));
+        ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
+        ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, id, &observed, err, sizeof(err)) &&
+            dc_gpu_read_body_motion(view->gpu, id, &observed_motion, err, sizeof(err)));
+        ASSERT_EQ(memcmp(&observed, &returned, sizeof(returned)), 0);
+        ASSERT_EQ(observed_motion.angle, motion.angle);
+        ASSERT_EQ(observed_motion.angular_velocity, motion.angular_velocity);
+        dc_level_view_discard(view);
+        free(bulk);
+        free(chunk);
+        PASS();
+        return;
+    }
     if (moving_body) {
         ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
         ASSERT_TRUE(dc_gpu_read_world_body(view->camera_offscreen.workspace->gpu, id, &returned, err, sizeof(err)) &&
@@ -451,8 +483,9 @@ static void check_two_screen_camera_pan(bool moving_body) {
     PASS();
 }
 
-static void test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner(void) { check_two_screen_camera_pan(false); }
-static void test_camera_transfers_moving_body_on_acknowledged_eviction_and_return(void) { check_two_screen_camera_pan(true); }
+static void test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner(void) { check_two_screen_camera_pan(false, false); }
+static void test_camera_transfers_moving_body_on_acknowledged_eviction_and_return(void) { check_two_screen_camera_pan(true, false); }
+static void test_quit_saves_the_offscreen_moving_body_at_the_confirmed_world_clock(void) { check_two_screen_camera_pan(true, true); }
 
 static void test_dormant_room_starts_offscreen_water_at_its_edit_time(void) {
     char directory[] = "build/dormant_edit_clock_XXXXXX", err[256] = {0};
