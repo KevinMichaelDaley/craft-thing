@@ -6,6 +6,7 @@
 #include "../../include/dungeoncraft/char_enthalpy.h"
 #include "../../include/dungeoncraft/reactive_profile_layout.h"
 #include "../../include/dungeoncraft/thermal_parameters.h"
+#include "thermal_exchange.glsl"
 #include "../../include/dungeoncraft/thermal_surface.h"
 #include "../../include/dungeoncraft/bulk_phase_layout.h"
 #include "../../include/dungeoncraft/coating_layout.h"
@@ -116,12 +117,7 @@ float wet_energy(uint first,uint second,float amount) {
     return mass==0u?0.:samples[water].x*(amount/float(mass));
 }
 float exchange(vec4 a,vec4 b) {
-    if(a.y<=0.||b.y<=0.||a.z<=0.||b.z<=0.) return 0.;
-    float difference=a.x/a.y-b.x/b.y,conductance=2.*a.z*b.z/(a.z+b.z);
-    if((params.mode&1u)!=0u) conductance*=float(FR_THERMAL_GAMEPLAY_FACE_METERS);
-    float requested=conductance*difference*uintBitsToFloat(params.seconds);
-    float bound=min(a.y,b.y)*abs(difference)/float(FR_THERMAL_NEIGHBORS);
-    return sign(requested)*min(abs(requested),bound);
+    return thermal_face_exchange(a,b,uintBitsToFloat(params.seconds),(params.mode&1u)!=0u);
 }
 void body_conduction(uint index) {
     Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),index));
@@ -280,7 +276,9 @@ void main() {
     if(active_phase()==2u&&samples[index].y>0.&&floatBitsToUint(samples[index+params.width*params.height].x)!=4u) {
         float energy=-fluxes[index].x-fluxes[index].y;
         if(x>0u) energy+=fluxes[index-1u].x;
+        energy+=fluxes[index].z;
         if(y>0u) energy+=fluxes[index-params.width].y;
+        energy+=fluxes[index].w;
         uvec2 handle=handle_at(index);
         if(valid(handle)) {
             Words e=Words(reactive_entry_address(uvec2(root[4],root[5]),handle.x));

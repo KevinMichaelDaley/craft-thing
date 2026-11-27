@@ -7,6 +7,7 @@
 #include "dungeoncraft/liquid_seam_layout.h"
 #include "dungeoncraft/terrain_flags.h"
 #include "liquid_water_domain_gpu.h"
+#include "thermal_gpu_internal.h"
 
 enum {
     SEAM_CELLS = SEAM_TILES * DC_CHUNK_CELLS,
@@ -489,6 +490,7 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
         return DC_LIQUID_SEAM_REJECTED;
     }
     domain.bulk = gpu->bulk_phase_work_possible || peer->bulk_phase_work_possible;
+    if (!fr_thermal_prepare_liquid_seam(gpu, peer, err, cap)) return DC_LIQUID_SEAM_REJECTED;
     if (domain.bulk && (!dc_gpu_ensure_bulk_phase_pipeline(gpu, err, cap) ||
                         !dc_gpu_ensure_bulk_phase_pipeline(peer, err, cap))) return DC_LIQUID_SEAM_REJECTED;
     if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, true, err, cap)) {
@@ -503,7 +505,7 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
                 dc_gpu_mark_bulk_step(gpu);
                 dc_gpu_mark_bulk_step(peer);
             }
-            if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, false, err, cap)) return result;
+            if (dc_gpu_finish_paired_tick(gpu, peer, tiles, count, seconds, err, cap)) return result;
         }
     }
     gpu->liquid_seam_orphaned = peer->liquid_seam_orphaned = true;

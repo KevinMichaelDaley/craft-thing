@@ -105,6 +105,7 @@ build/fluid_schedule.o: src/vulkan/fluid_schedule.c src/vulkan/fluid_schedule.h 
 GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_address_gpu.o build/body_storage_gpu.o
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
+GPU_OBJ += build/thermal_liquid_seam_gpu.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
 GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o build/liquid_seam_publication_gpu.o build/liquid_water_domain_gpu.o
 build/liquid_seam_publication_gpu.o: src/vulkan/liquid_seam_publication_gpu.c src/vulkan/liquid_seam_gpu_internal.h src/vulkan/renderer_internal.h src/vulkan/thermal_gpu_internal.h
@@ -296,6 +297,7 @@ WATER_SEAM_CORRECTION_SHADER = build/shaders/fluid_water_seam_correction.comp.sp
 WATER_SEAM_DISPLACEMENT_SHADER = build/shaders/fluid_water_seam_displacement.comp.spv
 FLUID_SHADER += $(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER) $(WATER_SEAM_DISPLACEMENT_SHADER)
 FLUID_SHADER += build/shaders/liquid_seam.comp.spv build/shaders/liquid_water_publication.comp.spv
+FLUID_SHADER += build/shaders/thermal_liquid_seam.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
 PROJECTION_SHADER = build/shaders/projection.comp.spv build/shaders/hydro_head.comp.spv build/shaders/pressure_work.comp.spv build/shaders/pressure_stencil.comp.spv
@@ -2392,6 +2394,12 @@ $(QUARTER_APP_OBJ): src/app/benchmark_clock.h
 test: build/thermal_tests
 build/thermal_gpu.o: src/vulkan/thermal_gpu.c include/ferrum/fire/thermal_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/thermal_liquid_seam_gpu.o: src/vulkan/thermal_liquid_seam_gpu.c src/vulkan/thermal_gpu_state.h src/vulkan/thermal_gpu_internal.h build/shaders/thermal_liquid_seam.comp.spv
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/shaders/thermal_liquid_seam.comp.spv: shaders/reactive/thermal_liquid_seam.comp shaders/reactive/thermal_exchange.glsl include/dungeoncraft/thermal_parameters.h
+	mkdir -p $(dir $@)
+	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+build/shaders/thermal.comp.spv: shaders/reactive/thermal_exchange.glsl
 build/constructed_thermal_gpu.o: src/vulkan/constructed_thermal_gpu.c src/vulkan/reactive_storage_gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/thermal_feedback_gpu.o: src/vulkan/thermal_feedback_gpu.c src/vulkan/thermal_feedback_gpu.h

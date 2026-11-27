@@ -131,6 +131,16 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
     record_particles_and_heat(gpu);
 }
 
+static bool submit_pair(dc_gpu_t *first, dc_gpu_t *second, char *err, uint32_t cap) {
+    const VkCommandBuffer commands[] = {first->command, second->command};
+    const VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 2, .pCommandBuffers = commands};
+    if (vkQueueSubmit(first->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(first->queue) != VK_SUCCESS)
+        return error(err, cap, "Cannot confirm paired owner physics");
+    return true;
+}
+
 bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float seconds,
     bool before_water, char *err, uint32_t cap) {
     dc_gpu_t *owners[] = {first, second};
@@ -142,21 +152,35 @@ bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float se
         if (!fr_renderer_begin(gpu)) return error(err, cap, "Cannot record paired owner physics");
         if (before_water) record_before_water(gpu);
         else {
-            record_particles_and_heat(gpu);
+            stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                          VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+            dc_gpu_record_mpm(gpu);
+            fr_thermal_record_face_fluxes(gpu, seconds);
         }
         stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
         if (vkEndCommandBuffer(commands[i]) != VK_SUCCESS)
             return error(err, cap, "Cannot finish paired owner physics");
     }
-    const VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 2, .pCommandBuffers = commands};
-    if (vkQueueSubmit(first->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
-        vkQueueWaitIdle(first->queue) != VK_SUCCESS)
-        return error(err, cap, "Cannot confirm paired owner physics");
-    if (!before_water) {
-        for (unsigned i = 0; i < 2u; ++i)
-            if (owners[i]->gas && !fr_gas_gpu_step(owners[i], seconds, err, cap)) return false;
+    return submit_pair(first, second, err, cap);
+}
+
+bool dc_gpu_finish_paired_tick(dc_gpu_t *first, dc_gpu_t *second, const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap) {
+    dc_gpu_t *owners[] = {first, second};
+    if (!dc_gpu_submit_paired_tick_stage(first, second, seconds, false, err, cap)) return false;
+    if (first->thermal) {
+        for (unsigned i = 0; i < 2; ++i) {
+            dc_gpu_t *gpu = owners[i];
+            if (!fr_renderer_begin(gpu)) return error(err, cap, "Cannot record shared thermal faces");
+            if (!i) fr_thermal_record_liquid_seams(first, tiles, count, seconds);
+            fr_thermal_record_after_face_fluxes(gpu, seconds);
+            stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+            if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS) return error(err, cap, "Cannot finish shared heat");
+        }
+        if (!submit_pair(first, second, err, cap)) return false;
     }
+    for (unsigned i = 0; i < 2u; ++i)
+        if (owners[i]->gas && !fr_gas_gpu_step(owners[i], seconds, err, cap)) return false;
     return true;
 }
 

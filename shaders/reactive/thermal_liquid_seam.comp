@@ -1,0 +1,34 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/thermal_parameters.h"
+#include "thermal_exchange.glsl"
+
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer FirstSamples { vec4 first_sample[]; };
+layout(set=0,binding=1,std430) readonly buffer SecondSamples { vec4 second_sample[]; };
+layout(set=0,binding=2,std430) buffer FirstFlux { vec4 first_flux[]; };
+layout(set=0,binding=3,std430) buffer SecondFlux { vec4 second_flux[]; };
+layout(push_constant) uniform Params {
+    uint first_base, second_base, first_stride, second_stride;
+    uint first_cells, second_cells, axis, first_before, gameplay;
+    float seconds;
+} p;
+
+void main() {
+    uint i = p.first_base + gl_LocalInvocationID.x * p.first_stride;
+    uint j = p.second_base + gl_LocalInvocationID.x * p.second_stride;
+    if (floatBitsToUint(first_sample[i+p.first_cells].x) != 2u ||
+        floatBitsToUint(second_sample[j+p.second_cells].x) != 2u) return;
+    vec4 a = first_sample[i], b = second_sample[j];
+    a.x = (a.x/a.y + float(FR_THERMAL_AMBIENT_K)) * a.y;
+    b.x = (b.x/b.y + float(FR_THERMAL_AMBIENT_K)) * b.y;
+    if (p.first_before != 0u) {
+        float heat = thermal_face_exchange(a,b,p.seconds,p.gameplay!=0u);
+        first_flux[i][p.axis] = heat;
+        second_flux[j][2u+p.axis] = heat;
+    } else {
+        float heat = thermal_face_exchange(b,a,p.seconds,p.gameplay!=0u);
+        second_flux[j][p.axis] = heat;
+        first_flux[i][2u+p.axis] = heat;
+    }
+}

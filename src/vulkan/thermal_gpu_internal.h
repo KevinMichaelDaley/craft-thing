@@ -1,10 +1,18 @@
 #ifndef FR_THERMAL_GPU_INTERNAL_H
 #define FR_THERMAL_GPU_INTERNAL_H
 #include "gpu_internal.h"
+#include "dungeoncraft/liquid_seam.h"
 #include "ferrum/fire/thermal_checkpoint.h"
 struct fr_reactive_gpu;
 /** Record one accepted physical interval; no work or allocation when disabled. */
 void fr_thermal_record_step(dc_gpu_t *gpu,float seconds);
+void fr_thermal_record_face_fluxes(dc_gpu_t *gpu, float seconds);
+void fr_thermal_record_after_face_fluxes(dc_gpu_t *gpu, float seconds);
+bool fr_thermal_prepare_liquid_seam(dc_gpu_t *first, dc_gpu_t *second, char *err, uint32_t cap);
+void fr_thermal_record_liquid_seams(dc_gpu_t *first, const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds);
+bool dc_gpu_finish_paired_tick(dc_gpu_t *first, dc_gpu_t *second, const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap);
 /** Refresh and render thermal feedback without changing physical state. */
 void fr_thermal_record_overlay(dc_gpu_t *gpu);
 /** Release thermal resources before their reactive backing storage. */

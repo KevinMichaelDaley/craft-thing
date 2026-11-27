@@ -4,6 +4,7 @@
 #include "renderer_internal.h"
 struct fr_thermal_gpu {
     fr_renderer_compute_t compute,feedback,combustion,body_combustion;
+    fr_renderer_compute_t liquid_seam;
     VkPipeline phase_pipelines[24];
     dc_gpu_address_buffer_t profiles,samples,fluxes,probe,water;
     dc_gpu_address_buffer_t emission,emission_snapshot,hud,radiation_scratch;

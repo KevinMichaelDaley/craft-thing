@@ -207,6 +207,7 @@ static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
         vkDestroyPipeline(g->device,t->phase_pipelines[phase],NULL);
     fr_renderer_compute_destroy(g,&t->compute);
     fr_renderer_compute_destroy(g,&t->feedback);
+    fr_renderer_compute_destroy(g,&t->liquid_seam);
     fr_renderer_compute_destroy(g,&t->combustion);
     fr_renderer_compute_destroy(g,&t->body_combustion);
     dc_gpu_address_buffer_destroy(g,&t->profiles);dc_gpu_address_buffer_destroy(g,&t->samples);
@@ -319,11 +320,14 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
         x=groups<65535u?groups:65535u;y=(groups+x-1u)/x;}
     vkCmdDispatch(g->command,mode==4u?1u:x,mode==4u?1u:y,1);
 }
-void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
+static bool trace_thermal_phases(const dc_gpu_t *g) {
+    const char *timings=getenv("DC_FRAME_TIMINGS");
+    return timings&&strcmp(timings,"0")!=0&&getenv("DC_THERMAL_PHASE_TRACE")&&g->timestamp_pool;
+}
+void fr_thermal_record_face_fluxes(dc_gpu_t *g,float seconds) {
     if(!g->thermal||seconds<=0) return;
     if(g->thermal->combustion.pipeline) fr_renderer_emission_changed(g);
-    const char *timings=getenv("DC_FRAME_TIMINGS");
-    bool trace=timings&&strcmp(timings,"0")!=0&&getenv("DC_THERMAL_PHASE_TRACE")&&g->timestamp_pool;
+    bool trace=trace_thermal_phases(g);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,4);
     if(g->thermal->probe_active) phase(g,4,seconds);
     phase(g,0,seconds);phase(g,5,seconds);phase(g,6,seconds);
@@ -331,7 +335,12 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     phase(g,21,seconds);phase(g,20,seconds);phase(g,24,seconds);phase(g,25,seconds);phase(g,23,seconds);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,6);
     phase(g,8,seconds);phase(g,9,seconds);
-    phase(g,0,seconds);phase(g,7,seconds);phase(g,1,seconds);phase(g,2,seconds);
+    phase(g,0,seconds);phase(g,7,seconds);phase(g,1,seconds);
+}
+void fr_thermal_record_after_face_fluxes(dc_gpu_t *g,float seconds) {
+    if(!g->thermal||seconds<=0) return;
+    bool trace=trace_thermal_phases(g);
+    phase(g,2,seconds);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,7);
     phase(g,10,seconds);phase(g,11,seconds);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,8);
@@ -351,6 +360,11 @@ void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
     if(g->thermal->combustion.pipeline) dc_gpu_record_body_ash(g,g->thermal->hud.buffer);
     phase(g,14,seconds);
     if(trace) vkCmdWriteTimestamp2(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,g->timestamp_pool,12);
+}
+void fr_thermal_record_step(dc_gpu_t *g,float seconds) {
+    if(!g->thermal||seconds<=0) return;
+    fr_thermal_record_face_fluxes(g,seconds);
+    fr_thermal_record_after_face_fluxes(g,seconds);
 }
 void fr_thermal_record_overlay(dc_gpu_t *g) {
     if(!g->thermal) return;
