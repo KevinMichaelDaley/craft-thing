@@ -16,5 +16,4 @@ The equal-duration level fast path still calls dc_gpu_present_chunks_steps, whic
 
 ## Acceptance Criteria
 
-Report the count of completed ticks independently from presentation success. Exercise failure before work, failure after completed works, and successful combined rendering. Keep the existing one-presentation batch for equal-duration requests.
-
+Report the count of completed ticks independently from presentation success. Exercise failure before simulation, failure after completed ticks, and successful combined rendering. Keep the existing one-presentation batch for equal-duration requests.
