@@ -67,7 +67,7 @@ static bool create_phase_pipeline(dc_gpu_t *gpu,const char *path,
     if(result==VK_SUCCESS) {
         char name[96];
         snprintf(name,sizeof(name),"bulk:%s",path);
-        dc_gpu_name_object(gpu->device,VK_OBJECT_TYPE_PIPELINE,
+        dc_gpu_name_object(gpu,VK_OBJECT_TYPE_PIPELINE,
             (uint64_t)*pipeline,name);
     }
     return result==VK_SUCCESS||error(err,cap,failure);

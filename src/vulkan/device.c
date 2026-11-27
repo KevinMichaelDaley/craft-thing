@@ -263,28 +263,29 @@ bool dc_gpu_initialize_device(dc_gpu_t *gpu, VkDeviceSize bytes, uint32_t window
         .pApplicationName = "dungeoncraft", .apiVersion = VK_API_VERSION_1_3 };
     VkInstanceCreateInfo instance_info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &app };
+    const char *validation = getenv("DC_VK_VALIDATE");
+    const bool validate = validation && validation[0] == '1';
+    const char *layer = "VK_LAYER_KHRONOS_validation";
+    const char *debug_utils_extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     unsigned int extension_count = 0;
     const char **extensions = NULL;
     if (gpu->window) {
         if (!SDL_Vulkan_GetInstanceExtensions(gpu->window, &extension_count, NULL)) {
             return error(err, cap, SDL_GetError());
         }
-        extensions = calloc(extension_count, sizeof(*extensions));
+        extensions = calloc(extension_count + (validate ? 1u : 0u), sizeof(*extensions));
         if (!extensions || !SDL_Vulkan_GetInstanceExtensions(gpu->window, &extension_count, extensions)) {
             free(extensions);
             return error(err, cap, "Cannot query SDL Vulkan extensions");
         }
+        if (validate) extensions[extension_count++] = debug_utils_extension;
         instance_info.enabledExtensionCount = extension_count;
         instance_info.ppEnabledExtensionNames = extensions;
-    }
-    const char *validation = getenv("DC_VK_VALIDATE");
-    const char *layer = "VK_LAYER_KHRONOS_validation";
-    const char *debug_utils_extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-    if (validation && validation[0] == '1' && !gpu->window) {
+    } else if (validate) {
         instance_info.enabledExtensionCount = 1;
         instance_info.ppEnabledExtensionNames = &debug_utils_extension;
     }
-    if (validation && validation[0] == '1') {
+    if (validate) {
         uint32_t layer_count = 0;
         vkEnumerateInstanceLayerProperties(&layer_count, NULL);
         VkLayerProperties *layers = calloc(layer_count, sizeof(*layers));
@@ -309,7 +310,7 @@ bool dc_gpu_initialize_device(dc_gpu_t *gpu, VkDeviceSize bytes, uint32_t window
     if (instance_result != VK_SUCCESS) {
         return error(err, cap, "Cannot create Vulkan 1.3 instance");
     }
-    if (validation && validation[0] == '1') dc_gpu_create_validation_messenger(gpu);
+    if (validate) dc_gpu_create_validation_messenger(gpu);
     dc_gpu_startup_trace("Vulkan instance",started);
     if (gpu->window && !SDL_Vulkan_CreateSurface(gpu->window, gpu->instance, &gpu->surface)) {
         return error(err, cap, SDL_GetError());
@@ -348,6 +349,9 @@ bool dc_gpu_initialize_device(dc_gpu_t *gpu, VkDeviceSize bytes, uint32_t window
     if (vkCreateDevice(gpu->physical, &device_info, NULL, &gpu->device) != VK_SUCCESS) {
         return error(err, cap, "Cannot create Vulkan compute device");
     }
+    if (validate)
+        gpu->set_debug_name = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(
+            gpu->instance, "vkSetDebugUtilsObjectNameEXT");
     vkGetDeviceQueue(gpu->device, gpu->family, 0, &gpu->queue);
     pipeline_cache_load(gpu);
     dc_gpu_startup_trace("Vulkan device",started);
@@ -369,6 +373,7 @@ bool dc_gpu_inherit_device(dc_gpu_t *gpu, const dc_gpu_t *parent, VkDeviceSize b
     gpu->instance = parent->instance;
     gpu->physical = parent->physical;
     gpu->device = parent->device;
+    gpu->set_debug_name = parent->set_debug_name;
     gpu->queue = parent->queue;
     gpu->family = parent->family;
     gpu->vendor_id = parent->vendor_id;

@@ -154,9 +154,9 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .pushConstantRangeCount = 1, .pPushConstantRanges = &range };
     if (vkCreatePipelineLayout(gpu->device, &pipeline_layout_info, NULL, &gpu->pipeline_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create compute pipeline layout");
-    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+    dc_gpu_name_object(gpu, VK_OBJECT_TYPE_PIPELINE_LAYOUT,
                        (uint64_t)gpu->pipeline_layout, "main_layout");
-    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+    dc_gpu_name_object(gpu, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
                        (uint64_t)gpu->set_layout, "main_set0");
     VkShaderModule shader = VK_NULL_HANDLE;
     if (!dc_gpu_load_shader_module(gpu, path, &shader, err, cap)) return false;

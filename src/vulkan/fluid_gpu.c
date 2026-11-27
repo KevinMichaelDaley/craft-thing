@@ -121,7 +121,7 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     if (result != VK_SUCCESS) return error(err, cap, "Cannot create Eulerian fluid pipeline");
     char name[96];
     snprintf(name, sizeof(name), "fluid:%s:phase%u", path, phase);
-    dc_gpu_name_object(gpu->device, VK_OBJECT_TYPE_PIPELINE, (uint64_t)*pipeline, name);
+    dc_gpu_name_object(gpu, VK_OBJECT_TYPE_PIPELINE, (uint64_t)*pipeline, name);
     return true;
 }
 

@@ -76,6 +76,7 @@ struct dc_gpu {
     int32_t device_type;
     VkPhysicalDevice physical;
     VkDevice device;
+    PFN_vkSetDebugUtilsObjectNameEXT set_debug_name;
     VkPipelineCache pipeline_cache;
     char pipeline_cache_path[256];
     bool pipeline_cache_loaded;
@@ -612,17 +613,13 @@ void dc_gpu_write_chunk_colors(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_colors
 void dc_gpu_record_component_baseline(dc_gpu_t *gpu);
 
 /** Tag a Vulkan object for validation-layer diagnostics; no-op without debug utils. */
-static inline void dc_gpu_name_object(VkDevice device, VkObjectType type,
+static inline void dc_gpu_name_object(const dc_gpu_t *gpu, VkObjectType type,
                                       uint64_t handle, const char *name) {
-    static PFN_vkSetDebugUtilsObjectNameEXT set_name;
-    if (!set_name)
-        set_name = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(
-            device, "vkSetDebugUtilsObjectNameEXT");
-    if (!set_name) return;
+    if (!gpu->set_debug_name) return;
     VkDebugUtilsObjectNameInfoEXT info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = type, .objectHandle = handle, .pObjectName = name};
-    set_name(device, &info);
+    gpu->set_debug_name(gpu->device, &info);
 }
 
 /** Host body-record lookup by stable ID; NULL when absent or retired. */
