@@ -91,7 +91,7 @@ bool dc_gpu_solver_commands_stats(const dc_gpu_t *g,uint64_t *recordings,uint64_
 }
 static void record_program(dc_gpu_t *g,unsigned program) {
     if(program==RIGID_PROGRAM) dc_gpu_record_solver_uncached(g);
-    else if(program==MPM_PROGRAM) dc_gpu_record_mpm_uncached(g);
+    else if(program==MPM_PROGRAM) dc_gpu_record_mpm_interval(g, 1.f, g->gas != NULL);
     else dc_gpu_record_fluid_phase_uncached(g,(program-FLUID_PROGRAM)/2u);
 }
 static bool execute_cached(dc_gpu_t *g,unsigned program) {
@@ -126,7 +126,15 @@ void dc_gpu_record_solver(dc_gpu_t *g) {
     if(!execute_cached(g,RIGID_PROGRAM)) dc_gpu_record_solver_uncached(g);
 }
 void dc_gpu_record_mpm(dc_gpu_t *g) {
-    if(!execute_cached(g,MPM_PROGRAM)) dc_gpu_record_mpm_uncached(g);
+    float remaining = g->timed_fluid ? g->tick_time_scale : 1.f;
+    bool gas_force = g->gas != NULL;
+    while (remaining > 0.f) {
+        float scale = remaining < 1.f ? remaining : 1.f;
+        if (scale != 1.f || gas_force != (g->gas != NULL) || !execute_cached(g, MPM_PROGRAM))
+            dc_gpu_record_mpm_interval(g, scale, gas_force);
+        remaining -= scale;
+        gas_force = false;
+    }
 }
 
 void dc_gpu_record_fluid_phase(dc_gpu_t *g,uint32_t phase) {

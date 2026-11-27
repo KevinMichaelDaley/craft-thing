@@ -122,8 +122,8 @@ static void transfer_tile(VkCommandBuffer cmd,const struct dc_mpm_domain *d,dc_g
 }
 
 static void dispatch(dc_gpu_t *gpu,const struct dc_mpm_domain *d,const fr_renderer_compute_t *c,
-    uint32_t mode,bool gas) {
-    uint32_t push[]={d->width,d->height,mode,0u,gas,d->width*d->height,0u};
+    uint32_t mode,bool gas,float scale) {
+    uint32_t push[]={d->width,d->height,mode,0u,gas,d->width*d->height,dc_gpu_float_bits(scale)};
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,c->pipeline);
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,c->pipeline_layout,0,1,&c->descriptor,0,NULL);
     vkCmdPushConstants(gpu->command,c->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
@@ -209,16 +209,23 @@ bool dc_gpu_run_grain_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tile
         VK_ACCESS_2_TRANSFER_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
-    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,d->component.pipeline_layout,
-        0,1,&d->component.descriptor,0,NULL);
-    dc_gpu_record_mpm_component_graph(gpu,d->width,d->height,false,d->component.pipeline,
-        d->component.pipeline_layout,d->storage.buffer,d->field[WORK].offset);
-    dispatch(gpu,d,&d->mpm,7u,false);
-    for (unsigned step=0;step<2;step++)
-        for (unsigned mode=0;mode<6;mode++) {
-            dispatch(gpu,d,&d->mpm,mode,!step&&(owners[0]->gas||owners[1]->gas));
-            if (mode==1u) dispatch(gpu,d,&d->mpm,6u,false);
-        }
+    float remaining = gpu->timed_fluid ? gpu->tick_time_scale : 1.f;
+    bool gas_force = owners[0]->gas || owners[1]->gas;
+    while (remaining > 0.f) {
+        float scale = remaining < 1.f ? remaining : 1.f;
+        vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,d->component.pipeline_layout,
+            0,1,&d->component.descriptor,0,NULL);
+        dc_gpu_record_mpm_component_graph(gpu,d->width,d->height,false,d->component.pipeline,
+            d->component.pipeline_layout,d->storage.buffer,d->field[WORK].offset);
+        dispatch(gpu,d,&d->mpm,7u,false,scale);
+        for (unsigned step=0;step<2;step++)
+            for (unsigned mode=0;mode<6;mode++) {
+                dispatch(gpu,d,&d->mpm,mode,!step && gas_force,scale);
+                if (mode==1u) dispatch(gpu,d,&d->mpm,6u,false,scale);
+            }
+        gas_force = false;
+        remaining -= scale;
+    }
     fr_renderer_barrier(gpu->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
     if (parcels) transfer_parcels(gpu,d,owners,locations,count);

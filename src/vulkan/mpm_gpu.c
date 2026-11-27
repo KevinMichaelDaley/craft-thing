@@ -371,10 +371,10 @@ static void bind_mpm_phase(dc_gpu_t *gpu,uint32_t phase,VkPipeline *bound) {
     *bound=pipeline;
 }
 
-void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
+void dc_gpu_record_mpm_interval(dc_gpu_t *gpu, float scale, bool gas_force) {
     dc_gpu_mpm_swap_descriptors(gpu);
     dc_gpu_record_components(gpu, false);
-    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
+    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, dc_gpu_float_bits(scale)};
     VkPipeline bound=VK_NULL_HANDLE;
     bind_mpm_phase(gpu,DC_MPM_MOISTURE_MODE,&bound);
     push[2] = DC_MPM_MOISTURE_MODE;
@@ -386,7 +386,7 @@ void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
                     VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     for (uint32_t step = 0; step < DC_MPM_SUBSTEPS; ++step) {
         push[3]=gpu->mpm_swap_buffers?(step&1u):0u;
-        push[4]=step==0u&&gpu->gas!=NULL?1u:0u;
+        push[4]=step==0u && gas_force;
         for (uint32_t mode = 0; mode < DC_MPM_MODES; ++mode) {
             if(gpu->mpm_fused_grid&&mode==1u) continue;
             push[2] = mode;

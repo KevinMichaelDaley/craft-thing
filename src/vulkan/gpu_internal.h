@@ -661,7 +661,7 @@ void dc_gpu_mpm_pipeline_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_peer_grain_occupancy(dc_gpu_t *gpu,const dc_gpu_t *peer);
 void dc_gpu_record_mpm(dc_gpu_t *gpu);
 /** Record the reference MPM sequence for cache rebuilds and diagnostics. */
-void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu);
+void dc_gpu_record_mpm_interval(dc_gpu_t *gpu, float scale, bool gas_force);
 bool dc_gpu_mpm_compaction_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_mpm_compaction_pipeline_destroy(dc_gpu_t *gpu);
 /** Record deterministic compaction with compatible descriptors already bound. */
