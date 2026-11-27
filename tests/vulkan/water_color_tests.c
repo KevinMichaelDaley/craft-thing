@@ -33,9 +33,10 @@ static void water_case(bool soil,bool displacement,bool distant) {
     f->words[4][2*face+1]=bits(speed);f->words[3][face]=bits(speed);
     uint32_t color_bindings[8];memcpy(color_bindings,bindings,sizeof(bindings));color_bindings[7]=32;
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p, &f->gpu, VK_NULL_HANDLE, displacement ?
-        "build/shaders/fluid_displacement.comp.spv" : "build/shaders/fluid_transport.comp.spv",
-        color_bindings, 8, 0, CHUNKS));
+    const char *shader = displacement ? "build/shaders/fluid_displacement.comp.spv" :
+                                        "build/shaders/fluid_transport.comp.spv";
+    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p, &f->gpu, VK_NULL_HANDLE,
+                                                shader, color_bindings, 8, 0, CHUNKS));
     ASSERT_TRUE(f->p.empty_bulk);
     VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
     for(unsigned i=0;i<8;i++) {

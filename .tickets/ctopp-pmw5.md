@@ -1,6 +1,6 @@
 ---
 id: ctopp-pmw5
-status: in_progress
+status: closed
 deps: []
 links: [ctvfb-5v03]
 created: 2026-11-27T06:05:51Z
@@ -29,3 +29,7 @@ Reproduced nine null-storage-descriptor messages on both the previous paired-own
 **2026-11-27T06:14:07Z**
 
 RED caught three null bulk writes in the normal hydro-head suite. The fix preserves sparse binding indices, leaves unused descriptors unwritten, and gives every transport or displacement probe that reads bulk a correctly sized zero-stock buffer. All 56 correctness checks passed under synchronization validation after GREEN. The final hydro-head variations and aperture probes pass without validation messages. Optional transport timing remains tracked in ctvfb-5v03.
+
+**2026-11-27T06:42:23Z**
+
+The standalone water-color probe also dispatches shaders that statically read bulk storage. A pre-dispatch RED guard caught all four cases. The fixture now binds a correctly sized zero-stock bulk buffer and all four checks pass with synchronization validation.
