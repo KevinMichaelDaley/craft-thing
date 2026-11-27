@@ -756,6 +756,34 @@ static void test_camera_workspace_requires_a_closed_stationary_rim(void) {
     PASS();
 }
 
+static void test_empty_camera_eviction_leaves_the_workspace_for_oil_stock(void) {
+    dc_gpu_t gpu = {0};
+    dc_level_view_t view = {.gpu = &gpu};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
+    ASSERT_TRUE(chunk && bulk);
+    chunk->coord = (dc_chunk_coord_t){-12, 0};
+    const dc_cell_t terrain = {.material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) chunk->cells[i] = terrain;
+    const dc_chunk_owner_t owner = {.epoch = 4, .serial = 2};
+    const dc_stream_result_t snapshot = {.coord = chunk->coord, .chunk = chunk, .bulk = bulk,
+        .time = {.seconds = 2., .known = true}};
+
+    dc_camera_offscreen_offer(&view, &snapshot, owner, 5u);
+    ASSERT_EQ(view.camera_offscreen.phase, DC_CAMERA_OFFSCREEN_IDLE);
+
+    const uint32_t center = (DC_CHUNK_SIDE / 2u) * (DC_CHUNK_SIDE + 1u);
+    chunk->cells[center] = (dc_cell_t){0};
+    bulk->oil_fp[center] = 8000u;
+    dc_camera_offscreen_offer(&view, &snapshot, owner, 6u);
+    ASSERT_EQ(view.camera_offscreen.phase, DC_CAMERA_OFFSCREEN_SAVING);
+    ASSERT_EQ(view.camera_offscreen.generation, 6u);
+
+    free(bulk);
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
@@ -777,6 +805,7 @@ int main(void) {
     RUN(test_duplicate_load_reply_cannot_overwrite_a_live_slot);
     RUN(test_transfer_releases_rejected_request_and_rebinds_failed_worker_destination);
     RUN(test_camera_workspace_requires_a_closed_stationary_rim);
+    RUN(test_empty_camera_eviction_leaves_the_workspace_for_oil_stock);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
