@@ -107,7 +107,7 @@ GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o 
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/thermal_liquid_seam_gpu.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
-GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o build/liquid_seam_publication_gpu.o build/liquid_water_domain_gpu.o build/mpm_domain_gpu.o
+GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o build/liquid_seam_publication_gpu.o build/liquid_water_domain_gpu.o build/mpm_domain_gpu.o build/gas_domain_gpu.o
 build/liquid_seam_publication_gpu.o: src/vulkan/liquid_seam_publication_gpu.c src/vulkan/liquid_seam_gpu_internal.h src/vulkan/renderer_internal.h src/vulkan/thermal_gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 WATER_DOMAIN_HEADERS = src/vulkan/liquid_water_domain_gpu.h src/vulkan/liquid_seam_gpu_internal.h \
@@ -124,6 +124,9 @@ build/shaders/mpm_parcel_domain.comp.spv: shaders/sim/mpm_parcel_domain.comp sha
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 build/mpm_domain_gpu.o build/performance/src/vulkan/mpm_domain_gpu.o: build/shaders/mpm_parcel_domain.comp.spv
+build/gas_domain_gpu.o: src/vulkan/gas_domain_gpu.c $(WATER_DOMAIN_HEADERS) src/vulkan/gas_gpu_state.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/performance/src/vulkan/gas_domain_gpu.o: $(WATER_DOMAIN_HEADERS) src/vulkan/gas_gpu_state.h
 build/mpm_domain_gpu.o: src/vulkan/mpm_domain_gpu.c $(WATER_DOMAIN_HEADERS) build/shaders/mpm_domain.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/performance/src/vulkan/mpm_domain_gpu.o: $(WATER_DOMAIN_HEADERS) build/shaders/mpm_domain.comp.spv

@@ -19,6 +19,7 @@ void fr_gas_gpu_record_pending_geometry(dc_gpu_t *gpu);
 void fr_gas_gpu_record_grain_pressure(dc_gpu_t *gpu,uint32_t bank);
 /** Submit one gas command buffer and wait for its completion fence only. */
 bool fr_gas_submit(dc_gpu_t *gpu);
+bool fr_gas_gpu_step_with_conduction(dc_gpu_t *gpu,float seconds,bool conduct,char *err,uint32_t cap);
 /** Dispatch and wait for the gas audit after its summary buffer has been bound. */
 bool fr_gas_run_audit(dc_gpu_t *gpu,char *err_buf,uint32_t err_cap);
 /** Read completed scalar pressure dispatch size; diagnostic only, no field scan. */

@@ -1,6 +1,6 @@
 #include "ferrum/fire/gas_gpu.h"
 
-static void test_each_gas_species_and_pressure_work_cross_the_owner_face(void) {
+static void check_gas_cohort(uint32_t policy) {
     const char *shader = "build/shaders/pattern.comp.spv";
     const fr_gas_model_t model = {.gas_constant={1,1,1,1,0},.heat_capacity_cv={2.5,2.5,2.5,2.5,1},.kinetic_scale=1};
     dc_gpu_t *owners[2]={0}, *mono=NULL;
@@ -23,7 +23,7 @@ static void test_each_gas_species_and_pressure_work_cross_the_owner_face(void) {
             dc_gpu_set_page(mono,i,0,i,g_err,sizeof(g_err)));
     }
     ASSERT_TRUE(fr_gas_gpu_enable(mono,&model,1.f,300.f,g_err,sizeof(g_err)) &&
-        fr_gas_gpu_set_pressure_policy(mono,FR_GAS_PRESSURE_HLLC,g_err,sizeof(g_err)));
+        fr_gas_gpu_set_pressure_policy(mono,policy,g_err,sizeof(g_err)));
     for(unsigned i=0;i<2;i++) {
         for(unsigned j=0;j<DC_CHUNK_CELLS;j++) {
             bool warm=(j/64u<32u)==(i==0u);
@@ -34,19 +34,27 @@ static void test_each_gas_species_and_pressure_work_cross_the_owner_face(void) {
             volumes[j]=1.;
         }
         ASSERT_TRUE(fr_gas_gpu_enable(owners[i],&model,1.f,300.f,g_err,sizeof(g_err)) &&
-            fr_gas_gpu_set_pressure_policy(owners[i],FR_GAS_PRESSURE_HLLC,g_err,sizeof(g_err)) &&
+            fr_gas_gpu_set_pressure_policy(owners[i],policy,g_err,sizeof(g_err)) &&
             fr_gas_gpu_seed_chunk(owners[i],0,states,volumes,DC_CHUNK_CELLS,g_err,sizeof(g_err)) &&
             fr_gas_gpu_seed_chunk(mono,i,states,volumes,DC_CHUNK_CELLS,g_err,sizeof(g_err)));
     }
+    ASSERT_TRUE(fr_gas_gpu_gate(owners[0],63u,21u,1u,8u,0u,true,g_err,sizeof(g_err)) &&
+        fr_gas_gpu_gate(mono,63u,21u,1u,8u,0u,true,g_err,sizeof(g_err)));
     const float dt=.005f;
     ASSERT_TRUE(dc_gpu_set_tick_seconds(mono,dt) && dc_gpu_tick_step(mono,g_err,sizeof(g_err)));
+    ASSERT_TRUE(fr_gas_gpu_set_wind(owners[0],1.f,g_err,sizeof(g_err)));
+    ASSERT_EQ(dc_gpu_tick_water_cohort(tiles,2,dt,g_err,sizeof(g_err)),DC_LIQUID_SEAM_REJECTED);
+    ASSERT_TRUE(fr_gas_gpu_set_wind(owners[0],0.f,g_err,sizeof(g_err)));
     ASSERT_EQ(dc_gpu_tick_water_cohort(tiles,2,dt,g_err,sizeof(g_err)),DC_LIQUID_SEAM_COMMITTED);
     for(unsigned i=0;i<2;i++) {
         ASSERT_TRUE(fr_gas_gpu_export_checkpoint(mono,i,reference,g_err,sizeof(g_err)) &&
             fr_gas_gpu_export_checkpoint(owners[i],0,actual,g_err,sizeof(g_err)));
         unsigned receiver=i?16u*64u:48u*64u+63u;
-        ASSERT_TRUE(reference->cells[receiver][FR_GAS_EXHAUST]>0.f);
-        ASSERT_TRUE(reference->cells[receiver][FR_GAS_SOOT]>0.f);
+        if (policy != FR_GAS_PRESSURE_IMPLICIT) {
+            ASSERT_TRUE(reference->cells[receiver][FR_GAS_EXHAUST]>0.f);
+            ASSERT_TRUE(reference->cells[receiver][FR_GAS_SOOT]>0.f);
+        }
+        if (i && policy==FR_GAS_PRESSURE_HLLC) ASSERT_EQ(reference->cells[25u*64u][FR_GAS_EXHAUST],0.f);
         ASSERT_EQ(actual->clock.physical_steps,reference->clock.physical_steps);
         ASSERT_EQ(actual->clock.advanced_seconds,reference->clock.advanced_seconds);
         ASSERT_EQ(memcmp(actual->cells,reference->cells,sizeof(actual->cells)),0);
@@ -63,4 +71,14 @@ cleanup:
     free(actual);
     free(states);
     free(chunk);
+}
+
+static void test_each_gas_species_and_pressure_work_cross_the_owner_face(void) {
+    check_gas_cohort(FR_GAS_PRESSURE_HLLC);
+}
+static void test_implicit_gas_pressure_work_matches_across_the_owner_face(void) {
+    check_gas_cohort(FR_GAS_PRESSURE_IMPLICIT);
+}
+static void test_practical_gas_transport_matches_across_the_owner_face(void) {
+    check_gas_cohort(FR_GAS_PRESSURE_PRACTICAL);
 }

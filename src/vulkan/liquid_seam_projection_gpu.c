@@ -523,7 +523,7 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
     for (unsigned i = 0; i < 2u; ++i)
         for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(owners[i]); ++slot)
             mapped += owners[i]->slot_page[slot] != UINT32_MAX;
-    if (mapped != count || dc_gpu_liquid_seam_pending(gpu) || dc_gpu_liquid_seam_pending(peer) ||
+    if (!dc_gpu_gas_owners_aligned(gpu,peer) || mapped != count || dc_gpu_liquid_seam_pending(gpu) || dc_gpu_liquid_seam_pending(peer) ||
         !same_water_cycle(&domain, &schedule) || gpu->marker_correction != peer->marker_correction ||
         (gpu->marker_correction && ((gpu->fluid_tick ^ peer->fluid_tick) & 1u))) {
         error(err, cap, "Paired tick requires complete, aligned owner mappings");
@@ -552,7 +552,9 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
                 grains |= ((const uint32_t *)tiles[i].gpu->particle_count_mapped)[tiles[i].slot]!=0u;
             if ((!grains || (dc_gpu_prepare_water_projection(gpu,domain.width,domain.height,count,err,cap) &&
                 dc_gpu_run_grain_domain(gpu,tiles,locations,count,err,cap))) &&
-                dc_gpu_finish_paired_tick(gpu,peer,tiles,count,seconds,grains,err,cap)) return result;
+                dc_gpu_finish_paired_tick(gpu,peer,tiles,count,seconds,grains,err,cap) &&
+                (!gpu->gas || (dc_gpu_prepare_water_projection(gpu,domain.width,domain.height,count,err,cap) &&
+                    dc_gpu_run_gas_domain(gpu,tiles,locations,count,seconds,err,cap)))) return result;
         }
     }
     gpu->liquid_seam_orphaned = peer->liquid_seam_orphaned = true;

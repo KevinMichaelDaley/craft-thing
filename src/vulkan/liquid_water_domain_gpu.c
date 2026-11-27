@@ -96,6 +96,7 @@ void dc_gpu_seam_projection_destroy(dc_gpu_t *gpu) {
     struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
     if (!scratch) return;
     dc_gpu_grain_domain_destroy(gpu,scratch->grains);
+    dc_gpu_gas_domain_destroy(scratch->gas);
     for (uint32_t mode = 0; mode < 4u; ++mode)
         if (scratch->transport[mode]) vkDestroyPipeline(gpu->device, scratch->transport[mode], NULL);
     for (uint32_t mode = 0; mode < 2u; ++mode)

@@ -28,6 +28,7 @@ enum {
 
 struct dc_gpu_seam_projection {
     struct dc_mpm_domain *grains;
+    struct dc_gas_domain *gas;
     VkBuffer buffer;
     VkDeviceMemory memory;
     VkDescriptorPool pool;
@@ -53,6 +54,10 @@ static inline void *projection_field(const struct dc_gpu_seam_projection *scratc
 bool dc_gpu_water_checkpoint_layout(const dc_liquid_seam_endpoint_t *tiles, uint32_t count,
     dc_gpu_water_tile_t *locations, uint32_t *width, uint32_t *height);
 
+void dc_gpu_gas_domain_destroy(struct dc_gas_domain *domain);
+bool dc_gpu_gas_owners_aligned(const dc_gpu_t *first,const dc_gpu_t *second);
+bool dc_gpu_run_gas_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tiles,
+    const dc_gpu_water_tile_t *locations,uint32_t count,float seconds,char *err,uint32_t cap);
 void dc_gpu_grain_domain_destroy(dc_gpu_t *gpu, struct dc_mpm_domain *domain);
 bool dc_gpu_run_grain_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tiles,
     const dc_gpu_water_tile_t *locations,uint32_t count,char *err,uint32_t cap);

@@ -185,8 +185,6 @@ bool dc_gpu_finish_paired_tick(dc_gpu_t *first, dc_gpu_t *second, const dc_liqui
         }
         if (!submit_pair(first, second, err, cap)) return false;
     }
-    for (unsigned i = 0; i < 2u; ++i)
-        if (owners[i]->gas && !fr_gas_gpu_step(owners[i], seconds, err, cap)) return false;
     return true;
 }
 

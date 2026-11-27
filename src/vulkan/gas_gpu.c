@@ -409,6 +409,10 @@ bool fr_gas_gpu_enable(dc_gpu_t *g,const fr_gas_model_t *model,float density,flo
     g->gas=t;return true;
 }
 bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
+    return fr_gas_gpu_step_with_conduction(g,seconds,!fr_combustion_gpu_enabled(g),err,cap);
+}
+
+bool fr_gas_gpu_step_with_conduction(dc_gpu_t *g,float seconds,bool conduct,char *err,uint32_t cap) {
     if(!g||!g->gas||!isfinite(seconds)||seconds<0) return error(err,cap,"Invalid Vulkan gas interval");
     if(seconds==0) return true;
     struct fr_gas_gpu *t=g->gas;t->trace=getenv("DC_GAS_TRACE")!=NULL;clear_stats(t);
@@ -419,7 +423,7 @@ bool fr_gas_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     t->geometry_deferred=fused;t->bubble_seconds=seconds;
     if(fused) t->acoustic.geometry_changed=true;
     else if(!refresh_geometry(g,seconds,err,cap)) return false;
-    if(!fr_combustion_gpu_enabled(g)) {
+    if(conduct) {
         if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin gas heat diffusion");
         dispatch(g,t,&t->conduction,seconds,0u);
         dispatch(g,t,&t->conduction,seconds,1u);
