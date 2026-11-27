@@ -341,7 +341,7 @@ static dc_offscreen_t *shared_return_workspace(dc_level_view_t *view, const dc_c
         uint32_t slot;
         if (!workspace || other->phase != DC_CAMERA_OFFSCREEN_LEASED || other->parking ||
             other->rigid_group || other->water_face || other->time.seconds != room->time.seconds ||
-            !camera_needs_chunk(view, other->coord) || workspace->held_writes || workspace->failed ||
+            !camera_needs_chunk(view, other->coord) || workspace->held_writes || workspace->failed || workspace->replay_count ||
             (workspace->time.known && workspace->time.seconds != room->time.seconds) ||
             !dc_offscreen_page_at(workspace, room->coord, &slot) || workspace->generations[slot]) continue;
         ++workspace->references;
@@ -405,11 +405,25 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
         dc_camera_offscreen_release(camera);
         return true;
     }
+
     if (closing && time.known) camera->time = time;
     if (!time.known || writing) return true;
     if (camera->workspace->references > 1u)
         for (const dc_level_offscreen_handoff_t *lease = view->offscreen_handoffs; lease; lease = lease->next)
             if (lease->workspace == camera->workspace && !lease->admitted) return true;
+    dc_offscreen_t *workspace = camera->workspace;
+    const bool batchable = !closing && independent && selected && !needed && !coupled && !camera->rigid_group &&
+        workspace->references == 1u && !workspace->held_writes && !workspace->water_coupled &&
+        !workspace->failed && dc_gpu_can_batch_independent_tick(workspace->gpu);
+    if (!batchable && workspace->replay_count) {
+        if (!dc_offscreen_drain_replay(workspace, err, cap)) {
+            if (workspace->failed && dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
+                dc_camera_offscreen_release(camera);
+            return false;
+        }
+        time = workspace->time;
+        if (closing) camera->time = time;
+    }
     if (coupled || camera->rigid_group) {
         if (closing || needed || (coupled && !attached))
             return dc_level_offscreen_publish(view, camera->coord, camera->generation, err, cap);
@@ -421,12 +435,12 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
         return camera->parking;
     }
     camera->parking = false;
-    if (needed || view->world_seconds - time.seconds >= period / 60.)
+    const double scheduled = workspace->replay_count ? workspace->replay_end : time.seconds;
+    if (needed || view->world_seconds - scheduled >= period / 60.)
         camera->workspace->due_seconds = view->world_seconds;
-    dc_offscreen_t *workspace = camera->workspace;
     if (!closing && independent && time.seconds < workspace->due_seconds) {
-        if (!needed && workspace->references == 1u && !workspace->failed && !workspace->held_writes &&
-            !workspace->water_coupled && dc_gpu_can_batch_independent_tick(workspace->gpu)) {
+        if (batchable) {
+            if (!dc_offscreen_plan_replay(workspace, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) return false;
             due->rooms[due->count++] = camera;
             return true;
         }
@@ -445,20 +459,22 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
 static unsigned replay_rounds(const dc_level_view_t *view, const due_rooms_t *due) {
     if (due->count * CAMERA_WORKSPACE_STEPS_PER_TICK <= DC_CAMERA_WORKSPACE_LIMIT ||
         !view->pending_steps || view->end_run - view->first_run != 1u)
-        return CAMERA_WORKSPACE_STEPS_PER_TICK;
+        return OFFSCREEN_STEP_LIMIT;
 
     const dc_level_step_run_t *runs = view->step_runs ? view->step_runs : &view->inline_step;
     const dc_level_step_run_t run = runs[view->first_run];
     /* Defer a second round only while all owners stay inside their cadence
-       through the queued foreground advance. Draining and catch-up retain both rounds. */
+       through the queued foreground advance. Draining and catch-up also execute previously deferred rounds. */
     const double next_world = view->world_seconds + (double)run.seconds * run.count;
     for (unsigned i = 0; i < due->count; ++i) {
         const dc_camera_offscreen_t *room = due->rooms[i];
         const dc_offscreen_t *workspace = room->workspace;
+        if (workspace->replay_count > OFFSCREEN_STEP_LIMIT - CAMERA_WORKSPACE_STEPS_PER_TICK)
+            return OFFSCREEN_STEP_LIMIT;
         const double start = workspace->time.seconds;
-        const double next = start + dc_offscreen_step_seconds(workspace->due_seconds - start);
+        const double next = start + dc_offscreen_step_seconds(workspace->replay_targets[0] - start);
         if (next_world - next >= room_period(room->coord, view->origin) / 60.)
-            return CAMERA_WORKSPACE_STEPS_PER_TICK;
+            return OFFSCREEN_STEP_LIMIT;
     }
     return 1u;
 }
@@ -503,7 +519,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     }
     dc_offscreen_t *workspaces[DC_CAMERA_WORKSPACE_LIMIT];
     for (unsigned i = 0; i < due.count; ++i) workspaces[i] = due.rooms[i]->workspace;
-    if (dc_offscreen_advance_due_group(workspaces, due.count, replay_rounds(view, &due), err, cap))
+    if (dc_offscreen_run_replay_group(workspaces, due.count, replay_rounds(view, &due), err, cap))
         return true;
     for (unsigned i = 0; i < due.count; ++i) {
         dc_camera_offscreen_t *room = due.rooms[i];

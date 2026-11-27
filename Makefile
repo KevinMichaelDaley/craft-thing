@@ -365,7 +365,7 @@ build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) 
 test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
-OFFSCREEN_SRC = src/app/offscreen.c src/app/offscreen_body.c src/app/offscreen_bond_graph.c src/app/offscreen_liquid.c src/app/camera_offscreen.c src/app/camera_room_store.c src/app/camera_bond.c src/app/water_checkpoint.c
+OFFSCREEN_SRC = src/app/offscreen.c src/app/offscreen_replay.c src/app/offscreen_body.c src/app/offscreen_bond_graph.c src/app/offscreen_liquid.c src/app/camera_offscreen.c src/app/camera_room_store.c src/app/camera_bond.c src/app/water_checkpoint.c
 NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/stream_packet.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
 PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_view.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 PLAYER_RUNTIME_SRC += src/app/player_inventory_save.c src/app/player_join.c

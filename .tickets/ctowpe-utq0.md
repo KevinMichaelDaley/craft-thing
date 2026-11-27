@@ -26,3 +26,7 @@ Reduced host reproduction to seven middle-band service calls from world time 2.0
 **2026-11-27T19:59:24Z**
 
 Native RTX reproduction confirmed on hidden :93: the seven real middle-band frames and a zero-time drain leave at least one of the 16 replayed owners at a different physical timestamp from the serial two-round reference. The regression also compares fluid cells, face velocities and complete markers once the timestamp matches.
+
+**2026-11-27T20:11:56Z**
+
+GREEN on hidden :93: all 16 middle-band owners and their water state now match serial replay on the seven-frame reproduction and drain. Regular pacing and middle cadence also pass. A host cross-check exercised 262144 randomized service calls against the real replay planning functions, comparing every native duration byte-for-byte with serial execution. A rejected group retained its queued steps and confirmed time.

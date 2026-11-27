@@ -50,15 +50,27 @@ bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
 bool dc_offscreen_partition_graph(dc_gpu_t *from, dc_gpu_t *to, const dc_offscreen_bond_group_t *group,
     const uint32_t *dest_slots);
 
+enum { OFFSCREEN_STEP_LIMIT = 16u };
+
 struct dc_offscreen {
     dc_gpu_t *gpu;
     dc_chunk_coord_t origin;
     uint64_t generations[OFFSCREEN_SLOTS];
     dc_chunk_time_t time;
     double due_seconds;
+    double replay_targets[OFFSCREEN_STEP_LIMIT], replay_end;
+    unsigned replay_count;
     uint32_t held_writes, references;
     bool failed, water_coupled;
 };
+
+/** Plan native elapsed steps without advancing the confirmed solver clock. */
+bool dc_offscreen_plan_replay(dc_offscreen_t *room, unsigned budget, char *err, uint32_t cap);
+/** Run queued native steps and remove each round only after its fence succeeds. */
+bool dc_offscreen_run_replay_group(dc_offscreen_t *const *rooms, unsigned count, unsigned budget,
+                                   char *err, uint32_t cap);
+/** Complete already planned steps before changing ownership or simulation paths. */
+bool dc_offscreen_drain_replay(dc_offscreen_t *room, char *err, uint32_t cap);
 
 /** Advance exclusively leased, independently due rooms and commit their clocks after each fence. */
 bool dc_offscreen_advance_due_group(dc_offscreen_t *const *rooms, unsigned count, unsigned budget,
