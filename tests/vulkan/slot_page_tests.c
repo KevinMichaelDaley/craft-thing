@@ -42,13 +42,15 @@ static void test_compact_table_initialization(void) { check_initial_table(2); }
 static void test_resident_table_initialization(void) { check_initial_table(0); }
 
 static void test_replacing_and_unmapping_compact_slots(void) {
-    uint32_t pages[] = {1, 2};
-    dc_gpu_t gpu = {.workspace_slots = 2, .page_width = 2, .page_height = 1,
+    uint32_t pages[] = {1, 2, 3};
+    dc_gpu_t gpu = {.workspace_slots = 3, .page_width = 3, .page_height = 1,
                     .page_mapped = pages, .slot_page_mapped = storage};
     memset(storage, 0, sizeof(storage));
     memset(gpu.slot_page, 0xff, sizeof(gpu.slot_page));
-    gpu.slot_page[0] = 0;
-    gpu.slot_page[1] = 1;
+    for (uint32_t i = 0; i < gpu.workspace_slots; ++i) {
+        gpu.slot_page[i] = i;
+        storage[i] = i;
+    }
     gpu.preserve_shifted_slot[1] = true;
     gpu.body_mapped = calloc(1, dc_gpu_legacy_body_storage_bytes(&gpu));
     ASSERT_TRUE(gpu.body_mapped);
@@ -60,7 +62,10 @@ static void test_replacing_and_unmapping_compact_slots(void) {
     ASSERT_TRUE(replaced && replacement_visible && unmapped);
     ASSERT_INT_EQ(pages[0], 0);
     ASSERT_EQ(storage[1], UINT32_MAX);
-    for (uint32_t i = 2; i <= DC_GPU_CHUNK_SLOTS; ++i) ASSERT_EQ(storage[i], 0u);
+    ASSERT_EQ(storage[2], 2u);
+    ASSERT_EQ(pages[2], 3u);
+    for (uint32_t i = gpu.workspace_slots; i <= DC_GPU_CHUNK_SLOTS; ++i)
+        ASSERT_EQ(storage[i], 0u);
     PASS();
 }
 
