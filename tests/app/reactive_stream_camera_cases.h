@@ -136,7 +136,16 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
     }
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     const float elapsed = 1.f / 60.f;
+    unsigned ticks = 0u;
     for (unsigned cycle = 0; cycle < 2u; ++cycle) {
+        if (cycle == 1u) {
+            ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                        dc_level_view_tick(view, err, sizeof(err)));
+            ASSERT_EQ(view->gpu->fluid_phase, 3u);
+            ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_tick_step(reference, err, sizeof(err)) && dc_gpu_tick_step(reference, err, sizeof(err)));
+            ticks += 2u;
+        }
         ASSERT_TRUE(dc_level_view_move(view, 1, 0));
         if (cycle == 0u) {
             uint32_t departing;
@@ -173,7 +182,8 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
                     dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(!dc_level_offscreen_owns(view, first));
-        ASSERT_EQ(view->world_seconds, 2. + (2u * cycle + 2u) * (double)elapsed);
+        ticks += 2u;
+        ASSERT_EQ(view->world_seconds, 2. + ticks * (double)elapsed);
         ASSERT_TRUE(dc_gpu_set_tick_seconds(reference, elapsed) && dc_gpu_tick_step(reference, err, sizeof(err)) &&
                     dc_gpu_tick_step(reference, err, sizeof(err)));
         uint64_t stock[2] = {0};
