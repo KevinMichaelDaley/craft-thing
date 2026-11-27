@@ -8,6 +8,7 @@
 #include "../vulkan/thermal_gpu_internal.h"
 #include "level_internal.h"
 #include "offscreen_internal.h"
+#include "water_checkpoint.h"
 
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -184,7 +185,8 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
         }
         workspace = p->workspace;
     }
-    if (!workspace) return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    if (!workspace) return dc_level_resume_water_checkpoint(view, NULL, 0, err, cap) ?
+        DC_LEVEL_OFFSCREEN_UNMATCHED : DC_LEVEL_OFFSCREEN_FAILED;
     dc_liquid_seam_endpoint_t tiles[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS];
     uint32_t count = 0;
     if (workspace->failed || workspace->held_writes || view->closing || view->liquid_seam_failed ||
@@ -217,6 +219,7 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
             .tile_x = slot % OFFSCREEN_SIDE, .tile_y = slot / OFFSCREEN_SIDE};
     }
     if (different_times && !water_regions_aligned(view, tiles, count, residents, err, cap)) goto stale;
+    if (!dc_level_resume_water_checkpoint(view, tiles, count, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
     if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
     dc_liquid_seam_result_t result = dc_gpu_tick_water_cohort(tiles, count, seconds, err, cap);
     if (result != DC_LIQUID_SEAM_COMMITTED) {

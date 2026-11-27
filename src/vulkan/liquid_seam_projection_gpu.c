@@ -449,6 +449,15 @@ static bool cohort_domain(const dc_liquid_seam_endpoint_t *tiles, uint32_t count
     return true;
 }
 
+bool dc_gpu_water_checkpoint_layout(const dc_liquid_seam_endpoint_t *tiles, uint32_t count,
+    dc_gpu_water_tile_t *locations, uint32_t *width, uint32_t *height) {
+    water_domain_t domain;
+    if (!cohort_domain(tiles, count, locations, &domain)) return false;
+    *width = domain.width;
+    *height = domain.height;
+    return true;
+}
+
 dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap) {
     dc_gpu_water_tile_t locations[MAX_WATER_COHORT_TILES];

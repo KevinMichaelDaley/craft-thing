@@ -48,6 +48,10 @@ static inline void *projection_field(const struct dc_gpu_seam_projection *scratc
     return (unsigned char *)scratch->mapped + scratch->offset[field];
 }
 
+/** Resolve a reopened cohort against its new device pages before restoring phase scratch. */
+bool dc_gpu_water_checkpoint_layout(const dc_liquid_seam_endpoint_t *tiles, uint32_t count,
+    dc_gpu_water_tile_t *locations, uint32_t *width, uint32_t *height);
+
 bool dc_gpu_prepare_water_projection(dc_gpu_t *gpu, uint32_t width, uint32_t height, uint32_t tiles,
     char *err, uint32_t cap);
 bool dc_gpu_prepare_water_transport(dc_gpu_t *gpu, bool occupancy, bool thermal, char *err, uint32_t cap);

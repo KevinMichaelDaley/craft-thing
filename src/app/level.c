@@ -20,6 +20,7 @@
 #include "player_session.h"
 #include "thermal_bench.h"
 #include "view_config.h"
+#include "water_checkpoint.h"
 
 static bool error(char *buf,uint32_t cap,const char *message);
 
@@ -1125,6 +1126,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     bool okay = !view->liquid_seam_failed || error(err, cap, "Cannot close an unconfirmed liquid seam");
     if (okay && view->pending_steps && view->gpu && view->gpu->water_cycle_peer)
         okay = execute_level_steps(view, err, cap);
+    if (okay) okay = dc_level_stage_water_checkpoint(view, err, cap);
     if (okay) okay = dc_camera_offscreen_service(view, true, err, cap) &&
         dc_level_offscreen_flush_pairs(view, err, cap);
     if (okay && staged) okay = view->players ? dc_players_save_inventory(view, err, cap) :

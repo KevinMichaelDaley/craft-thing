@@ -19,6 +19,7 @@ struct dc_level_view {
     dc_world_save_t *save;
     struct dc_level_offscreen_handoff *offscreen_handoffs;
     uint64_t water_generations[DC_GPU_CHUNK_SLOTS];
+    bool water_checkpoint_checked, water_checkpoint_resumed;
     dc_camera_offscreen_t camera_offscreen;
     double world_seconds;
     fr_player_inventory_t saved_inventory[FR_INPUT_PLAYERS];
