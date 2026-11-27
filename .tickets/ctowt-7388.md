@@ -1,6 +1,6 @@
 ---
 id: ctowt-7388
-status: in_progress
+status: closed
 deps: [ctowt-o11u, ctowp-v2rf, ctowtb-yr4g, ctowtb-kz7x, ctowd-09br, ctowc-ccrm, ctowpe-bs8y, ctowpe-fbhn, ctowpe-uoaa]
 links: []
 created: 2026-11-27T06:30:47Z
@@ -58,3 +58,7 @@ Two camera evictions and returns now match an independent monolithic simulation 
 **2026-11-27T10:58:36Z**
 
 Verified eviction halfway through resident pressure work on Xephyr :93 against a monolithic GPU solve. Repeated pans exposing a region with an older confirmed clock reject atomically and retain the elapsed tick. Tracked recovery in ctowpe-bs8y.
+
+**2026-11-27T12:59:52Z**
+
+Verified the nine dependencies are closed. The RTX connected-domain tests match monolithic stock and carried channels across two seams and verify rejection leaves each tile unchanged. The level and repeated camera-return tests cover stale epochs, failed loads, recovered and unreadable receipts, equal confirmed clocks, and durable restoration. Evidence includes the seven-case native cohort run, the sixteen-case level and camera run, and the five-phase cold restart and lost-receipt coverage in ctowpe-uoaa.
