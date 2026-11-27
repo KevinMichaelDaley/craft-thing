@@ -1,6 +1,6 @@
 ---
 id: ctolt-6it2
-status: in_progress
+status: closed
 deps: []
 links: [ctolt-po5m]
 created: 2026-11-27T00:35:15Z
@@ -24,3 +24,7 @@ Preserve the order and exact requested time of unequal, valid ticks, reject inva
 **2026-11-27T00:41:02Z**
 
 The production level control-path fixture reproduced three defects before the fix and now passes seven cases with recording GPU boundaries. Unequal durations and player time remain in request order, equal requests share one presentation batch, invalid requests do not mutate the queue, and retries consume only unfinished mixed ticks. Loading frames continue to discard frame debt. Native controls and make test are queued. Batched presentation completion reporting is tracked separately.
+
+**2026-11-27T12:21:17Z**
+
+Rebuilt and ran the production queue and native controls on the current feature branch. All 22 level tick cases and all five native controls passed on the persistent Xephyr display.
