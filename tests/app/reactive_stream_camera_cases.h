@@ -402,10 +402,7 @@ static void check_camera_water_returns(unsigned channels) {
                     fr_thermal_gpu_read_water_chunk(reference, tile, expected_heat, DC_CHUNK_CELLS, err, sizeof(err)));
                 for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) ASSERT_TRUE(fabsf(heat[i] - expected_heat[i]) <= 1e-5f);
             }
-            ASSERT_EQ(chunk->marker_count, expected.marker_count);
-            qsort(chunk->markers, chunk->marker_count, sizeof(dc_marker_t), camera_marker_order);
-            qsort(expected.markers, expected.marker_count, sizeof(dc_marker_t), camera_marker_order);
-            ASSERT_EQ(memcmp(chunk->markers, expected.markers, chunk->marker_count * sizeof(dc_marker_t)), 0);
+            ASSERT_TRUE(camera_markers_match(chunk, &expected));
             for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
                 ASSERT_EQ(chunk->cells[i].fluid_mass, expected.cells[i].fluid_mass);
                 ASSERT_TRUE(fabsf(chunk->face_velocity[i].x - expected.face_velocity[i].x) <= 1e-5f);

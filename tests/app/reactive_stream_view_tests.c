@@ -369,8 +369,10 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 }
 
 int main(int argc, char **argv) {
-    RUN(test_water_comparison_preserves_complete_marker_records);
-    if (argc == 2 && !strcmp(argv[1], "--marker-records")) return g_fail != 0;
+    if (argc == 2 && !strcmp(argv[1], "--marker-records")) {
+        RUN(test_water_comparison_preserves_complete_marker_records);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera-reversal") == 0) {
         RUN(test_world_transfer_resolves_against_replayed_room);
         RUN(test_reversal_replays_a_sleeping_slot_before_residency);
@@ -496,6 +498,7 @@ int main(int argc, char **argv) {
         RUN(test_workspace_takeover_retries_and_commits_exactly_once);
         return g_fail != 0;
     }
+    RUN(test_water_comparison_preserves_complete_marker_records);
     if (!getenv("DC_TEST_STRUCTURE_TIME_ONLY")) {
         RUN(test_level_save_and_load_publish_the_same_reactive_worker_channel);
         RUN(test_level_save_and_load_restore_bulk_liquid_channel);
