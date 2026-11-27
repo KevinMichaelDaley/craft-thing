@@ -73,7 +73,7 @@ static bool make_fluid_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase,
     const char *dry=getenv("DC_TRANSPORT_DRY_SCAN");
     const char *scan=getenv("DC_TRANSPORT_LONG_SCAN");
     const char *page_cache=getenv("DC_TRANSPORT_PAGE_CACHE");
-    uint32_t values[7]={phase,length<2048u?length:2048u,seam_length == 0u,0u,transport&&(!dry||strcmp(dry,"0")!=0),
+    uint32_t values[7]={phase,length<2048u?length:2048u,1u,0u,transport&&(!dry||strcmp(dry,"0")!=0),
         transport&&scan&&strcmp(scan,"1")==0,transport&&page_cache&&strcmp(page_cache,"1")==0};
     uint32_t required_size=transport?dc_gpu_transport_subgroup_size(gpu->physical):0u;
     if(transport) {

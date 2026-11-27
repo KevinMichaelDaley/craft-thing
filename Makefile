@@ -104,7 +104,7 @@ GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o 
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
 GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o
-build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c include/dungeoncraft/fluid_aperture_layout.h include/dungeoncraft/liquid_seam_layout.h include/ferrum/fire/bulk_phase.h include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h src/vulkan/renderer_internal.h
+build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c include/dungeoncraft/fluid_aperture_layout.h include/dungeoncraft/liquid_seam_layout.h include/ferrum/fire/bulk_phase.h include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h include/dungeoncraft/thermal_water_layout.h src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/thermal_gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/liquid_seam_layout.h src/vulkan/gas_gpu_internal.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

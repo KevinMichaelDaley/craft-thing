@@ -430,6 +430,9 @@ bool fr_thermal_gpu_seed_water(dc_gpu_t *g,uint32_t slot,uint32_t cell,float ene
         return error(err,cap,"Liquid heat fixture requires water and nonnegative enthalpy");
     ((float *)g->thermal->water.mapped)[slot*4096u+cell]=energy;return true;
 }
+VkBuffer fr_thermal_gpu_water_buffer(const dc_gpu_t *gpu) {
+    return gpu && gpu->thermal ? gpu->thermal->water.buffer : VK_NULL_HANDLE;
+}
 bool fr_thermal_gpu_read_water_chunk(dc_gpu_t *g,uint32_t slot,float *energy,uint32_t count,char *err,uint32_t cap) {
     if(!g||!g->thermal||slot>=dc_gpu_slot_capacity(g)||!energy||count<4096u)
         return error(err,cap,"Invalid liquid heat snapshot");

@@ -2,14 +2,18 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "dungeoncraft/fluid_aperture_layout.h"
 #include "dungeoncraft/liquid_seam.h"
 #include "dungeoncraft/liquid_seam_layout.h"
 #include "dungeoncraft/terrain_flags.h"
+#include "dungeoncraft/thermal_water_layout.h"
 #include "ferrum/fire/bulk_phase.h"
+#include "body_address_gpu.h"
 #include "gpu_internal.h"
 #include "renderer_internal.h"
+#include "thermal_gpu_internal.h"
 
 enum {
     SEAM_TILES = 2,
@@ -23,6 +27,7 @@ enum {
 typedef struct {
     uint32_t sent, received;
 } seam_crossing_t;
+typedef float seam_color_t[4];
 
 _Static_assert(DC_CHUNK_SIDE == DC_WATER_SEAM_SIDE, "Water seam differs from the chunk side");
 _Static_assert(sizeof(seam_crossing_t) == 2u * sizeof(uint32_t), "Water seam crossing layout mismatch");
@@ -30,7 +35,7 @@ _Static_assert(sizeof(seam_crossing_t) == 2u * sizeof(uint32_t), "Water seam cro
 enum {
     CELLS, PAGES, OCCUPANCY, PREVIOUS_VERTICAL, HEAD, VELOCITY, PRESSURE, SLOT_PAGES,
     PRESSURE_WORK, PRESSURE_STENCIL, INITIAL_CELLS, APERTURE_PREFIX, APERTURE_TREE,
-    CROSSINGS, INACTIVE_COLOR, INACTIVE_THERMAL, BULK_PHASE, BUFFER_COUNT
+    CROSSINGS, WATER_COLOR, INITIAL_COLOR, THERMAL_CONTROL, BULK_PHASE, BUFFER_COUNT
 };
 
 static const struct {
@@ -52,8 +57,9 @@ static const struct {
     [APERTURE_TREE] = {0, 29, (DC_FLUID_APERTURE_TREE_BASE +
         2u * SEAM_CELLS / DC_FLUID_APERTURE_TILE_CELLS) * sizeof(uint32_t)},
     [CROSSINGS] = {0, DC_WATER_SEAM_CROSSING_BINDING, SEAM_CELLS * sizeof(seam_crossing_t)},
-    [INACTIVE_COLOR] = {0, 32, 4u * sizeof(float)},
-    [INACTIVE_THERMAL] = {0, 36, sizeof(uint32_t)},
+    [WATER_COLOR] = {0, 32, SEAM_CELLS * sizeof(seam_color_t)},
+    [THERMAL_CONTROL] = {0, 36, (DC_THERMAL_WATER_COUNT_WORD + 1u) * sizeof(uint32_t)},
+    [INITIAL_COLOR] = {0, 0, SEAM_CELLS * sizeof(seam_color_t)},
     [BULK_PHASE] = {0, 37, SEAM_TILES * sizeof(fr_bulk_phase_chunk_t)},
     [INITIAL_CELLS] = {0, 0, SEAM_CELLS * sizeof(dc_cell_t)}
 };
@@ -64,6 +70,7 @@ struct dc_gpu_seam_projection {
     VkDescriptorPool pool;
     VkDescriptorSet sets[2];
     VkPipeline transport[4];
+    dc_gpu_address_buffer_t water_heat;
     VkDeviceSize offset[BUFFER_COUNT];
     void *mapped;
 };
@@ -79,6 +86,7 @@ void dc_gpu_seam_projection_destroy(dc_gpu_t *gpu) {
     for (uint32_t mode = 0; mode < 4u; ++mode)
         if (scratch->transport[mode]) vkDestroyPipeline(gpu->device, scratch->transport[mode], NULL);
     if (scratch->pool) vkDestroyDescriptorPool(gpu->device, scratch->pool, NULL);
+    dc_gpu_address_buffer_destroy(gpu, &scratch->water_heat);
     if (scratch->mapped) vkUnmapMemory(gpu->device, scratch->memory);
     if (scratch->buffer) vkDestroyBuffer(gpu->device, scratch->buffer, NULL);
     if (scratch->memory) vkFreeMemory(gpu->device, scratch->memory, NULL);
@@ -104,7 +112,7 @@ static bool create_descriptors(dc_gpu_t *gpu, struct dc_gpu_seam_projection *scr
     VkWriteDescriptorSet writes[BUFFER_COUNT];
     uint32_t count = 0;
     for (unsigned i = 0; i < BUFFER_COUNT; ++i) {
-        if (i == INITIAL_CELLS) continue;
+        if (i == INITIAL_CELLS || i == INITIAL_COLOR) continue;
         buffers[i] = (VkDescriptorBufferInfo){scratch->buffer, scratch->offset[i], buffer_layout[i].size};
         writes[count++] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = scratch->sets[buffer_layout[i].set], .dstBinding = buffer_layout[i].binding,
@@ -138,7 +146,6 @@ static bool prepare_projection(dc_gpu_t *gpu, char *err, uint32_t cap) {
         dc_gpu_seam_projection_destroy(gpu);
         return error(err, cap, "Cannot create liquid seam projection descriptors");
     }
-    *(uint32_t *)projection_field(scratch, INACTIVE_THERMAL) = 0u;
     uint32_t *pages = projection_field(scratch, PAGES);
     uint32_t *slots = projection_field(scratch, SLOT_PAGES);
     for (uint32_t tile = 0; tile < SEAM_TILES; ++tile) {
@@ -148,31 +155,62 @@ static bool prepare_projection(dc_gpu_t *gpu, char *err, uint32_t cap) {
     return true;
 }
 
-static bool prepare_transport(dc_gpu_t *gpu, char *err, uint32_t cap) {
+static bool prepare_transport(dc_gpu_t *gpu, bool thermal, char *err, uint32_t cap) {
     struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
     for (uint32_t mode = 0; mode < 4u; ++mode)
         if (!scratch->transport[mode] &&
             !dc_gpu_make_water_seam_pipeline(gpu, mode, &scratch->transport[mode], err, cap)) return false;
+    uint32_t *control = projection_field(scratch, THERMAL_CONTROL);
+    if (!thermal) {
+        control[0] = 0u;
+        return true;
+    }
+    if (!scratch->water_heat.buffer && !dc_gpu_address_buffer_create(gpu,
+        2u * SEAM_CELLS * sizeof(float), true, &scratch->water_heat, err, cap)) return false;
+    const VkDeviceAddress address = scratch->water_heat.address;
+    control[DC_THERMAL_WATER_ADDRESS_WORD] = (uint32_t)address;
+    control[DC_THERMAL_WATER_ADDRESS_WORD + 1u] = (uint32_t)(address >> 32);
+    control[DC_THERMAL_WATER_COUNT_WORD] = SEAM_CELLS;
+    control[0] = DC_THERMAL_WATER_MAGIC;
     return true;
+}
+
+static void copy_atlas_tile(VkCommandBuffer command, dc_liquid_seam_endpoint_t endpoint,
+                            VkBuffer source, VkBuffer target, VkDeviceSize target_base,
+                            uint32_t tile, VkDeviceSize tile_bytes) {
+    const VkBufferCopy region = {endpoint.slot * tile_bytes, target_base + tile * tile_bytes, tile_bytes};
+    vkCmdCopyBuffer(command, source, target, 1u, &region);
+}
+
+static void copy_transport_fields(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
+                                  dc_liquid_seam_endpoint_t endpoint, uint32_t tile) {
+    const dc_gpu_t *source = endpoint.gpu;
+    copy_atlas_tile(command, endpoint, source->chunk_buffer, scratch->buffer, scratch->offset[INITIAL_CELLS],
+                    tile, DC_CHUNK_CELLS * sizeof(dc_cell_t));
+    copy_atlas_tile(command, endpoint, source->bulk_phase_buffer, scratch->buffer, scratch->offset[BULK_PHASE],
+                    tile, sizeof(fr_bulk_phase_chunk_t));
+    const VkDeviceSize color_bytes = DC_CHUNK_CELLS * sizeof(seam_color_t);
+    copy_atlas_tile(command, endpoint, source->water_color_buffer, scratch->buffer,
+                    scratch->offset[WATER_COLOR], tile, color_bytes);
+    copy_atlas_tile(command, endpoint, source->water_color_buffer, scratch->buffer,
+                    scratch->offset[INITIAL_COLOR], tile, color_bytes);
+
+    VkBuffer live_heat = fr_thermal_gpu_water_buffer(source);
+    if (live_heat) {
+        const VkDeviceSize heat_bytes = DC_CHUNK_CELLS * sizeof(float);
+        copy_atlas_tile(command, endpoint, live_heat, scratch->water_heat.buffer, 0u, tile, heat_bytes);
+        copy_atlas_tile(command, endpoint, live_heat, scratch->water_heat.buffer,
+                        SEAM_TILES * heat_bytes, tile, heat_bytes);
+    }
 }
 
 static void copy_projection_tile(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
                                  dc_liquid_seam_endpoint_t endpoint, uint32_t tile,
                                  dc_liquid_seam_axis_t axis, uint32_t width, bool transport) {
     const dc_gpu_t *source = endpoint.gpu;
-    const VkDeviceSize cell_bytes = DC_CHUNK_CELLS * sizeof(dc_cell_t);
-    const VkBufferCopy cells = {endpoint.slot * cell_bytes, scratch->offset[CELLS] + tile * cell_bytes,
-                                cell_bytes};
-    vkCmdCopyBuffer(command, source->chunk_buffer, scratch->buffer, 1, &cells);
-    if (transport) {
-        const VkBufferCopy initial = {cells.srcOffset, scratch->offset[INITIAL_CELLS] + tile * cell_bytes,
-                                      cell_bytes};
-        const VkDeviceSize bulk_bytes = sizeof(fr_bulk_phase_chunk_t);
-        const VkBufferCopy bulk = {endpoint.slot * bulk_bytes, scratch->offset[BULK_PHASE] + tile * bulk_bytes,
-                                   bulk_bytes};
-        vkCmdCopyBuffer(command, source->chunk_buffer, scratch->buffer, 1, &initial);
-        vkCmdCopyBuffer(command, source->bulk_phase_buffer, scratch->buffer, 1, &bulk);
-    }
+    copy_atlas_tile(command, endpoint, source->chunk_buffer, scratch->buffer, scratch->offset[CELLS],
+                    tile, DC_CHUNK_CELLS * sizeof(dc_cell_t));
+    if (transport) copy_transport_fields(command, scratch, endpoint, tile);
 
     const uint32_t x = axis == DC_LIQUID_SEAM_X ? tile * DC_CHUNK_SIDE : 0u;
     const uint32_t y = axis == DC_LIQUID_SEAM_Y ? tile * DC_CHUNK_SIDE : 0u;
@@ -241,10 +279,14 @@ static void read_face(const struct dc_gpu_seam_projection *scratch, dc_liquid_se
 }
 
 static void read_water_plan(const struct dc_gpu_seam_projection *scratch, dc_liquid_seam_axis_t axis,
-                            uint32_t width, dc_water_seam_plan_t *plan) {
+                            uint32_t width, bool thermal, dc_water_seam_plan_t *plan) {
     const dc_cell_t *initial = projection_field(scratch, INITIAL_CELLS);
     const dc_cell_t *final = projection_field(scratch, CELLS);
     const seam_crossing_t *crossings = projection_field(scratch, CROSSINGS);
+    const seam_color_t *initial_color = projection_field(scratch, INITIAL_COLOR);
+    const seam_color_t *final_color = projection_field(scratch, WATER_COLOR);
+    const float *heat = thermal ? scratch->water_heat.mapped : NULL;
+    plan->thermal_enabled = thermal;
     read_face(scratch, axis, width, plan->projection);
     for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane)
         plan->crossing_fp[lane] = 0;
@@ -254,6 +296,11 @@ static void read_water_plan(const struct dc_gpu_seam_projection *scratch, dc_liq
             uint32_t sent = crossings[atlas].sent, received = crossings[atlas].received;
             plan->cells[tile][i] = (dc_water_seam_cell_t){initial[atlas].fluid_mass,
                 final[atlas].fluid_mass, sent, received};
+            dc_water_seam_payload_t *payload = &plan->payload[tile][i];
+            memcpy(payload->initial_color, initial_color[atlas], sizeof(payload->initial_color));
+            memcpy(payload->final_color, final_color[atlas], sizeof(payload->final_color));
+            payload->initial_excess_heat = heat ? heat[SEAM_CELLS + atlas] : 0.f;
+            payload->final_excess_heat = heat ? heat[atlas] : 0.f;
             if (tile == 0) {
                 uint32_t lane = axis == DC_LIQUID_SEAM_X ? i / DC_CHUNK_SIDE : i % DC_CHUNK_SIDE;
                 plan->crossing_fp[lane] += (int32_t)sent - (int32_t)received;
@@ -280,7 +327,9 @@ static bool run_seam(dc_liquid_seam_endpoint_t first, dc_liquid_seam_endpoint_t 
     dc_gpu_t *gpu = first.gpu;
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "Cannot synchronize liquid seam projection endpoints");
-    if (!prepare_projection(gpu, err, cap) || (plan && !prepare_transport(gpu, err, cap))) return false;
+    const bool thermal = gpu->thermal != NULL;
+    if (!prepare_projection(gpu, err, cap) || (plan && !prepare_transport(gpu, thermal, err, cap)))
+        return false;
     if (!fr_renderer_begin(gpu))
         return error(err, cap, "Cannot begin liquid seam projection");
 
@@ -312,7 +361,7 @@ static bool run_seam(dc_liquid_seam_endpoint_t first, dc_liquid_seam_endpoint_t 
         VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
     if (!fr_renderer_submit(gpu)) return error(err, cap, "Liquid seam projection did not complete");
 
-    if (plan) read_water_plan(scratch, axis, width, plan);
+    if (plan) read_water_plan(scratch, axis, width, thermal, plan);
     else read_face(scratch, axis, width, samples);
     return true;
 }
