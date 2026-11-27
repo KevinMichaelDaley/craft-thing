@@ -1265,6 +1265,12 @@ build/native_720_component_tests: tests/vulkan/native_720_component_tests.c test
 test_native_720_components: build/native_720_component_tests
 	./build/native_720_component_tests
 
+OFFSCREEN_CACHE_BENCH_SRC = tests/app/offscreen_cache_bench.c $(filter-out src/app/main.c,$(NATIVE_SRC))
+build/offscreen_half_native_bench: $(OFFSCREEN_CACHE_BENCH_SRC) build/dungeoncraft_half_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u -DDC_PRESSURE_SWEEPS=16u $(OFFSCREEN_CACHE_BENCH_SRC) -o $@ $(LDLIBS)
+build/offscreen_native_bench: $(OFFSCREEN_CACHE_BENCH_SRC) build/dungeoncraft_native
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=608u $(OFFSCREEN_CACHE_BENCH_SRC) -o $@ $(LDLIBS)
+
 build/native_720_performance_tests: tests/app/native_720_performance_tests.c tests/vulkan/pixel_component_tests.c tests/vulkan/native_scene.h Makefile $(GPU_SRC) src/world/chunk.c build/pixel_component_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(NATIVE_720_FLAGS) $< $(GPU_SRC) src/world/chunk.c -o $@ $(LDLIBS) -lm
 

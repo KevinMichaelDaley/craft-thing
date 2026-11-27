@@ -1,7 +1,7 @@
 ---
 id: ctowpe-t43r
 status: in_progress
-deps: [ctowpe-k8de]
+deps: [ctowpe-k8de, ctowpe-l2cj]
 links: []
 created: 2026-11-27T14:01:15Z
 type: task
