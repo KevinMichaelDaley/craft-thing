@@ -331,6 +331,13 @@ bool dc_gpu_spawn_world_body(dc_gpu_t *gpu, dc_gpu_world_body_t body,
         body.body.x_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL) ||
         body.body.y_fp >= (int32_t)(DC_CHUNK_SIDE * DC_FLUID_FULL))
         return error(err, cap, "Invalid world body");
+    if (gpu->next_body_owner) {
+        if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+            return error(err, cap, "Cannot check body ownership");
+        for (dc_gpu_t *peer = gpu->next_body_owner; peer != gpu; peer = peer->next_body_owner)
+            if (body_slot(peer, body.body.id) != UINT32_MAX)
+                return error(err, cap, "Another solver owns the world body ID");
+    }
     dc_gpu_refresh_body_registry(gpu);
     uint32_t slot = body_slot(gpu, body.body.id);
     if (slot != UINT32_MAX) {

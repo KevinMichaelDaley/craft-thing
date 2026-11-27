@@ -320,6 +320,8 @@ struct dc_gpu {
     dc_presentation_reticle_t presentation_reticles[DC_PRESENTATION_VIEW_LIMIT];
     VkImage reticle_image;
     VkDeviceMemory reticle_memory;
+    /** Circular list of solvers sharing world body IDs. NULL for independent solvers. */
+    struct dc_gpu *next_body_owner;
 };
 
 bool fr_renderer_active(const dc_gpu_t *gpu);

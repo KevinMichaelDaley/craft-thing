@@ -71,6 +71,8 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
         dc_offscreen_destroy(workspace);
         return NULL;
     }
+    workspace->gpu->next_body_owner = parent->next_body_owner ? parent->next_body_owner : parent;
+    parent->next_body_owner = workspace->gpu;
     return workspace;
 }
 

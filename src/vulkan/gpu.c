@@ -21,6 +21,11 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 }
 void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (!gpu) return;
+    if (gpu->next_body_owner) {
+        dc_gpu_t *previous = gpu->next_body_owner;
+        while (previous->next_body_owner != gpu) previous = previous->next_body_owner;
+        previous->next_body_owner = previous == gpu->next_body_owner ? NULL : gpu->next_body_owner;
+    }
     fr_gpu_reactive_checkpoint_clear_pending(gpu);
     dc_checkpoint_fluid_destroy(gpu->checkpoint_fluids, gpu->checkpoint_chunk_count);
     free(gpu->checkpoint_chunks);
