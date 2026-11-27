@@ -110,7 +110,7 @@ static void test_native_smoke_streaming_restores_sleeping_stock_and_initializes_
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,slot,out,err,sizeof(err)));ASSERT_EQ(memcmp(before,out,sizeof(*before)),0);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));free(before);free(out);PASS();
 }
-static void test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world(void) {
+static void check_missing_stream_gas(bool authoritative) {
     char err[256]={0},directory[]="build/smoke_box_missing_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(view);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
@@ -119,6 +119,8 @@ static void test_native_incomplete_smoke_admission_fails_without_overwriting_sav
     uint64_t deadline=SDL_GetTicks64()+10000u;
     while(!dc_stream_poll(stream,&result)&&SDL_GetTicks64()<deadline) SDL_Delay(1);
     ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.chunk&&result.gas);
+    fr_gas_checkpoint_chunk_t *expected=result.gas;
+    result.gas=NULL;
     ASSERT_TRUE(dc_stream_request_save_thermal(stream,result.chunk,result.colors,result.reactive,result.water_excess,2));
     dc_stream_result_release(&result);deadline=SDL_GetTicks64()+10000u;
     while(!dc_stream_poll(stream,&result)&&SDL_GetTicks64()<deadline) SDL_Delay(1);
@@ -126,9 +128,24 @@ static void test_native_incomplete_smoke_admission_fails_without_overwriting_sav
     char chunk_path[512],body_path[512];snprintf(chunk_path,sizeof(chunk_path),"%s/chunk_%016llx_%016llx.bin",directory,1ull,0ull);
     snprintf(body_path,sizeof(body_path),"%s/rigid_bodies.bin",directory);
     uint64_t chunk_hash=smoke_file_hash(chunk_path),body_hash=smoke_file_hash(body_path);ASSERT_TRUE(chunk_hash&&body_hash);
-    view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));ASSERT_TRUE(!view);
+    view=dc_level_view_create_smoke_box(directory,314,err,sizeof(err));
+    if(authoritative) {
+        ASSERT_TRUE(!view);
+        ASSERT_TRUE(strstr(err,"missing an authoritative gas chunk"));
+    } else {
+        fr_gas_checkpoint_chunk_t *restored=malloc(sizeof(*restored));
+        uint32_t slot;
+        ASSERT_TRUE(view&&restored&&dc_chunk_table_find(&view->table,(dc_chunk_coord_t){1,0},&slot));
+        ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view->gpu,slot,restored,err,sizeof(err)));
+        ASSERT_EQ(memcmp(expected,restored,sizeof(*expected)),0);
+        free(restored);
+        dc_level_view_discard(view);
+    }
+    free(expected);
     ASSERT_EQ(smoke_file_hash(chunk_path),chunk_hash);ASSERT_EQ(smoke_file_hash(body_path),body_hash);PASS();
 }
+static void test_missing_superseded_gas_recovers_archive(void) {check_missing_stream_gas(false);}
+static void test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world(void) {check_missing_stream_gas(true);}
 static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) {
     enum { ROOF_X = 328, ROOF_Y = 49, ROOF_RADIUS = 4,
            ROOF_CELL = ROOF_Y * DC_CHUNK_SIDE + ROOF_X % DC_CHUNK_SIDE,
@@ -178,9 +195,15 @@ static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) 
     ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/smoke_box_carved_vent.bmp"),0);SDL_FreeSurface(image);free(pixels);free(snapshot);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--restore-gas")) {
+        RUN(test_missing_superseded_gas_recovers_archive);
+        RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
+        return g_fail!=0;
+    }
     setvbuf(stdout,NULL,_IOLBF,0);RUN(test_native_placement_box_has_finite_sources_real_controls_rising_smoke_and_stable_pause);
     RUN(test_native_saved_smoke_box_restores_stock_and_valves_without_refilling);
+    RUN(test_missing_superseded_gas_recovers_archive);
     RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
     RUN(test_native_smoke_streaming_restores_sleeping_stock_and_initializes_new_slots);
     RUN(test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke);
