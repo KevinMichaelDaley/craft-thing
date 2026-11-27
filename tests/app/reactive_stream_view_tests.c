@@ -111,7 +111,7 @@ static bool structure_time_gpu(dc_gpu_t **gpu, char *err, uint32_t cap) {
     return dc_gpu_create(gpu, 64, 64, "build/shaders/pattern.comp.spv", err, cap);
 }
 
-typedef enum { STOCK_CONFLICT, STOCK_LEGACY, STOCK_INTERRUPTED } stock_reopen_t;
+typedef enum { STOCK_CONFLICT, STOCK_LEGACY, STOCK_INTERRUPTED, STOCK_TAKEOVER, STOCK_STALE } stock_reopen_t;
 
 static void check_structure_stock_reopen(stock_reopen_t route) {
     char directory[] = "build/structure_stock_XXXXXX", err[256] = {0};
@@ -127,6 +127,9 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
     snprintf(view.body_path, sizeof(view.body_path), "%s/%s", directory, DC_WORLD_BODY_RECORD);
     const dc_chunk_coord_t coord = {-3, 7};
     const unsigned cell = 17;
+    const bool has_receipt = route == STOCK_TAKEOVER || route == STOCK_STALE;
+    const bool replace = route == STOCK_TAKEOVER;
+    const unsigned parcel_cell = 42;
     chunk->coord = coord;
     chunk->cells[0].material = DC_MATERIAL_STONE;
     chunk->cells[cell].fluid_mass = 5000;
@@ -136,6 +139,7 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
     gas->cells[cell][5] = .197f;
     gas->cells[cell][12] = .5f;
     gas->gates[cell] = 1;
+    if (has_receipt) chunk->cells[parcel_cell].material = DC_MATERIAL_WOOD;
     uint32_t slot = 0;
     uint64_t generation = 0;
     ASSERT_TRUE(dc_chunk_table_begin_load(&view.table, coord, &slot, &generation));
@@ -143,6 +147,15 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
     ASSERT_TRUE(dc_chunk_table_finish_load(&view.table, slot, generation));
     ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(view.gpu, slot, chunk, bulk, err, sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_import_checkpoint(view.gpu, slot, gas, err, sizeof(err)));
+    fr_reactive_chunk_t parcels = {0};
+    if (has_receipt) {
+        fr_reactive_state_t parcel;
+        ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD, 39322, 1200, 330, 30,
+                                             &parcel, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_seed_cell(view.gpu, slot, parcel_cell, &parcel, err, sizeof(err)));
+        ASSERT_TRUE(fr_gpu_reactive_export_chunk(view.gpu, slot, chunk, &parcels, err, sizeof(err)));
+        ASSERT_EQ(parcels.count, 1u);
+    }
     view.table.slots[slot].time = (dc_chunk_time_t){.seconds = 5., .known = true};
     view.gas_admitted[slot] = true;
     if (route == STOCK_LEGACY)
@@ -155,9 +168,14 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
 
     view.stream = dc_stream_create(directory, 42, 4);
     ASSERT_TRUE(view.stream);
+    view.gpu = NULL;
+    memset(view.gas_admitted, 0, sizeof(view.gas_admitted));
+    ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
+    ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
     if (route != STOCK_INTERRUPTED) {
         dc_chunk_time_t stream_time = {.seconds = 5., .known = true};
-        if (route == STOCK_CONFLICT) {
+        if (route == STOCK_CONFLICT || has_receipt) {
             chunk->cells[0].material = DC_MATERIAL_AIR;
             chunk->cells[cell].fluid_mass = 10000;
             bulk->oil_fp[cell] = 28000;
@@ -165,19 +183,23 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
             gas->gates[cell] = 2;
             stream_time.seconds = 9.;
         }
-        ASSERT_TRUE(dc_stream_request_save_snapshot(view.stream, chunk, NULL, NULL, NULL,
-                                                    gas, bulk, stream_time, 1));
+        if (has_receipt) {
+            ASSERT_TRUE(view.gpu->checkpoint_chunk_count == 1 && view.gpu->checkpoint_owners);
+            dc_chunk_owner_t owner = view.gpu->checkpoint_owners[0];
+            if (route == STOCK_STALE) ++owner.serial;
+            dc_stream_result_t update = {.kind = DC_STREAM_LOADED, .coord = coord, .generation = 2u,
+                .time = stream_time, .chunk = chunk, .reactive = &parcels, .gas = gas, .bulk = bulk};
+            ASSERT_TRUE(dc_stream_request_save_takeover(view.stream, &update, owner, 3u));
+        } else {
+            ASSERT_TRUE(dc_stream_request_save_snapshot(view.stream, chunk, NULL, NULL, NULL,
+                                                        gas, bulk, stream_time, 1));
+        }
         dc_stream_result_t result = {0};
         ASSERT_TRUE(receive(view.stream, &result));
         ASSERT_EQ(result.kind, DC_STREAM_SAVED);
         dc_stream_result_release(&result);
     }
 
-    view.gpu = NULL;
-    memset(view.gas_admitted, 0, sizeof(view.gas_admitted));
-    ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
-    ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
-    ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
     if (route == STOCK_INTERRUPTED) {
         const uint64_t first_generation = view.table.next_generation;
         ASSERT_TRUE(!publish_timed_chunk(&view, coord, &slot, err, sizeof(err)));
@@ -195,6 +217,12 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
     ASSERT_TRUE(dc_gpu_download_chunk(view.gpu, slot, chunk, err, sizeof(err)));
     ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view.gpu, slot, bulk, err, sizeof(err)));
     ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view.gpu, slot, gas, err, sizeof(err)));
+    if (has_receipt) {
+        fr_reactive_record_t parcel;
+        bool found = false;
+        ASSERT_TRUE(fr_gpu_reactive_read_cell(view.gpu, slot, parcel_cell, &parcel, &found, err, sizeof(err)));
+        ASSERT_TRUE(found && memcmp(&parcel.state, &parcels.attachments[0].record.state, sizeof(parcel.state)) == 0);
+    }
     ASSERT_EQ(dc_gpu_validation_errors(view.gpu), 0u);
     const bool gas_admitted = view.gas_admitted[slot];
     const dc_chunk_time_t time = view.table.slots[slot].time;
@@ -202,14 +230,15 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
     dc_gpu_destroy(view.gpu);
     dc_chunk_table_destroy(&view.table);
 
-    ASSERT_EQ(chunk->cells[0].material, DC_MATERIAL_STONE);
-    ASSERT_EQ(chunk->cells[cell].fluid_mass, 5000u);
-    ASSERT_TRUE(time.known && time.seconds == 5.);
-    ASSERT_EQ(bulk->oil_fp[cell], 12000u);
+    ASSERT_EQ(chunk->cells[0].material, replace ? DC_MATERIAL_AIR : DC_MATERIAL_STONE);
+    ASSERT_EQ(chunk->cells[cell].fluid_mass, replace ? 10000u : 5000u);
+    ASSERT_TRUE(time.known && time.seconds == (replace ? 9. : 5.));
+    ASSERT_EQ(bulk->oil_fp[cell], replace ? 28000u : 12000u);
     ASSERT_EQ(bulk->oil_retained_fp[cell], 125u);
     ASSERT_TRUE(gas_admitted);
-    ASSERT_EQ(gas->cells[cell][0], .001f);
-    ASSERT_EQ(gas->gates[cell], 1u);
+    ASSERT_EQ(gas->cells[cell][0], replace ? .002f : .001f);
+    ASSERT_EQ(gas->gates[cell], replace ? 2u : 1u);
+    fr_reactive_chunk_release(&parcels);
     free(gas);
     free(bulk);
     free(chunk);
@@ -226,6 +255,14 @@ static void test_legacy_structure_reopen_keeps_matching_stream_stock(void) {
 
 static void test_pending_stock_survives_failed_publication_and_missing_stream(void) {
     check_structure_stock_reopen(STOCK_INTERRUPTED);
+}
+
+static void test_cold_reopen_replaces_exact_owner_with_all_updated_channels(void) {
+    check_structure_stock_reopen(STOCK_TAKEOVER);
+}
+
+static void test_cold_reopen_rejects_receipt_for_previous_owner(void) {
+    check_structure_stock_reopen(STOCK_STALE);
 }
 
 static void test_staged_structure_reopen_retains_times_when_pending_slots_move(void) {
@@ -317,7 +354,12 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
     PASS();
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--takeover") == 0) {
+        RUN(test_cold_reopen_replaces_exact_owner_with_all_updated_channels);
+        RUN(test_cold_reopen_rejects_receipt_for_previous_owner);
+        return g_fail != 0;
+    }
     if (!getenv("DC_TEST_STRUCTURE_TIME_ONLY")) {
         RUN(test_level_save_and_load_publish_the_same_reactive_worker_channel);
         RUN(test_level_save_and_load_restore_bulk_liquid_channel);
@@ -326,5 +368,7 @@ int main(void) {
     RUN(test_structure_reopen_uses_its_own_gas_and_bulk);
     RUN(test_legacy_structure_reopen_keeps_matching_stream_stock);
     RUN(test_pending_stock_survives_failed_publication_and_missing_stream);
+    RUN(test_cold_reopen_replaces_exact_owner_with_all_updated_channels);
+    RUN(test_cold_reopen_rejects_receipt_for_previous_owner);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
