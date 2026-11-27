@@ -1,8 +1,14 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <SDL.h>
+
+#include "ferrum/fire/bulk_phase_gpu.h"
+#include "ferrum/fire/gpu.h"
 #include "../../src/app/level_internal.h"
 #include "../../src/app/player_session_internal.h"
 #include "../../src/app/view_config.h"
@@ -23,7 +29,68 @@ static struct {
     float elapsed[24], player_elapsed[24], seconds;
     unsigned steps, player_steps, presents, presented_steps, reject_step;
     bool reject_present;
+    uint16_t material[DC_GPU_CHUNK_SLOTS];
 } g_frame;
+
+bool __wrap_fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, bool *restored, char *err, uint32_t cap) {
+    (void)gpu; (void)err; (void)cap;
+    *restored = false;
+    g_frame.material[slot] = chunk->cells[0].material;
+    return true;
+}
+
+bool __wrap_dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
+                                  char *err, uint32_t cap) {
+    (void)gpu; (void)err; (void)cap;
+    chunk->cells[0].material = g_frame.material[slot];
+    return true;
+}
+
+bool __wrap_dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t dx, int32_t dy,
+                                  char *err, uint32_t cap) {
+    (void)gpu; (void)dx; (void)dy; (void)err; (void)cap;
+    return true;
+}
+
+bool __wrap_fr_renderer_upload_chunk_colors(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_colors_t *colors, char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)colors; (void)err; (void)cap;
+    return true;
+}
+
+bool __wrap_fr_renderer_download_chunk_colors(dc_gpu_t *gpu, uint32_t slot,
+    dc_chunk_colors_t *colors, char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)err; (void)cap;
+    memset(colors, 0, sizeof(*colors));
+    return true;
+}
+
+bool __wrap_fr_gpu_reactive_import_chunk(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, const fr_reactive_chunk_t *channel, char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)chunk; (void)channel; (void)err; (void)cap;
+    return true;
+}
+
+bool __wrap_fr_gpu_reactive_export_chunk(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, fr_reactive_chunk_t *out, char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)chunk; (void)err; (void)cap;
+    *out = (fr_reactive_chunk_t){.next_id = 1};
+    return true;
+}
+
+bool __wrap_fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu, uint32_t slot,
+    const dc_chunk_t *chunk, const fr_bulk_phase_chunk_t *bulk, char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)chunk; (void)bulk; (void)err; (void)cap;
+    return true;
+}
+
+bool __wrap_fr_bulk_phase_gpu_export_chunk(dc_gpu_t *gpu, uint32_t slot,
+    fr_bulk_phase_chunk_t *bulk, char *err, uint32_t cap) {
+    (void)gpu; (void)slot; (void)err; (void)cap;
+    memset(bulk, 0, sizeof(*bulk));
+    return true;
+}
 
 bool __wrap_dc_gpu_set_page(dc_gpu_t *gpu, uint32_t x, uint32_t y, uint32_t slot,
                             char *err, uint32_t cap) {
@@ -283,6 +350,78 @@ static void test_player_actions_receive_the_same_ordered_time_as_physics(void) {
     PASS();
 }
 
+static bool pan_until_ready(dc_level_view_t *view, int32_t dx) {
+    return dc_level_view_move(view, dx, 0) && dc_level_view_wait_visible(view, 3000, NULL, 0);
+}
+
+static bool load_first_clock_chunk(dc_level_view_t *view, const char *directory) {
+    view->stream = dc_stream_create(directory, 42, 64);
+    const dc_chunk_slot_t *slot = &view->table.slots[0];
+    return view->stream && dc_stream_request_load(view->stream, slot->coord, slot->generation) &&
+           dc_level_view_wait_visible(view, 3000, NULL, 0);
+}
+
+static void test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reopen(void) {
+    char directory[] = "build/level_clock_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(true);
+    ASSERT_TRUE(view);
+    const dc_chunk_coord_t coord = view->table.slots[0].coord;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_streamer_t *writer = dc_stream_create(directory, 42, 4);
+    ASSERT_TRUE(chunk && writer);
+    chunk->coord = coord;
+    chunk->cells[0].material = DC_MATERIAL_WATER;
+    ASSERT_TRUE(dc_stream_request_save_snapshot(writer, chunk, NULL, NULL, NULL, NULL,
+        NULL, (dc_stream_chunk_time_t){.seconds = 8., .known = true}, 999u));
+    dc_stream_destroy(writer);
+    free(chunk);
+
+    ASSERT_TRUE(load_first_clock_chunk(view, directory));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
+    g_frame.reject_present = true;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    g_frame.reject_present = false;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .0625f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(pan_until_ready(view, 1));
+    ASSERT_TRUE(pan_until_ready(view, -1));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(pan_until_ready(view, 1));
+    dc_level_view_discard(view);
+
+    view = ready_view(true);
+    ASSERT_TRUE(view && load_first_clock_chunk(view, directory));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .015625f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(pan_until_ready(view, 1));
+    dc_level_view_discard(view);
+
+    dc_streamer_t *reader = dc_stream_create(directory, 42, 2);
+    ASSERT_TRUE(reader && dc_stream_request_load(reader, coord, 1u));
+    dc_stream_result_t result = {0};
+    uint64_t deadline = SDL_GetTicks64() + 3000u;
+    bool received = dc_stream_poll(reader, &result);
+    while (!received && SDL_GetTicks64() < deadline) {
+        SDL_Delay(1);
+        received = dc_stream_poll(reader, &result);
+    }
+    dc_stream_destroy(reader);
+    const dc_stream_chunk_time_t time = result.time;
+    const bool loaded = received && result.kind == DC_STREAM_LOADED && result.chunk &&
+                        result.chunk->cells[0].material == DC_MATERIAL_WATER;
+    dc_stream_result_release(&result);
+    printf("Chunk time known %d, %.9f seconds after confirmed ticks and cold returns\n",
+           time.known, time.seconds);
+    ASSERT_TRUE(loaded);
+    ASSERT_TRUE(time.known && time.seconds == 8.484375);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
@@ -294,6 +433,7 @@ int main(void) {
     RUN(test_loading_frame_does_not_build_catch_up_debt);
     RUN(test_partial_tick_failure_retains_only_unfinished_steps);
     RUN(test_player_actions_receive_the_same_ordered_time_as_physics);
+    RUN(test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reopen);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

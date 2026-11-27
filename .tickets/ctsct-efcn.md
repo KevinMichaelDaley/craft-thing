@@ -1,6 +1,6 @@
 ---
 id: ctsct-efcn
-status: open
+status: in_progress
 deps: [ctsct-f96g, ctolt-po5m]
 links: []
 created: 2026-11-27T00:59:33Z

@@ -758,6 +758,10 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 LEVEL_TICK_CALLS = dc_gpu_set_page dc_gpu_set_body_origin dc_gpu_prepare_body_origin dc_gpu_set_tick_water_source dc_gpu_set_tick_seconds dc_gpu_tick_step dc_gpu_present_chunks_steps_progress
 LEVEL_TICK_CALLS += dc_players_prepare_view dc_players_present dc_players_step
+LEVEL_TICK_CALLS += fr_gpu_upload_structure_chunk dc_gpu_download_chunk dc_gpu_shift_velocity
+LEVEL_TICK_CALLS += fr_renderer_upload_chunk_colors fr_renderer_download_chunk_colors
+LEVEL_TICK_CALLS += fr_gpu_reactive_import_chunk fr_gpu_reactive_export_chunk
+LEVEL_TICK_CALLS += fr_bulk_phase_gpu_import_chunk fr_bulk_phase_gpu_export_chunk
 build/level_ticks_tests: tests/app/level_ticks_tests.c src/app/level.c src/app/level.h src/app/level_internal.h src/app/view_config.h src/app/player_session_internal.h $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/level.c $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(LEVEL_TICK_CALLS),-Xlinker --wrap=$(fn))
 .PHONY: test_level_ticks
