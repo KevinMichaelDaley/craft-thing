@@ -377,6 +377,22 @@ static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) 
     ASSERT_TRUE(view->table.slots[slot].dirty && !dc_level_offscreen_owns(view, coord));
     if (moving_body) ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, id, &observed, err, sizeof(err)));
     ASSERT_EQ(rmdir(temporary), 0);
+    if (moving_body && !close_offscreen) {
+        ASSERT_TRUE(schedule_saves(view, err, sizeof(err)));
+        uint64_t deadline = SDL_GetTicks64() + 10000u;
+        while (view->camera_offscreen.phase == DC_CAMERA_OFFSCREEN_SAVING && SDL_GetTicks64() < deadline) {
+            ASSERT_TRUE(process_results(view, err, sizeof(err)));
+            SDL_Delay(1);
+        }
+        ASSERT_EQ(view->camera_offscreen.phase, DC_CAMERA_OFFSCREEN_STORED);
+        ASSERT_TRUE(dc_chunk_table_evict(&view->table, slot, UINT64_MAX));
+        ASSERT_TRUE(dc_camera_offscreen_service(view, false, err, sizeof(err)));
+        dc_stream_result_t failure = {.kind = DC_STREAM_FAILED, .coord = coord,
+            .generation = view->camera_offscreen.generation};
+        ASSERT_EQ(dc_level_offscreen_result(view, &failure, err, sizeof(err)), DC_LEVEL_OFFSCREEN_FAILED);
+        ASSERT_EQ(view->camera_offscreen.phase, DC_CAMERA_OFFSCREEN_STORED);
+        ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, id, &observed, err, sizeof(err)));
+    }
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(!dc_chunk_table_find(&view->table, coord, NULL));
     ASSERT_TRUE(dc_level_offscreen_owns(view, coord));
