@@ -475,6 +475,7 @@ static void bind_hydro_peer(dc_gpu_t *gpu, const dc_gpu_t *peer, int32_t dx, int
 }
 
 static bool run_paired_rigid(const water_domain_t *domain, float seconds, char *err, uint32_t cap) {
+    /* cohort_domain places the first owner at index zero and requires a peer tile. */
     const dc_gpu_water_tile_t *a = domain->locations, *b = a;
     while (!b->context) ++b;
     const int32_t dx = (int32_t)a->scratch_x - (int32_t)a->x - (int32_t)b->scratch_x + (int32_t)b->x;
@@ -482,8 +483,9 @@ static bool run_paired_rigid(const water_domain_t *domain, float seconds, char *
     bind_hydro_peer(domain->gpu, domain->peer, dx, dy, domain->bulk);
     bind_hydro_peer(domain->peer, domain->gpu, -dx, -dy, domain->bulk);
     bool okay = dc_gpu_submit_paired_tick_stage(domain->gpu, domain->peer, seconds, true, err, cap);
-    memset((uint32_t *)domain->gpu->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, 16u*sizeof(uint32_t));
-    memset((uint32_t *)domain->peer->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, 16u*sizeof(uint32_t));
+    const size_t control_bytes = DC_HYDRO_PEER_WORDS * sizeof(uint32_t);
+    memset((uint32_t *)domain->gpu->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, control_bytes);
+    memset((uint32_t *)domain->peer->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, control_bytes);
     return okay;
 }
 

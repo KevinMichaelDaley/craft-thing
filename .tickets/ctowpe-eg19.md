@@ -26,3 +26,7 @@ A partial kinematic obstruction at x63 and a half-occupied sealed pocket match m
 **2026-11-27T11:41:29Z**
 
 Reproduced at elapsed tick 2 with a kinematic partial obstruction on the shared face. Resident horizontal oil momentum at atlas cell 1983 is -0.777648926 versus -0.664539695 in the monolithic native solver. Both layouts agree before the first rigid integration step. The native rigid_hydro.glsl neighborhood lookup stops at the local page boundary.
+
+**2026-11-27T11:53:28Z**
+
+All three native bulk fixtures passed with Vulkan synchronization validation, including fractional reverse flow at the partial obstruction and rejection without publishing either owner’s staged bulk impulse.
