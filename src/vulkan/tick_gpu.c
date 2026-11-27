@@ -258,6 +258,15 @@ bool dc_gpu_can_batch_independent_tick(const dc_gpu_t *gpu) {
     return dc_gpu_chunk_physics_isolated(gpu) && !gpu->gas && !dc_gpu_liquid_owner_held(gpu);
 }
 
+static bool independent_owner_needs_grain_step(const dc_gpu_t *gpu) {
+    /* Structural work can change stock after recording and before the grain step. */
+    if (gpu->structural_enabled) return true;
+    const uint32_t *counts = gpu->particle_count_mapped;
+    for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(gpu); ++slot)
+        if (gpu->slot_page[slot] != UINT32_MAX && counts[slot]) return true;
+    return false;
+}
+
 bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char *err, uint32_t cap) {
     if (!owners || !count || count > DC_GPU_TICK_BATCH_LIMIT || !owners[0])
         return error(err, cap, "Invalid independent tick batch");
@@ -273,12 +282,8 @@ bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char
     }
     for (uint32_t i = 0; i < count; ++i) {
         dc_gpu_t *gpu = owners[i];
-        const uint32_t *counts = gpu->particle_count_mapped;
-        bool advance_grains = gpu->structural_enabled;
-        for (uint32_t slot = 0; !advance_grains && slot < dc_gpu_slot_capacity(gpu); ++slot)
-            advance_grains = gpu->slot_page[slot] != UINT32_MAX && counts[slot] != 0;
-        if (!tick_record(gpu, NULL, advance_grains, err, cap)) return false;
-        commands[i] = owners[i]->command;
+        if (!tick_record(gpu, NULL, independent_owner_needs_grain_step(gpu), err, cap)) return false;
+        commands[i] = gpu->command;
     }
     return submit_commands(first, commands, count, err, cap);
 }
