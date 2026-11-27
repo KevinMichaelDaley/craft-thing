@@ -1,6 +1,6 @@
 ---
 id: ctowpe-bsh0
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T18:58:05Z
@@ -27,3 +27,7 @@ Baseline reproduced four tile scans and four stencil builds per uninterrupted fu
 **2026-11-27T19:34:37Z**
 
 4bbe76ec finished all seven real Vulkan pressure cases on hidden Xephyr :93 with synchronization validation and no failures. The half-native 16-owner near/middle/far mean/p95 timings were 24.068/36.907, 23.208/40.843, 23.552/41.465 ms. Each band advanced 2.000000104 seconds. Native and 720 comparison running.
+
+**2026-11-27T19:38:05Z**
+
+Native near/middle/far mean/p95 ms: 26.412/38.542, 27.169/43.320, 26.802/42.687. All six camera means pass; p95 remains above the 33.333 ms parent gate. Native 720 dry 3.509/4.464, dense 9.519/12.802 and exact concave 16.991/21.042 all pass. Solver equivalence and both requested production camera measurements are complete.

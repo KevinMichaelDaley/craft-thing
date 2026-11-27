@@ -55,3 +55,7 @@ At 8abb9206 the saturated 16-owner camera passed every mean with half-native 24.
 **2026-11-27T19:20:39Z**
 
 At 782cb32c, with page-indexed projection and mass launches bounded by mapped slot, half-native camera p95 near/middle/far = 36.938/43.107/43.807 ms; native = 44.182/43.728/44.132 ms. All six means and all three separate 720 mean/p95 gates passed. The six saturated camera p95 gates remain open.
+
+**2026-11-27T19:38:05Z**
+
+Pressure reuse at 4bbe76ec passed 7/7 Vulkan pressure checks and all 720 gates. Half-native near/middle/far p95: 36.907/40.843/41.465 ms; native: 38.542/43.320/42.687 ms. Retained 16 confirmed active owners and 2.000000104 s simulated per band. Collecting per-frame actual replay batch counts, wall times and per-kernel device timestamps for the remaining tail.
