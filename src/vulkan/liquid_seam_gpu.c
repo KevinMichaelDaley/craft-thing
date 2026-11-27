@@ -33,7 +33,7 @@ static dc_liquid_seam_result_t report(dc_liquid_seam_result_t result, char *err,
     return result;
 }
 
-static bool mapped_endpoint(dc_liquid_seam_endpoint_t endpoint) {
+bool dc_gpu_liquid_endpoint_mapped(dc_liquid_seam_endpoint_t endpoint) {
     const dc_gpu_t *gpu = endpoint.gpu;
     if (!gpu || !gpu->page_mapped || endpoint.slot >= dc_gpu_slot_capacity(gpu) ||
         endpoint.tile_x >= gpu->width / DC_CHUNK_SIDE || endpoint.tile_y >= gpu->height / DC_CHUNK_SIDE ||
@@ -48,7 +48,7 @@ static bool mapped_endpoint(dc_liquid_seam_endpoint_t endpoint) {
 
 bool dc_gpu_liquid_seam_mapped(dc_liquid_seam_endpoint_t first, dc_liquid_seam_endpoint_t second,
                                dc_liquid_seam_axis_t axis) {
-    if (!mapped_endpoint(first) || !mapped_endpoint(second) || first.gpu == second.gpu ||
+    if (!dc_gpu_liquid_endpoint_mapped(first) || !dc_gpu_liquid_endpoint_mapped(second) || first.gpu == second.gpu ||
         !first.gpu->device_lifetime || first.gpu->device_lifetime != second.gpu->device_lifetime ||
         (first.gpu->thermal != NULL) != (second.gpu->thermal != NULL)) return false;
     dc_chunk_coord_t a = first.coord, b = second.coord;

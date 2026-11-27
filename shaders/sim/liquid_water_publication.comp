@@ -5,7 +5,6 @@
 
 const uint SIDE = DC_WATER_SEAM_SIDE;
 const uint CELLS = SIDE * SIDE;
-const uint PAIR_CELLS = 2u * CELLS;
 const uint MARKER_CAPACITY = DC_WATER_SEAM_MARKER_CAPACITY;
 const uint FULL = 65536u;
 
@@ -22,45 +21,52 @@ layout(set = 0, binding = 8, std430) readonly buffer ScratchHeat { float scratch
 layout(set = 0, binding = 9, std430) readonly buffer FinalMarkers { uvec4 final_markers[]; };
 layout(set = 0, binding = 10, std430) readonly buffer FinalMarkerCounts { uint final_marker_counts[]; };
 layout(set = 0, binding = 11, std430) readonly buffer FinalMarkerGrid { uint final_marker_grid[]; };
-layout(set = 0, binding = 12, std430) buffer FirstCells { uvec2 first_cells[]; };
-layout(set = 0, binding = 13, std430) buffer FirstColor { vec4 first_color[]; };
-layout(set = 0, binding = 14, std430) buffer FirstVelocity { vec2 first_velocity[]; };
-layout(set = 0, binding = 15, std430) buffer FirstHeat { float first_heat[]; };
-layout(set = 0, binding = 16, std430) buffer FirstMarkers { uvec4 first_markers[]; };
-layout(set = 0, binding = 17, std430) buffer FirstMarkerCounts { uint first_marker_counts[]; };
-layout(set = 0, binding = 18, std430) buffer FirstMarkerGrid { uint first_marker_grid[]; };
-layout(set = 0, binding = 19, std430) buffer SecondCells { uvec2 second_cells[]; };
-layout(set = 0, binding = 20, std430) buffer SecondColor { vec4 second_color[]; };
-layout(set = 0, binding = 21, std430) buffer SecondVelocity { vec2 second_velocity[]; };
-layout(set = 0, binding = 22, std430) buffer SecondHeat { float second_heat[]; };
-layout(set = 0, binding = 23, std430) buffer SecondMarkers { uvec4 second_markers[]; };
-layout(set = 0, binding = 24, std430) buffer SecondMarkerCounts { uint second_marker_counts[]; };
-layout(set = 0, binding = 25, std430) buffer SecondMarkerGrid { uint second_marker_grid[]; };
+layout(set = 0, binding = 13, std430) buffer FirstCells { uvec2 first_cells[]; };
+layout(set = 0, binding = 14, std430) buffer FirstColor { vec4 first_color[]; };
+layout(set = 0, binding = 15, std430) buffer FirstVelocity { vec2 first_velocity[]; };
+layout(set = 0, binding = 16, std430) buffer FirstHeat { float first_heat[]; };
+layout(set = 0, binding = 17, std430) buffer FirstMarkers { uvec4 first_markers[]; };
+layout(set = 0, binding = 18, std430) buffer FirstMarkerCounts { uint first_marker_counts[]; };
+layout(set = 0, binding = 19, std430) buffer FirstMarkerGrid { uint first_marker_grid[]; };
+layout(set = 0, binding = 20, std430) buffer SecondCells { uvec2 second_cells[]; };
+layout(set = 0, binding = 21, std430) buffer SecondColor { vec4 second_color[]; };
+layout(set = 0, binding = 22, std430) buffer SecondVelocity { vec2 second_velocity[]; };
+layout(set = 0, binding = 23, std430) buffer SecondHeat { float second_heat[]; };
+layout(set = 0, binding = 24, std430) buffer SecondMarkers { uvec4 second_markers[]; };
+layout(set = 0, binding = 25, std430) buffer SecondMarkerCounts { uint second_marker_counts[]; };
+layout(set = 0, binding = 26, std430) buffer SecondMarkerGrid { uint second_marker_grid[]; };
 
-struct Location { uint slot, x, y, width, height; };
-layout(push_constant) uniform Params { Location first, second; uint axis, thermal; } params;
+struct Location { uint slot, x, y, width, scratch_x, scratch_y, context; };
+layout(set = 0, binding = 12, std430) readonly buffer Tiles { Location locations[]; };
+layout(push_constant) uniform Params { uint width, height, tiles, thermal; } params;
 
-shared uint invalid, stock_before, stock_after;
+shared uint invalid, before_low, before_high, after_low, after_high;
+
+void add_stock(inout uvec2 total, uint mass) {
+    uint carry;
+    total.x = uaddCarry(total.x, mass, carry);
+    total.y += carry;
+}
 
 bool finite_color(vec4 value) { return !any(isnan(value)) && !any(isinf(value)); }
 bool finite_velocity(vec2 value) { return !any(isnan(value)) && !any(isinf(value)); }
 
-uint scratch_grid(bool second, uvec2 local) {
-    if (params.axis == 0u) return local.y * 2u * SIDE + local.x + (second ? SIDE : 0u);
-    return (local.y + (second ? SIDE : 0u)) * SIDE + local.x;
+uint scratch_grid(Location owner, uvec2 local) {
+    return (owner.scratch_y + local.y) * params.width + owner.scratch_x + local.x;
 }
 
 uint owner_grid(Location owner, uvec2 local) {
     return (owner.y + local.y) * owner.width + owner.x + local.x;
 }
 
-bool valid_cell(uint atlas, bool second, uint local, Location owner, uint grid) {
+bool valid_cell(uint atlas, uint tile, uint local, Location owner, uint grid) {
+    const bool second = owner.context != 0u;
     const uint live = owner.slot * CELLS + local;
     const uvec2 before = initial_cells[atlas], after = final_cells[atlas];
     const uvec2 current = second ? second_cells[live] : first_cells[live];
     const vec4 current_color = second ? second_color[live] : first_color[live];
-    const uint bulk_base = (second ? FR_BULK_CHUNK_CHANNELS * CELLS : 0u) + local;
-    const uint occupied = min(FULL, occupancy[2u * PAIR_CELLS + grid]) +
+    const uint bulk_base = tile * FR_BULK_CHUNK_CHANNELS * CELLS + local;
+    const uint occupied = min(FULL, occupancy[2u * params.width * params.height + grid]) +
                           min(FULL, bulk[bulk_base]) + min(FULL, bulk[bulk_base + CELLS]);
     const uint capacity = FULL - min(FULL, occupied);
     /* A rigid pocket may retain existing excess when all escape routes are sealed. */
@@ -71,8 +77,12 @@ bool valid_cell(uint atlas, bool second, uint local, Location owner, uint grid) 
         !finite_velocity(final_velocity[grid]) ||
         any(notEqual(floatBitsToUint(current_color), floatBitsToUint(initial_color[atlas]))))
         return false;
+    if (local == 0u) {
+        const uint live_markers = second ? second_marker_counts[owner.slot] : first_marker_counts[owner.slot];
+        if (live_markers > MARKER_CAPACITY || final_marker_counts[tile] > MARKER_CAPACITY) return false;
+    }
     if (params.thermal != 0u) {
-        const float old = scratch_heat[PAIR_CELLS + atlas], next = scratch_heat[atlas];
+        const float old = scratch_heat[params.tiles * CELLS + atlas], next = scratch_heat[atlas];
         const float current_heat = second ? second_heat[live] : first_heat[live];
         if (isnan(old) || isinf(old) || isnan(next) || isinf(next) ||
             floatBitsToUint(old) != floatBitsToUint(current_heat)) return false;
@@ -83,45 +93,46 @@ bool valid_cell(uint atlas, bool second, uint local, Location owner, uint grid) 
 void main() {
     const uint lane = gl_LocalInvocationID.x;
     if (lane == 0u) {
-        invalid = uint(final_marker_counts[0] > MARKER_CAPACITY || final_marker_counts[1] > MARKER_CAPACITY ||
-                       first_marker_counts[params.first.slot] > MARKER_CAPACITY ||
-                       second_marker_counts[params.second.slot] > MARKER_CAPACITY);
-        stock_before = 0u;
-        stock_after = 0u;
+        invalid = 0u;
+        before_low = 0u;
+        before_high = 0u;
+        after_low = 0u;
+        after_high = 0u;
     }
     barrier();
 
-    uint before = 0u, after = 0u;
+    uvec2 before = uvec2(0), after = uvec2(0);
     bool valid = true;
-    for (uint atlas = lane; atlas < PAIR_CELLS; atlas += gl_WorkGroupSize.x) {
-        const bool second = atlas >= CELLS;
-        const uint local = atlas % CELLS;
-        const Location owner = second ? params.second : params.first;
-        const uint grid = scratch_grid(second, uvec2(local % SIDE, local / SIDE));
-        valid = valid_cell(atlas, second, local, owner, grid) && valid;
-        before += min(FULL, initial_cells[atlas].y);
-        after += min(FULL, final_cells[atlas].y);
+    for (uint atlas = lane; atlas < params.tiles * CELLS; atlas += gl_WorkGroupSize.x) {
+        const uint tile = atlas / CELLS, local = atlas % CELLS;
+        const Location owner = locations[tile];
+        const uint grid = scratch_grid(owner, uvec2(local % SIDE, local / SIDE));
+        valid = valid_cell(atlas, tile, local, owner, grid) && valid;
+        add_stock(before, min(FULL, initial_cells[atlas].y));
+        add_stock(after, min(FULL, final_cells[atlas].y));
     }
     if (!valid) atomicOr(invalid, 1u);
-    atomicAdd(stock_before, before);
-    atomicAdd(stock_after, after);
+    const uint old_before = atomicAdd(before_low, before.x);
+    const uint old_after = atomicAdd(after_low, after.x);
+    atomicAdd(before_high, before.y + uint(old_before > 0xffffffffu - before.x));
+    atomicAdd(after_high, after.y + uint(old_after > 0xffffffffu - after.x));
     /* A single workgroup finishes the entire preflight before any owner stores. */
     barrier();
 
-    if (invalid != 0u || stock_before != stock_after) {
+    if (invalid != 0u || before_low != after_low || before_high != after_high) {
         if (lane == 0u) receipt = DC_LIQUID_RECEIPT_REJECTED;
         return;
     }
 
-    for (uint atlas = lane; atlas < PAIR_CELLS; atlas += gl_WorkGroupSize.x) {
-        const bool second = atlas >= CELLS;
-        const uint local = atlas % CELLS;
+    for (uint atlas = lane; atlas < params.tiles * CELLS; atlas += gl_WorkGroupSize.x) {
+        const uint tile = atlas / CELLS, local = atlas % CELLS;
+        const Location owner = locations[tile];
+        const bool second = owner.context != 0u;
         const uvec2 point = uvec2(local % SIDE, local / SIDE);
-        const Location owner = second ? params.second : params.first;
         const uint live = owner.slot * CELLS + local;
         const uint live_grid = owner_grid(owner, point);
-        const uint grid = scratch_grid(second, point);
-        const uint tile = uint(second), marker_count = final_marker_counts[tile];
+        const uint grid = scratch_grid(owner, point);
+        const uint marker_count = final_marker_counts[tile];
         const uint marker = owner.slot * MARKER_CAPACITY + local;
         const uint scratch_marker = tile * MARKER_CAPACITY + local;
         if (second) {

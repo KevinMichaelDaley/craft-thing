@@ -15,7 +15,7 @@ void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
         push[2] = FIRST_DISPLACEMENT_MODE + mode;
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines[mode]);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0, (seam_axis ? 4u : 3u) * sizeof(uint32_t), push);
+            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         vkCmdDispatch(gpu->command, lines < 65535u ? lines : 65535u, (lines + 65534u) / 65535u, 1u);
         fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -23,7 +23,7 @@ void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     }
 }
 
-static uint32_t aperture_leaves(uint32_t length) {
+uint32_t dc_gpu_fluid_aperture_leaves(uint32_t length) {
     uint32_t leaves = 1;
     while (leaves < (length + DC_FLUID_APERTURE_TILE_CELLS - 1u) / DC_FLUID_APERTURE_TILE_CELLS)
         leaves *= 2;
@@ -58,7 +58,7 @@ static void record_aperture_cache(dc_gpu_t *gpu, VkDescriptorSet descriptor,
 void dc_gpu_record_transport_sweep(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
                                    uint32_t *push, uint32_t push_bytes, bool occupancy) {
     const bool vertical = push[2] < 2u;
-    push[4] = occupancy ? aperture_leaves(vertical ? push[1] : push[0]) : 0u;
+    push[4] = occupancy ? dc_gpu_fluid_aperture_leaves(vertical ? push[1] : push[0]) : 0u;
     if (push[4] && push[2] != 1u)
         record_aperture_cache(gpu, descriptor, push[0], push[1], vertical, push[4]);
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);

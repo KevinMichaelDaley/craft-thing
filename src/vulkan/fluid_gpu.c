@@ -136,10 +136,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     return make_fluid_pipeline(gpu, path, phase, 0u, pipeline, err, cap);
 }
 
-bool dc_gpu_make_water_seam_pipeline(dc_gpu_t *gpu, uint32_t mode, VkPipeline *pipeline,
+bool dc_gpu_make_water_seam_pipeline(dc_gpu_t *gpu, uint32_t mode, uint32_t length, VkPipeline *pipeline,
                                      char *err, uint32_t cap) {
     return make_fluid_pipeline(gpu, "build/shaders/fluid_transport.comp.spv", mode,
-                               2u * DC_CHUNK_SIDE, pipeline, err, cap);
+                               length, pipeline, err, cap);
 }
 
 bool dc_gpu_make_water_seam_correction_pipeline(dc_gpu_t *gpu, VkPipeline *pipeline,
@@ -148,10 +148,10 @@ bool dc_gpu_make_water_seam_correction_pipeline(dc_gpu_t *gpu, VkPipeline *pipel
                          UINT32_MAX, pipeline, err, cap);
 }
 
-bool dc_gpu_make_water_seam_displacement_pipeline(dc_gpu_t *gpu, uint32_t mode,
+bool dc_gpu_make_water_seam_displacement_pipeline(dc_gpu_t *gpu, uint32_t mode, uint32_t length,
     VkPipeline *pipeline, char *err, uint32_t cap) {
     return make_fluid_pipeline(gpu, "build/shaders/fluid_water_seam_displacement.comp.spv", mode,
-                               2u * DC_CHUNK_SIDE, pipeline, err, cap);
+                               length, pipeline, err, cap);
 }
 
 bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -359,8 +359,7 @@ static void record_fluid_correction(dc_gpu_t *gpu) {
 }
 
 void dc_gpu_record_water_seam_correction(dc_gpu_t *gpu, VkDescriptorSet descriptor,
-    VkPipeline pipeline, uint32_t width, uint32_t height, float step_scale, uint32_t axis) {
-    const uint32_t slots = 2u;
+    VkPipeline pipeline, uint32_t width, uint32_t height, uint32_t slots, float step_scale, uint32_t axis) {
     uint32_t push[8] = {width, height, 4u, gpu->fluid_tick & 1u, 0u,
                         dc_gpu_float_bits(step_scale), 0u, axis};
     record_mass_pass(gpu, descriptor, pipeline, slots, push);

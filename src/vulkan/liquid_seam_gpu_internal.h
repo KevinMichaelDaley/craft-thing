@@ -13,7 +13,11 @@ typedef struct {
     uint32_t axis;
 } dc_gpu_seam_push_t;
 
-enum { DC_WATER_PUBLICATION_SCRATCH_BINDINGS = 12u };
+typedef struct {
+    uint32_t slot, x, y, width, scratch_x, scratch_y, context;
+} dc_gpu_water_tile_t;
+
+enum { DC_WATER_PUBLICATION_SCRATCH_BINDINGS = 13u };
 
 typedef struct {
     VkBuffer records, counts;
@@ -27,6 +31,7 @@ static inline dc_gpu_seam_markers_t dc_gpu_seam_active_markers(const dc_gpu_t *g
 
 dc_gpu_seam_push_t dc_gpu_seam_push(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis);
+bool dc_gpu_liquid_endpoint_mapped(dc_liquid_seam_endpoint_t endpoint);
 void dc_gpu_seam_bind_buffers(dc_gpu_t *gpu, VkDescriptorSet set,
     const VkDescriptorBufferInfo *buffers, uint32_t count);
 bool dc_gpu_prepare_liquid_receipt(dc_gpu_t *gpu, char *err, uint32_t cap);
@@ -37,6 +42,6 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
     fr_renderer_compute_t *compute, const VkDescriptorBufferInfo scratch[DC_WATER_PUBLICATION_SCRATCH_BINDINGS],
     char *err, uint32_t cap);
 void dc_gpu_record_water_publication(dc_gpu_t *gpu, const fr_renderer_compute_t *compute,
-    dc_gpu_seam_push_t seam, bool thermal);
+    uint32_t width, uint32_t height, uint32_t tiles, bool thermal);
 
 #endif

@@ -4,11 +4,11 @@
 #include "thermal_gpu_internal.h"
 
 typedef struct {
-    dc_gpu_seam_push_t seam;
-    uint32_t thermal;
+    uint32_t width, height, tiles, thermal;
 } water_publication_push_t;
 
-_Static_assert(sizeof(water_publication_push_t) == 12u * sizeof(uint32_t), "Water publication push mismatch");
+_Static_assert(sizeof(water_publication_push_t) == 4u * sizeof(uint32_t), "Water publication push mismatch");
+_Static_assert(sizeof(dc_gpu_water_tile_t) == 7u * sizeof(uint32_t), "Water publication tile layout mismatch");
 
 bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
     fr_renderer_compute_t *compute, const VkDescriptorBufferInfo scratch[DC_WATER_PUBLICATION_SCRATCH_BINDINGS],
@@ -43,8 +43,8 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
 }
 
 void dc_gpu_record_water_publication(dc_gpu_t *gpu, const fr_renderer_compute_t *compute,
-    dc_gpu_seam_push_t seam, bool thermal) {
-    const water_publication_push_t push = {seam, thermal};
+    uint32_t width, uint32_t height, uint32_t tiles, bool thermal) {
+    const water_publication_push_t push = {width, height, tiles, thermal};
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         compute->pipeline_layout, 0, 1, &compute->descriptor, 0, NULL);
