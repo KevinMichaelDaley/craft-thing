@@ -31,3 +31,11 @@ Presentation control on hidden :93 with the half-native 1920x1080 swapchain, 12 
 **2026-11-27T16:33:47Z**
 
 Latest profiled native near camera averaged 151.364 ms, p95 216.584. In its 60 measured frames, GPU timestamps placed both resident physics steps together at 67.759 ms mean / 114.878 p95, rendering at 1.188/1.629, and copy/blit at 0.398/0.797. The host vkQueuePresentKHR call, including GPU wait, averaged 134.084 ms. The native 720 gate measured mean/p95 23.238/24.504 dry, 29.560/33.457 dense and 39.143/46.799 concave. Dry passed; dense narrowly missed p95 and concave missed both limits.
+
+**2026-11-27T17:06:16Z**
+
+88238843 production 720 tests on hidden :93: dry mean/p95 23.602/25.631 ms and dense 29.081/32.589 passed. Exact concave 38.079/44.128 still fails. Half-native mean/p95 82.879/107.740 near, 81.336/110.201 middle, 79.536/117.421 far. Each band presented 60 frames with 16 active owners and advanced the world clock by 2.000000104 seconds. Oldest-owner lag was 0.0667/0.0667/0.2667 seconds. Full native pending.
+
+**2026-11-27T17:09:41Z**
+
+Native 88238843 ran the full near/middle/far workload with production dispatch and default presentation. Mean/p95 was 95.165/121.557, 93.551/119.526, and 87.842/114.234 ms. All bands had 16 active owners. World-clock advancement was 2.000000104 seconds per band. The oldest owner lag was 0.0667/0.0667/0.2667 seconds. Allocation priority is verified and closed; the aggregate regression suite is being run on the newer hydrostatic shader revision.
