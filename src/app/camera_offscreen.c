@@ -73,15 +73,16 @@ static bool face_in_view(const dc_level_view_t *view, dc_chunk_coord_t coord, un
     return face_neighbor(coord, face, &neighbor) && dc_level_chunk_visible(view, neighbor);
 }
 
-static bool neighbor_has_water(dc_level_view_t *view, dc_chunk_coord_t coord, unsigned face) {
+static bool neighbor_has_liquid(dc_level_view_t *view, dc_chunk_coord_t coord, unsigned face) {
     dc_chunk_coord_t neighbor;
     uint32_t slot;
     if (!face_neighbor(coord, face, &neighbor) || !dc_chunk_table_find(&view->table, neighbor, &slot) ||
         view->table.slots[slot].state != DC_SLOT_ACTIVE ||
         !dc_gpu_copy_chunk_state(view->gpu, slot, false, false, NULL, 0)) return false;
     const dc_cell_t *cells = (const dc_cell_t *)view->gpu->chunk_mapped + (size_t)slot * DC_CHUNK_CELLS;
+    const fr_bulk_phase_chunk_t *bulk = (const fr_bulk_phase_chunk_t *)view->gpu->bulk_phase_mapped + slot;
     for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i)
-        if (cells[i].fluid_mass) return true;
+        if (cells[i].fluid_mass || bulk->oil_fp[i] || bulk->slime_fp[i]) return true;
     return false;
 }
 
@@ -92,7 +93,6 @@ unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_st
     unsigned faces = 0;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         const dc_cell_t *cell = &snapshot->chunk->cells[i];
-        if (snapshot->bulk && (snapshot->bulk->oil_fp[i] || snapshot->bulk->slime_fp[i])) return 0;
         const uint32_t x = i % DC_CHUNK_SIDE, y = i / DC_CHUNK_SIDE;
         unsigned edge = (x == 0 ? WEST : 0) | (x == DC_CHUNK_SIDE - 1u ? EAST : 0) |
                         (y == 0 ? NORTH : 0) | (y == DC_CHUNK_SIDE - 1u ? SOUTH : 0);
@@ -129,7 +129,7 @@ bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err
         const dc_stream_result_t snapshot = {.time = slot->time, .coord = slot->coord, .chunk = &chunk,
             .bulk = (fr_bulk_phase_chunk_t *)view->gpu->bulk_phase_mapped + i};
         if (dc_camera_offscreen_water_face(view, &snapshot) == face &&
-            (has_transport_stock(&snapshot) || neighbor_has_water(view, slot->coord, face))) {
+            (has_transport_stock(&snapshot) || neighbor_has_liquid(view, slot->coord, face))) {
             *hold = true;
             break;
         }
@@ -148,7 +148,7 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
         if (!face || !face_in_view(view, snapshot->coord, face) || view->gpu->fluid_phase ||
             snapshot->time.seconds != view->world_seconds) return;
     }
-    if (!has_transport_stock(snapshot) && (!face || !neighbor_has_water(view, snapshot->coord, face))) return;
+    if (!has_transport_stock(snapshot) && (!face || !neighbor_has_liquid(view, snapshot->coord, face))) return;
     *camera = (dc_camera_offscreen_t){.coord = snapshot->coord, .owner = owner,
         .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING,
         .water_face = face};

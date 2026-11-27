@@ -116,10 +116,9 @@ static bool inspect_water_region(dc_liquid_seam_endpoint_t tile, water_region_ti
     const dc_face_velocity_t *faces = (const dc_face_velocity_t *)gpu->velocity_mapped +
         ((size_t)tile.tile_y * gpu->width + tile.tile_x) * DC_CHUNK_SIDE;
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
-        if (bulk->oil_fp[i] || bulk->slime_fp[i]) return false;
         uint32_t x = i % DC_CHUNK_SIDE, y = i / DC_CHUNK_SIDE;
         dc_face_velocity_t velocity = faces[(size_t)y * gpu->width + x];
-        r->active |= cells[i].fluid_mass || velocity.x || velocity.y;
+        r->active |= cells[i].fluid_mass || bulk->oil_fp[i] || bulk->slime_fp[i] || velocity.x || velocity.y;
         if (cells[i].material == DC_MATERIAL_STONE && (cells[i].flags & DC_CELL_LOADED_TERRAIN) &&
             !(cells[i].flags & (DC_CELL_RELEASED_TERRAIN | DC_CELL_BURNING_SMOKE_PASS))) continue;
         if (cells[i].material != DC_MATERIAL_AIR || cells[i].flags) return false;

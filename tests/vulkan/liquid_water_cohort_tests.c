@@ -467,33 +467,39 @@ cleanup:
     free(identity);
 }
 
-static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) {
+static void check_bulk_crossing(bool vertical) {
     const char shader[] = "build/shaders/pattern.comp.spv";
     dc_gpu_t *owners[2] = {0}, *mono = NULL;
-    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *native = calloc(1, sizeof(*native));
     fr_bulk_phase_chunk_t *phase = calloc(1, sizeof(*phase));
     fr_bulk_phase_chunk_t *expected = calloc(1, sizeof(*expected));
     dc_liquid_seam_endpoint_t endpoints[2] = {0};
-    ASSERT_TRUE(chunk && phase && expected);
+    ASSERT_TRUE(chunk && native && phase && expected);
     ASSERT_TRUE(dc_gpu_create(&owners[0], 64, 64, shader, g_err, sizeof(g_err)) &&
                 dc_gpu_create_shared(&owners[1], owners[0], 64, 64, shader, g_err, sizeof(g_err)) &&
-                dc_gpu_create(&mono, 128, 64, shader, g_err, sizeof(g_err)));
+                dc_gpu_create(&mono, vertical ? 64 : 128, vertical ? 128 : 64, shader, g_err, sizeof(g_err)));
     ASSERT_TRUE(dc_gpu_set_fluid_interval(mono, 6u));
     for (unsigned i = 0; i < 2; ++i) {
-        chunk->coord.x = i;
+        chunk->coord = (dc_chunk_coord_t){vertical ? 0 : i, vertical ? i : 0};
+        if (vertical) {
+            for (unsigned j = 0; j < DC_CHUNK_CELLS; ++j) chunk->cells[j] = (dc_cell_t){.material = DC_MATERIAL_STONE};
+            unsigned row = i ? 0u : DC_CHUNK_SIDE - 1u;
+            for (unsigned x = 30; x <= 34; x += 4)
+                chunk->cells[row * DC_CHUNK_SIDE + x] = (dc_cell_t){.fluid_mass = i ? DC_FLUID_FULL : 0u};
+        }
         endpoints[i] = (dc_liquid_seam_endpoint_t){.gpu = owners[i], .coord = chunk->coord};
         ASSERT_TRUE(dc_gpu_set_body_origin(owners[i], chunk->coord, g_err, sizeof(g_err)) &&
                     dc_gpu_set_fluid_interval(owners[i], 6u) &&
                     dc_gpu_upload_chunk(owners[i], 0, chunk, g_err, sizeof(g_err)) &&
                     dc_gpu_set_page(owners[i], 0, 0, 0, g_err, sizeof(g_err)) &&
                     dc_gpu_upload_chunk(mono, i, chunk, g_err, sizeof(g_err)) &&
-                    dc_gpu_set_page(mono, i, 0, i, g_err, sizeof(g_err)));
+                    dc_gpu_set_page(mono, chunk->coord.x, chunk->coord.y, i, g_err, sizeof(g_err)));
         if (i) continue;
-        uint32_t at = 30u * DC_CHUNK_SIDE + 63u;
+        uint32_t at = vertical ? 63u * DC_CHUNK_SIDE + 30u : 30u * DC_CHUNK_SIDE + 63u;
         phase->oil_fp[at] = DC_FLUID_FULL;
         phase->oil_momentum_x[at] = 10.f;
         phase->oil_excess[at] = 3.f;
-        at += 4u * DC_CHUNK_SIDE;
+        at += vertical ? 4u : 4u * DC_CHUNK_SIDE;
         phase->slime_fp[at] = DC_FLUID_FULL;
         phase->slime_momentum_x[at] = 100.f;
         phase->slime_excess[at] = 6.f;
@@ -508,6 +514,10 @@ static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) {
             ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(mono, i, expected, g_err, sizeof(g_err)) &&
                         fr_bulk_phase_gpu_export_chunk(owners[i], 0, phase, g_err, sizeof(g_err)));
             ASSERT_EQ(memcmp(phase, expected, sizeof(*phase)), 0);
+            ASSERT_TRUE(dc_gpu_download_chunk(mono, i, native, g_err, sizeof(g_err)) &&
+                        dc_gpu_download_chunk(owners[i], 0, chunk, g_err, sizeof(g_err)));
+            ASSERT_EQ(memcmp(native->cells, chunk->cells, sizeof(native->cells)), 0);
+            ASSERT_EQ(memcmp(native->face_velocity, chunk->face_velocity, sizeof(native->face_velocity)), 0);
         }
     }
     uint64_t oil = 0, slime = 0;
@@ -521,8 +531,10 @@ cleanup:
     dc_gpu_destroy(mono);
     dc_gpu_destroy(owners[1]);
     dc_gpu_destroy(owners[0]);
-    free(chunk); free(phase); free(expected);
+    free(native); free(chunk); free(phase); free(expected);
 }
+static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) { check_bulk_crossing(false); }
+static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_bulk_crossing(true); }
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
@@ -531,8 +543,10 @@ int main(int argc, char **argv) {
         RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
     } else if (argc == 2 && strcmp(argv[1], "--bulk") == 0) {
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
+        RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
     } else if (argc == 1) {
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
+        RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
         RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
         RUN(test_connected_tiles_match_monolithic_water_and_share_one_receipt);
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
