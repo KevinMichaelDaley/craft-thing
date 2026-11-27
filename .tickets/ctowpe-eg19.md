@@ -1,6 +1,6 @@
 ---
 id: ctowpe-eg19
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T11:41:08Z
@@ -30,3 +30,7 @@ Reproduced at elapsed tick 2 with a kinematic partial obstruction on the shared 
 **2026-11-27T11:53:28Z**
 
 All three native bulk fixtures passed with Vulkan synchronization validation, including fractional reverse flow at the partial obstruction and rejection without publishing either owner’s staged bulk impulse.
+
+**2026-11-27T12:17:10Z**
+
+The moving partial obstruction now matches native Q16 position and velocity, angle, angular velocity and both owners’ liquid states. All seven native cohort cases passed under Vulkan synchronization validation on :93. A mismapped world coordinate is rejected before the valid tick.
