@@ -387,11 +387,18 @@ static void check_two_screen_camera_pan(bool moving_body) {
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_EQ(view->world_seconds, 2.0625);
     if (moving_body) {
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
         ASSERT_TRUE(dc_gpu_read_world_body(view->camera_offscreen.workspace->gpu, id, &returned, err, sizeof(err)) &&
             dc_gpu_read_body_motion(view->camera_offscreen.workspace->gpu, id, &motion, err, sizeof(err)));
         ASSERT_TRUE(returned.body.x_fp > initial.body.x_fp && returned.body.vy_fp > 0 && motion.angle > .125f);
     }
 
+    if (moving_body) {
+        const char *draft = dc_world_save_directory(view->save, true);
+        ASSERT_TRUE(draft);
+        snprintf(temporary, sizeof(temporary), "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin.tmp",
+            draft, (uint64_t)coord.x, (uint64_t)coord.y);
+    }
     ASSERT_EQ(mkdir(temporary, 0700), 0);
     ASSERT_TRUE(dc_level_view_pan_pixels(view, -2 * VIEW_WIDTH, 0));
     ASSERT_TRUE(!dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));

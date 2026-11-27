@@ -44,7 +44,8 @@ static bool closed_edge_cell(const dc_stream_result_t *snapshot, uint32_t index)
 
 bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_result_t *snapshot) {
     if (!snapshot->chunk || !snapshot->time.known || !isfinite(snapshot->time.seconds) ||
-        snapshot->time.seconds < 0. || !dc_gpu_chunk_physics_isolated(view->gpu) ||
+        snapshot->time.seconds < 0. || (!dc_gpu_chunk_physics_isolated(view->gpu) &&
+        !dc_offscreen_body_island(view->gpu, snapshot->coord)) ||
         snapshot->water_excess || snapshot->chunk->particle_count ||
         (snapshot->gas != NULL) != (view->gpu->gas != NULL)) return false;
     for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
@@ -148,7 +149,8 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
         if (!face || !face_in_view(view, snapshot->coord, face) || view->gpu->fluid_phase ||
             snapshot->time.seconds != view->world_seconds) return;
     }
-    if (!has_transport_stock(snapshot) && (!face || !neighbor_has_liquid(view, snapshot->coord, face))) return;
+    if (!has_transport_stock(snapshot) && !dc_offscreen_body_island(view->gpu, snapshot->coord) &&
+        (!face || !neighbor_has_liquid(view, snapshot->coord, face))) return;
     *camera = (dc_camera_offscreen_t){.coord = snapshot->coord, .owner = owner,
         .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING,
         .water_face = face};
@@ -187,7 +189,7 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     if (camera->phase == DC_CAMERA_OFFSCREEN_IDLE || camera->phase == DC_CAMERA_OFFSCREEN_SAVING)
         return true;
     bool needed = camera_needs_chunk(view, camera->coord);
-    bool independent = dc_gpu_chunk_physics_isolated(view->gpu);
+    bool independent = dc_gpu_chunk_physics_isolated(view->gpu) || dc_offscreen_body_island(view->gpu, camera->coord);
     bool coupled = camera->water_face != 0u;
     bool attached = coupled && face_in_view(view, camera->coord, camera->water_face);
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {

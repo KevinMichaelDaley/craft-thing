@@ -328,6 +328,7 @@ bool dc_level_offscreen_cancel(dc_level_view_t *view, dc_chunk_coord_t coord,
     dc_level_offscreen_handoff_t **link = find_handoff(view, coord);
     dc_level_offscreen_handoff_t *handoff = *link;
     if (!handoff || handoff->generation != generation || handoff->write_generation || handoff->liquid_paired ||
+        handoff->owns_bodies ||
         dc_gpu_liquid_owner_held(handoff->workspace->gpu))
         return error(err, cap, "Offscreen owner cannot be canceled");
     bool okay = !handoff->admitted || handoff->workspace->failed || retire_page(handoff, err, cap);
@@ -348,6 +349,14 @@ static bool accept_source(dc_level_view_t *view, dc_level_offscreen_handoff_t *h
                 !dc_camera_offscreen_isolated(view, result)))
             return error(err, cap, "Offscreen eviction source changed");
         if (!dc_offscreen_admit(handoff->workspace, result, handoff->generation, err, cap)) return false;
+        if (!coupled && dc_offscreen_body_island(view->gpu, result->coord)) {
+            dc_gpu_t *destination = handoff->workspace->gpu;
+            if (!dc_level_view_stage_world_save(view, err, cap) ||
+                !dc_gpu_set_rigid_solver(destination, view->gpu->rigid_solver_enabled) ||
+                !dc_offscreen_move_bodies(view->gpu, destination, result->coord, err, cap)) return false;
+            destination->rigid_step_budget = view->gpu->rigid_step_budget;
+            handoff->owns_bodies = true;
+        }
         handoff->source_time = result->time;
         handoff->admitted = true;
         return true;
@@ -400,6 +409,15 @@ dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
     }
     if (result->kind != DC_STREAM_SAVED || !dc_chunk_owner_equal(result->replaces_owner, handoff->owner))
         return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    if (handoff->owns_bodies) {
+        if (!dc_offscreen_move_bodies(handoff->workspace->gpu, view->gpu, handoff->coord, err, cap)) {
+            --handoff->workspace->held_writes;
+            handoff->write_generation = 0;
+            return DC_LEVEL_OFFSCREEN_FAILED;
+        }
+        handoff->owns_bodies = false;
+        view->closing_structure_saved = false;
+    }
     bool okay = retire_page(handoff, err, cap);
     remove_handoff(link);
     return okay ? DC_LEVEL_OFFSCREEN_HANDLED : DC_LEVEL_OFFSCREEN_FAILED;
