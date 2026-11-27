@@ -1,6 +1,6 @@
 ---
 id: ctost-uuni
-status: in_progress
+status: closed
 deps: [ctost-pneh, ctcos-3q4u]
 links: []
 created: 2026-11-27T02:45:45Z
@@ -31,3 +31,7 @@ DCS v11 now includes gas and bulk liquid from the same selected physical owner a
 **2026-11-27T03:21:59Z**
 
 The targeted Vulkan run passed 22 checks across level streaming, structural storage, thermal and reactive checkpoints, and offscreen workspaces. The four level snapshot cases passed again after moving the unchanged checksum calculation with the channel format. The final codec passed five sanitizer checks. The exact code revision for make test is queued behind the earlier GPU suites.
+
+**2026-11-27T03:57:29Z**
+
+The durable takeover now selects the exact owner across stream and structure archives, retries failed publications without dropping the previous snapshot, and preserves legacy fallback. Verified cold restart and restored gas, liquid, parcel and elapsed-time state on the RTX fixtures. The camera route and seam integration remain under ctoew-5swd.
