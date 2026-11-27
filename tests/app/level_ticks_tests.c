@@ -28,15 +28,17 @@ static int g_pass, g_fail;
 static struct {
     float elapsed[24], player_elapsed[24], seconds;
     unsigned steps, player_steps, presents, presented_steps, reject_step;
-    bool reject_present;
+    bool reject_present, restore_first_from_checkpoint;
     uint16_t material[DC_GPU_CHUNK_SLOTS];
+    unsigned uploads[DC_GPU_CHUNK_SLOTS];
 } g_frame;
 
 bool __wrap_fr_gpu_upload_structure_chunk(dc_gpu_t *gpu, uint32_t slot,
     const dc_chunk_t *chunk, bool *restored, char *err, uint32_t cap) {
     (void)gpu; (void)err; (void)cap;
-    *restored = false;
-    g_frame.material[slot] = chunk->cells[0].material;
+    *restored = g_frame.restore_first_from_checkpoint && slot == 0;
+    g_frame.material[slot] = *restored ? DC_MATERIAL_STONE : chunk->cells[0].material;
+    ++g_frame.uploads[slot];
     return true;
 }
 
@@ -299,12 +301,18 @@ static void test_mixed_ticks_are_consumed_before_retrying_failed_present(void) {
 static void test_loading_frame_does_not_build_catch_up_debt(void) {
     dc_level_view_t *view = ready_view(true);
     ASSERT_TRUE(view);
+    dc_chunk_slot_t *timed = &view->table.slots[1];
+    timed->time = (dc_chunk_time_t){.seconds = 4.5, .known = true};
     ASSERT_TRUE(dc_level_view_step_timed(view, .01f, NULL, 0));
     ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    ASSERT_TRUE(!timed->dirty);
     ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(timed->time.seconds == 4.5 && !timed->dirty);
     ASSERT_TRUE(dc_chunk_table_finish_load(&view->table, 0, view->table.slots[0].generation));
     ASSERT_TRUE(dc_level_view_step_timed(view, .03f, NULL, 0));
     ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(timed->time.seconds == 4.5 + (double).03f && timed->dirty);
+    ASSERT_TRUE(!view->table.slots[0].time.known);
     dc_level_view_discard(view);
     ASSERT_INT_EQ(g_frame.presents, 2);
     ASSERT_INT_EQ(g_frame.steps, 1);
@@ -357,8 +365,22 @@ static bool pan_until_ready(dc_level_view_t *view, int32_t dx) {
 static bool load_first_clock_chunk(dc_level_view_t *view, const char *directory) {
     view->stream = dc_stream_create(directory, 42, 64);
     const dc_chunk_slot_t *slot = &view->table.slots[0];
-    return view->stream && dc_stream_request_load(view->stream, slot->coord, slot->generation) &&
+    return view->stream && dc_stream_request_load(view->stream, slot->coord, slot->generation + 100u) &&
+           dc_stream_request_load(view->stream, slot->coord, slot->generation) &&
            dc_level_view_wait_visible(view, 3000, NULL, 0);
+}
+
+static bool write_timed_chunk(const char *directory, dc_chunk_coord_t coord) {
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    if (!chunk) return false;
+    dc_streamer_t *writer = dc_stream_create(directory, 42, 4);
+    chunk->coord = coord;
+    chunk->cells[0].material = DC_MATERIAL_WATER;
+    bool saved = writer && dc_stream_request_save_snapshot(writer, chunk, NULL, NULL, NULL,
+        NULL, NULL, (dc_stream_chunk_time_t){.seconds = 8., .known = true}, 999u);
+    dc_stream_destroy(writer);
+    free(chunk);
+    return saved;
 }
 
 static void test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reopen(void) {
@@ -367,17 +389,9 @@ static void test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reope
     dc_level_view_t *view = ready_view(true);
     ASSERT_TRUE(view);
     const dc_chunk_coord_t coord = view->table.slots[0].coord;
-    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    dc_streamer_t *writer = dc_stream_create(directory, 42, 4);
-    ASSERT_TRUE(chunk && writer);
-    chunk->coord = coord;
-    chunk->cells[0].material = DC_MATERIAL_WATER;
-    ASSERT_TRUE(dc_stream_request_save_snapshot(writer, chunk, NULL, NULL, NULL, NULL,
-        NULL, (dc_stream_chunk_time_t){.seconds = 8., .known = true}, 999u));
-    dc_stream_destroy(writer);
-    free(chunk);
-
+    ASSERT_TRUE(write_timed_chunk(directory, coord));
     ASSERT_TRUE(load_first_clock_chunk(view, directory));
+    ASSERT_EQ(g_frame.uploads[0], 1u);
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
     ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
     g_frame.reject_present = true;
@@ -422,6 +436,19 @@ static void test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reope
     PASS();
 }
 
+static void test_untimed_structure_checkpoint_does_not_inherit_stream_time(void) {
+    char directory[] = "build/level_clock_structure_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(true);
+    ASSERT_TRUE(view && write_timed_chunk(directory, view->table.slots[0].coord));
+    g_frame.restore_first_from_checkpoint = true;
+    ASSERT_TRUE(load_first_clock_chunk(view, directory));
+    ASSERT_TRUE(!view->table.slots[0].time.known);
+    ASSERT_EQ(g_frame.material[0], DC_MATERIAL_STONE);
+    dc_level_view_discard(view);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
@@ -434,6 +461,7 @@ int main(void) {
     RUN(test_partial_tick_failure_retains_only_unfinished_steps);
     RUN(test_player_actions_receive_the_same_ordered_time_as_physics);
     RUN(test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reopen);
+    RUN(test_untimed_structure_checkpoint_does_not_inherit_stream_time);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

@@ -1,6 +1,6 @@
 ---
 id: ctolt-po5m
-status: in_progress
+status: closed
 deps: []
 links: [ctolt-6it2]
 created: 2026-11-27T00:41:02Z
@@ -27,3 +27,7 @@ RED on the live level entry point executed four ticks after two were requested a
 **2026-11-27T00:59:33Z**
 
 Exact 88c64a1c RTX display regression passed both injected cases. Combined completion count was 0 before acquisition, 2 after the fenced present failure, 0 on render retry, and 2 on subsequent success. Gas count was 2 on the acquire failure and 0 on retry. Vulkan SDK validation 1.3.275 reported older-layer support errors for the existing FIFO latest-ready feature. A rerun with that optional display mode disabled is queued.
+
+**2026-11-27T01:07:03Z**
+
+Exact 88c64a1c passed both RTX display fault-injection cases again with Vulkan core and synchronization validation and FIFO latest-ready disabled to accommodate the installed validation layer. Combined progress was 0/2/0/2 and gas acquire/retry was 2/0. The log had no validation errors or synchronization hazards.

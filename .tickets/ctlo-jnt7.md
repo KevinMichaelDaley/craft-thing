@@ -63,3 +63,7 @@ The pinned 3c94b591 integrated full run exited 2 at the large-body brush timing 
 **2026-11-27T00:20:13Z**
 
 Native integrated RED at 239a46da measured 1,861 union edges. Refactor at 159e8284 measured one union edge for the same intact 512-pixel diagonal seam and preserved exact 255/256 fragments on the cut. Both the stale-root and tile probes passed ordinary and synchronization-validation NVIDIA runs. The side comparison on 8daff75e reduced the exact 36,051-pixel colored fixture from 143,026 to 34,216 merges with exact mass, colors and rotated miss behavior. Its concurrent native body suite passed all 11 functional checks and failed the unchanged two elapsed-time gates at 161.417 ms and 3.417 ms. Current integrated body suite and isolated timing remain open.
+
+**2026-11-27T01:07:03Z**
+
+The parallel submerged-ledger full suite pinned at 55d2438d exited 2 on the strict warm miss gate. The full-body cut retained 36,051 pixels at 8.375 ms. The warm miss took 3.130 ms with one submission, against 3 ms. The integrated tile-connectivity latency run remains queued. The two timing thresholds are unchanged.

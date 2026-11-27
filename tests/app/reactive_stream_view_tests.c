@@ -21,6 +21,7 @@ static void test_level_save_and_load_publish_the_same_reactive_worker_channel(vo
     ASSERT_TRUE(dc_chunk_table_begin_load(&view.table,chunk->coord,&index,&generation));
     ASSERT_TRUE(dc_gpu_upload_chunk(view.gpu,index,chunk,err,sizeof(err))&&dc_gpu_set_page(view.gpu,0,0,index,err,sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_finish_load(&view.table,index,generation));
+    view.table.slots[index].time = (dc_chunk_time_t){.seconds = 4.5, .known = true};
     fr_reactive_state_t state;ASSERT_TRUE(fr_reactive_state_default(DC_MATERIAL_WOOD,39322,8192,800,80,&state,err,sizeof(err)));
     state.coating_oil_fuel_fp=300;state.ignition_threshold=.7f;state.ignition_integral=.4f;
     ASSERT_TRUE(fr_gpu_reactive_seed_cell(view.gpu,index,0,&state,err,sizeof(err)));
@@ -30,6 +31,7 @@ static void test_level_save_and_load_publish_the_same_reactive_worker_channel(vo
     ASSERT_TRUE(dc_chunk_table_finish_save(&view.table,index,result.generation));dc_stream_result_release(&result);
     ASSERT_TRUE(dc_stream_request_load(view.stream,chunk->coord,generation));ASSERT_TRUE(receive(view.stream,&result));
     ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.reactive);ASSERT_EQ(result.reactive->count,1u);
+    ASSERT_TRUE(result.time.known && result.time.seconds == 4.5);
     ASSERT_TRUE(result.bulk);ASSERT_INT_EQ(result.bulk->oil_fp[0],0);
     ASSERT_TRUE(memcmp(&result.reactive->attachments[0].record.state,&state,sizeof(state))==0);dc_stream_result_release(&result);
     ASSERT_TRUE(fr_gpu_reactive_import_chunk(view.gpu,index,chunk,NULL,err,sizeof(err)));
@@ -42,6 +44,7 @@ static void test_level_save_and_load_publish_the_same_reactive_worker_channel(vo
         ASSERT_TRUE(process_results(&view,err,sizeof(err)));SDL_Delay(1);
     }
     ASSERT_EQ(view.table.slots[index].state,DC_SLOT_ACTIVE);
+    ASSERT_TRUE(view.table.slots[index].time.known && view.table.slots[index].time.seconds == 4.5);
     ASSERT_TRUE(fr_gpu_reactive_read_cell(view.gpu,index,0,&record,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(memcmp(&record.state,&state,sizeof(state))==0);
     ASSERT_TRUE(present(view.gpu,err,sizeof(err)));

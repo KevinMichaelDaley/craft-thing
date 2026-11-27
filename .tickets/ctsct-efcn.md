@@ -1,7 +1,7 @@
 ---
 id: ctsct-efcn
 status: in_progress
-deps: [ctsct-f96g, ctolt-po5m]
+deps: [ctsct-f96g, ctolt-po5m, ctlrcc-1nhb]
 links: []
 created: 2026-11-27T00:59:33Z
 type: task
@@ -24,3 +24,7 @@ Stamp only confirmed physics work on the correct resident generation. Restore kn
 **2026-11-27T00:59:33Z**
 
 Use the immutable snapshot time in dc_stream_request_save_snapshot and the completed-tick reporting in the level pipeline. The offscreen scheduler and full display gates remain tracked in the parent.
+
+**2026-11-27T01:07:03Z**
+
+Host RED preserved the water cell while losing the timestamp. GREEN preserved 8.484375 s through a failed present, equal and mixed ticks, camera eviction, return and worker reopen. The fixture also checks stale worker generations, paused and loading frames, and a timed stream packet superseded by an untimed embedded structure snapshot. Twelve level, three chunk, eleven stream and four world-save cases passed. The application and native reactive stream test also built. Embedded structure time is still required for ordinary world reopen.
