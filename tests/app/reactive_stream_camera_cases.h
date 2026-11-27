@@ -457,7 +457,8 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
     ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[0]));
     ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[1]));
     if (sleep_and_prefetch) {
-        ASSERT_TRUE(dc_level_view_pan_pixels(view, 3 * VIEW_WIDTH, 0) &&
+        ASSERT_TRUE(dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0) &&
+            dc_level_view_pan_pixels(view, VIEW_WIDTH, 0) &&
             dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         uint64_t deadline = SDL_GetTicks64() + 5000u;
         while ((dc_level_offscreen_owns(view, rooms[0]) || dc_level_offscreen_owns(view, rooms[1])) &&
@@ -466,7 +467,8 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
             SDL_Delay(1);
         }
         ASSERT_TRUE(!dc_level_offscreen_owns(view, rooms[0]) && !dc_level_offscreen_owns(view, rooms[1]));
-        ASSERT_TRUE(dc_level_view_pan_pixels(view, -3 * VIEW_WIDTH, 0) &&
+        ASSERT_TRUE(dc_level_view_pan_pixels(view, -2 * VIEW_WIDTH, 0) &&
+            dc_level_view_pan_pixels(view, -VIEW_WIDTH, 0) &&
             dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(!dc_level_chunk_visible(view, rooms[0]) && !dc_level_chunk_visible(view, rooms[1]));
         ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[0]) && dc_level_offscreen_owns(view, rooms[1]));
