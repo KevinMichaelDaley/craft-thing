@@ -301,6 +301,89 @@ static void test_middle_band_finishes_its_due_interval(void) {
     check_two_evicted_sealed_rooms(false, true, false);
 }
 
+static bool seed_saturated_rooms(dc_level_view_t *view, dc_chunk_t *chunk,
+                                 dc_chunk_coord_t *rooms, unsigned count, char *err, uint32_t cap) {
+    const unsigned center = 32u * DC_CHUNK_SIDE + 32u;
+    for (unsigned i = 0; i < count; ++i) {
+        rooms[i] = (dc_chunk_coord_t){view->origin.x + (int)(i % 5u), view->origin.y + (int)(i / 5u)};
+        camera_seal_room(chunk, rooms[i]);
+        chunk->cells[center].fluid_mass = 14000u + i;
+        uint32_t slot;
+        uint64_t generation;
+        if (!(dc_chunk_table_begin_load(&view->table, rooms[i], &slot, &generation) &&
+            dc_gpu_upload_chunk(view->gpu, slot, chunk, err, cap) &&
+            dc_chunk_table_finish_load(&view->table, slot, generation) &&
+            dc_chunk_table_mark_dirty(&view->table, slot))) return false;
+        view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
+    }
+    return true;
+}
+
+static void test_saturated_near_rooms_share_replay_across_regular_frames(void) {
+    enum { ROOM_COUNT = DC_CAMERA_WORKSPACE_LIMIT + 1u };
+    char directory[] = "build/camera_replay_frames_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_chunk_coord_t rooms[ROOM_COUNT];
+    ASSERT_TRUE(view && chunk && seed_saturated_rooms(view, chunk, rooms, ROOM_COUNT, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)) &&
+        dc_level_view_pan_pixels(view, VIEW_WIDTH, 0) &&
+        dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+
+    dc_offscreen_t *owners[DC_CAMERA_WORKSPACE_LIMIT];
+    unsigned active = 0;
+    const uint64_t deadline = SDL_GetTicks64() + 25000u;
+    while (active < DC_CAMERA_WORKSPACE_LIMIT && SDL_GetTicks64() < deadline) {
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+        active = 0;
+        for (dc_level_offscreen_handoff_t *h = view->offscreen_handoffs; h; h = h->next) {
+            if (!h->admitted) continue;
+            ASSERT_TRUE(active < DC_CAMERA_WORKSPACE_LIMIT && h->workspace->time.known);
+            owners[active++] = h->workspace;
+        }
+    }
+    ASSERT_EQ(active, DC_CAMERA_WORKSPACE_LIMIT);
+    const double start = view->world_seconds;
+    const float tick = 1.f / 60.f;
+    const double first_step = (double)nextafterf(.05f, 0.f);
+    const double end = start + 4. * tick;
+    for (unsigned frame = 0; frame < 4; ++frame) {
+        watched_owner_commands[0] = owners[0]->gpu->command;
+        watched_owner_commands[1] = owners[1]->gpu->command;
+        shared_owner_submissions = 0;
+        ASSERT_TRUE(dc_level_view_step_timed(view, tick, err, sizeof(err)) &&
+                    dc_level_view_step_timed(view, tick, err, sizeof(err)) &&
+                    dc_level_view_tick(view, err, sizeof(err)));
+        unsigned submissions = shared_owner_submissions;
+        memset(watched_owner_commands, 0, sizeof(watched_owner_commands));
+        ASSERT_EQ(submissions, frame >= 2 ? 1u : 0u);
+        const double expected = frame < 2 ? start : frame == 2 ? start + first_step : end;
+        for (unsigned i = 0; i < active; ++i) ASSERT_EQ(owners[i]->time.seconds, expected);
+    }
+    ASSERT_EQ(view->world_seconds, start + 8. * tick);
+    watched_owner_commands[0] = owners[0]->gpu->command;
+    watched_owner_commands[1] = owners[1]->gpu->command;
+    shared_owner_submissions = 0;
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, err, sizeof(err)) &&
+                dc_level_view_tick(view, err, sizeof(err)));
+    memset(watched_owner_commands, 0, sizeof(watched_owner_commands));
+    ASSERT_EQ(shared_owner_submissions, 2u);
+    for (unsigned i = 0; i < active; ++i) ASSERT_EQ(owners[i]->time.seconds, start + 8. * tick);
+    ASSERT_TRUE(dc_level_view_pan_pixels(view, -VIEW_WIDTH, 0) &&
+                dc_level_view_wait_visible(view, 120000u, err, sizeof(err)));
+    for (unsigned i = 0; i < ROOM_COUNT; ++i) {
+        uint32_t slot;
+        ASSERT_TRUE(dc_chunk_table_find(&view->table, rooms[i], &slot) &&
+                    dc_gpu_download_chunk(view->gpu, slot, chunk, err, sizeof(err)));
+        ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
+        ASSERT_EQ(camera_stock(chunk, NULL, false), 14000u + i);
+    }
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    free(chunk);
+    PASS();
+}
+
 static void test_saturated_sleeping_rooms_all_return_at_the_world_clock(void) {
     enum { ROOM_COUNT = 17u };
     char directory[] = "build/camera_saturated_rooms_XXXXXX", err[256] = {0};
@@ -310,18 +393,7 @@ static void test_saturated_sleeping_rooms_all_return_at_the_world_clock(void) {
     ASSERT_TRUE(view && chunk);
     dc_chunk_coord_t rooms[ROOM_COUNT];
     unsigned center = 32u * DC_CHUNK_SIDE + 32u;
-    for (unsigned i = 0; i < ROOM_COUNT; ++i) {
-        rooms[i] = (dc_chunk_coord_t){view->origin.x + (int)(i % 5u), view->origin.y + (int)(i / 5u)};
-        camera_seal_room(chunk, rooms[i]);
-        chunk->cells[center].fluid_mass = 14000u + i;
-        uint32_t slot;
-        uint64_t generation;
-        ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, rooms[i], &slot, &generation) &&
-            dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
-            dc_chunk_table_finish_load(&view->table, slot, generation) &&
-            dc_chunk_table_mark_dirty(&view->table, slot));
-        view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
-    }
+    ASSERT_TRUE(seed_saturated_rooms(view, chunk, rooms, ROOM_COUNT, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     for (unsigned i = 0; i < 3u; ++i) ASSERT_TRUE(dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
