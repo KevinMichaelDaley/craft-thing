@@ -18,6 +18,7 @@ typedef struct {
     dc_chunk_time_t time;
     uint64_t generation;
     unsigned water_face;
+    bool rigid_group;
     dc_camera_offscreen_phase_t phase;
 } dc_camera_offscreen_t;
 

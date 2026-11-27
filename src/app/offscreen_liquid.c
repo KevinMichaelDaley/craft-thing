@@ -249,6 +249,23 @@ stale:
 
 dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
     char *err, uint32_t cap) {
+    if (view->camera_offscreen.rigid_group) {
+        dc_camera_offscreen_t *camera = &view->camera_offscreen;
+        dc_level_offscreen_handoff_t *lease = dc_level_offscreen_lookup(view, camera->coord);
+        if (!lease || !lease->owns_bodies || lease->generation != camera->generation ||
+            lease->write_generation || !lease->workspace->time.known || lease->workspace->failed ||
+            lease->workspace->time.seconds != view->world_seconds) {
+            error(err, cap, "Rigid owners require a common confirmed time and live lease");
+            return DC_LEVEL_OFFSCREEN_FAILED;
+        }
+        if (!dc_gpu_set_tick_seconds(lease->workspace->gpu, seconds) ||
+            !dc_gpu_tick_step(lease->workspace->gpu, err, cap) || !dc_gpu_tick_step(view->gpu, err, cap)) {
+            view->liquid_seam_failed = lease->workspace->failed = true;
+            return DC_LEVEL_OFFSCREEN_FAILED;
+        }
+        lease->workspace->time.seconds += seconds;
+        return DC_LEVEL_OFFSCREEN_HANDLED;
+    }
     return service_water_pair(view, seconds, false, err, cap);
 }
 

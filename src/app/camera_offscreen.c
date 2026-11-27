@@ -106,7 +106,7 @@ unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_st
 
 bool dc_camera_offscreen_water_ready(dc_level_view_t *view) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
-    if (!camera->water_face) return true;
+    if (!camera->water_face && !camera->rigid_group) return true;
     dc_chunk_time_t time;
     bool writing;
     return camera->phase == DC_CAMERA_OFFSCREEN_LEASED &&
@@ -153,7 +153,7 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
         (!face || !neighbor_has_liquid(view, snapshot->coord, face))) return;
     *camera = (dc_camera_offscreen_t){.coord = snapshot->coord, .owner = owner,
         .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING,
-        .water_face = face};
+        .water_face = face, .rigid_group = !face && dc_offscreen_body_island(view->gpu, snapshot->coord)};
 }
 
 void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *result) {
@@ -222,8 +222,8 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
         return true;
     }
     if (!time.known || writing) return true;
-    if (coupled) {
-        if (closing || needed || !attached)
+    if (coupled || camera->rigid_group) {
+        if (closing || needed || (coupled && !attached))
             return dc_level_offscreen_publish(view, camera->coord, camera->generation, err, cap);
         return true;
     }
