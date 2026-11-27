@@ -1463,7 +1463,7 @@ build/contact_dispatch_tests: tests/vulkan/contact_dispatch_tests.c tools/diagno
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/fluid_displacement_tests build/fluid_displacement_wide_tests build/fluid_displacement_tall_tests
 
-build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c tests/vulkan/fluid_aperture_runtime_case.h $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
+build/diagnostics/fluid_case: tools/diagnostics/fluid_case.c tests/vulkan/fluid_tests.c tests/vulkan/fluid_aperture_runtime_case.h include/dungeoncraft/fluid_aperture_layout.h src/vulkan/renderer_internal.h $(GPU_OBJ) $(CHUNK_OBJ) build/fluid_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=vkCmdDispatch
 
 build/diagnostics/shader_compile_probe: tools/diagnostics/shader_compile_probe.c tools/diagnostics/vulkan_probe.c

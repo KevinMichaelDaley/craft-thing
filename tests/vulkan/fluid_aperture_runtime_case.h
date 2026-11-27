@@ -1,3 +1,9 @@
+#include "dungeoncraft/fluid_aperture_layout.h"
+
+static uint32_t horizontal_face_aperture(uint32_t coverage) {
+    return coverage < DC_FLUID_FULL ? DC_FLUID_FULL - coverage : 0u;
+}
+
 static void test_long_transport_uses_exact_runtime_apertures(void) {
     char err[256];
     dc_chunk_t left={0},right={0},saved;
@@ -30,26 +36,25 @@ static void test_long_transport_uses_exact_runtime_apertures(void) {
     uint32_t prefix[2*128*64];
     ASSERT_TRUE(read_aperture_prefix(g,prefix,sizeof(prefix),err,sizeof(err)));
     const uint32_t *coverage=g->occupancy_mapped;
+    const uint32_t *horizontal_faces=coverage+3*g->width*g->height;
     unsigned mismatches=0, restricted=0, open=0, changed_labels=0;
     const uint32_t *labels=g->mpm_label_a_mapped;
     for(unsigned y=0;y<64;y++) for(unsigned x=0;x<128;x++) {
-        unsigned lo=x/16*16,hi=lo+16;
+        unsigned lo=x-x%DC_FLUID_APERTURE_TILE_CELLS,hi=lo+DC_FLUID_APERTURE_TILE_CELLS;
         uint32_t a=DC_FLUID_FULL,b=DC_FLUID_FULL;
         for(unsigned k=lo;k<=x;k++) {
-            uint32_t covered=coverage[3*128*64+y*128+k];
-            uint32_t value=DC_FLUID_FULL-(covered<DC_FLUID_FULL?covered:DC_FLUID_FULL);
+            uint32_t value=horizontal_face_aperture(horizontal_faces[y*g->width+k]);
             if(value<a) a=value;
         }
         for(unsigned k=x;k<hi;k++) {
-            uint32_t covered=coverage[3*128*64+y*128+k];
-            uint32_t value=DC_FLUID_FULL-(covered<DC_FLUID_FULL?covered:DC_FLUID_FULL);
+            uint32_t value=horizontal_face_aperture(horizontal_faces[y*g->width+k]);
             if(value<b) b=value;
         }
         unsigned word=2*(y*128+x);
         restricted+=a<DC_FLUID_FULL || b<DC_FLUID_FULL;
         open+=a==DC_FLUID_FULL && b==DC_FLUID_FULL;
         changed_labels+=labels[word]!=UINT32_C(0xa5a5a5a5) || labels[word+1]!=UINT32_C(0xa5a5a5a5);
-        mismatches+=prefix[2*(y*128+x)]!=a||prefix[2*(y*128+x)+1]!=b;
+        mismatches+=prefix[word]!=a||prefix[word+1]!=b;
     }
     printf("long transport fingerprint %016llx mass%llu runtime aperture mismatches%u\n",
         (unsigned long long)hash,(unsigned long long)mass,mismatches);
