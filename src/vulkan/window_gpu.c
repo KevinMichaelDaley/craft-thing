@@ -121,6 +121,7 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t requested_width,
     if (dc_software_present_create(gpu, &swap_info)) return true;
     if (vkCreateSwapchainKHR(gpu->device, &swap_info, NULL, &gpu->swapchain) != VK_SUCCESS)
         return error(err, cap, "Cannot create Vulkan swapchain");
+    if (getenv("DC_PRESENT_TRACE")) fprintf(stderr, "Vulkan presentation device: %s\n", gpu->device_name);
     vkGetSwapchainImagesKHR(gpu->device, gpu->swapchain, &gpu->swap_count, NULL);
     gpu->swap_images = calloc(gpu->swap_count, sizeof(*gpu->swap_images));
     if (!gpu->swap_images) return error(err, cap, "Out of memory listing swapchain images");

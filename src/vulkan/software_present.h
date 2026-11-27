@@ -33,6 +33,6 @@ void dc_software_present_destroy(dc_gpu_t *gpu);
 /** Upload and present an already completed frame at the acquired image index. */
 VkResult dc_software_present_frame(dc_gpu_t *gpu, uint32_t index, void *capture);
 /** Allocate a render-device transfer image for window composition. */
-bool dc_window_transfer_image(dc_gpu_t *gpu, VkExtent2D extent, VkFormat format,
-                              VkImage *image, VkDeviceMemory *memory, char *err, uint32_t cap);
+bool dc_window_transfer_image(dc_gpu_t *gpu, VkExtent2D extent, VkFormat format, VkImage *image,
+                              VkDeviceMemory *memory, char *err, uint32_t cap);
 #endif

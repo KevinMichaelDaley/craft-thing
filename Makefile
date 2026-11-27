@@ -384,8 +384,8 @@ build/presentation_tests: tests/app/presentation_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 test_presentation: build/presentation_tests
 	./build/presentation_tests
 
-build/software_present_tests: tests/vulkan/software_present_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCreateDevice,--wrap=vkDestroyDevice,--wrap=vkCreateSwapchainKHR
+build/software_present_tests: tests/vulkan/software_present_tests.c tests/test_window.h $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCreateDevice,--wrap=vkDestroyDevice,--wrap=vkCreateSwapchainKHR,--wrap=vkGetSwapchainImagesKHR
 
 test: build/software_present_tests
 
@@ -2334,6 +2334,7 @@ build/gas_feedback_gpu.o: src/vulkan/gas_feedback_gpu.c src/vulkan/gas_feedback_
 build/gas_model.o: src/fire/gas.c src/fire/gas_internal.h include/ferrum/fire/gas.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/gpu.o build/present_gpu.o: src/vulkan/gas_gpu_internal.h
+build/gpu.o build/present_gpu.o build/window_gpu.o: src/vulkan/software_present.h
 GAS_SHADERS = build/shaders/gas_init.comp.spv build/shaders/gas_prepare.comp.spv build/shaders/gas_transport.comp.spv build/shaders/gas_gate.comp.spv build/shaders/gas_overlay.comp.spv $(patsubst %,build/shaders/gas_%.comp.spv,transport_factor transport_prefix transport_apply transport_metadata activity_candidates pressure_clear pressure_prepare activity activity_compact final_compact sparse_commit advect acoustic_init pressure_rhs pressure_classify pressure_compact pressure_sor pressure_tile pressure_correct pressure_residual acoustic_finish)
 GAS_SHADERS += build/shaders/gas_transport_prefix_wide.comp.spv
 GAS_SHADERS += build/shaders/gas_transport_factor_wide.comp.spv

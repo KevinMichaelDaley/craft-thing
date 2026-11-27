@@ -243,10 +243,10 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, dc_
     else {
         if (capture) record_composed_readback(gpu, composed, capture->buffer);
         image_barrier(gpu->command, composed,
-        capture ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        capture ? VK_ACCESS_2_TRANSFER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
+            capture ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            capture ? VK_ACCESS_2_TRANSFER_READ_BIT : VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
     }
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end present command buffer");
@@ -267,22 +267,26 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, dc_
             .swapchainCount = 1, .pSwapchains = &gpu->swapchain, .pImageIndices = &index };
         result = vkQueuePresentKHR(gpu->queue, &present);
     }
-    uint64_t present_done=trace_waits?SDL_GetPerformanceCounter():0;
+    uint64_t wait_begin=trace_waits?SDL_GetPerformanceCounter():0;
+    uint64_t present_ticks=wait_begin-present_begin;
     /* The render fence also commits any ticks recorded in the frame command. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
+    uint64_t fence_done=trace_waits?SDL_GetPerformanceCounter():0;
     if (completed) *completed += steps;
-    if (software) result = dc_software_present_frame(gpu, index, capture ? capture->mapped : NULL);
+    if (software) {
+        result = dc_software_present_frame(gpu, index, capture ? capture->mapped : NULL);
+        if (trace_waits) present_ticks=SDL_GetPerformanceCounter()-fence_done;
+    }
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Vulkan swapchain presentation failed");
     if (render_chunks) fr_renderer_fire_coverage_presented(gpu);
-    uint64_t fence_done=trace_waits?SDL_GetPerformanceCounter():0;
     if(trace_waits) {
         double scale=1000./SDL_GetPerformanceFrequency();
         fprintf(stderr,"Present setup tick%.3f service%.3f pump%.3f\n",(tick_done-setup_begin)*scale,
             (service_done-tick_done)*scale,(acquire_begin-service_done)*scale);
         fprintf(stderr,"Present waits acquire%.3f fence%.3f present%.3f\n",(acquire_done-acquire_begin)*scale,
-            (fence_done-present_done)*scale,(present_done-present_begin)*scale);
+            (fence_done-wait_begin)*scale,present_ticks*scale);
     }
     return true;
 }

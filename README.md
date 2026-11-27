@@ -100,6 +100,14 @@ The current performance target is quarter-native: `make quarter_native` builds
 view; its world is saved under `world_chunks_quarter_native/`. On a Wayland
 session whose X11 display lacks DRI3, use
 `SDL_VIDEODRIVER=wayland ./build/dungeoncraft_quarter_native` for GPU presentation.
+
+On a local X11 server such as Xephyr with MIT-SHM and without DRI3 or NV-GLX,
+an NVIDIA renderer can send its composed frames to a compatible software Vulkan
+device for presentation. Physics and rendering stay on the NVIDIA GPU.
+`DC_PRESENT_TRACE=1` reports the presentation device. `DC_X11_SOFTWARE_PRESENT=0`
+selects the render device for presentation. A value of `1` requests the software
+device on local X11. If setup fails, the window uses the render device.
+
 `make bench_quarter_native` measures dense water/grain physics on the complete
 640×448 simulation grid. `make test_quarter_native_perf` checks the 60 Hz
 physics budget on the current machine; run it without other GPU workloads.
