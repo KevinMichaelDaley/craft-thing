@@ -150,6 +150,37 @@ static void check_camera_bonded_assembly(enum bond_check check) {
         PASS();
         return;
     }
+    dc_gpu_world_body_t uninterrupted[2];
+    dc_gpu_body_motion_t uninterrupted_motion[2];
+    if (check == BOND_CAMERA) {
+        dc_gpu_t *reference = NULL;
+        ASSERT_TRUE(dc_gpu_create_shared(&reference, view->gpu, 2 * DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+            "build/shaders/pattern.comp.spv", err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_origin(reference, origin, err, sizeof(err)));
+        for (unsigned i = 0; i < 2; ++i) {
+            dc_chunk_t chunk = {.coord = {origin.x + i, origin.y}};
+            uint32_t slot;
+            ASSERT_TRUE(dc_chunk_table_find(&view->table, chunk.coord, &slot));
+            ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &chunk, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_upload_chunk(reference, i, &chunk, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_set_page(reference, i, 0, i, err, sizeof(err)));
+        }
+        ASSERT_TRUE(fr_gpu_place_structure(reference, &graph, err, sizeof(err)));
+        for (unsigned i = 0; i < 90; ++i) ASSERT_TRUE(dc_gpu_rigid_step(reference, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_body_motion(reference, first, &motion, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_motion(reference, first, motion.angle, .05f, 0, err, sizeof(err)));
+        const float intervals[] = {.0078125f, .03125f};
+        for (unsigned i = 0; i < 2; ++i)
+            ASSERT_TRUE(dc_gpu_set_tick_seconds(reference, intervals[i]) && dc_gpu_tick_step(reference, err, sizeof(err)));
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_TRUE(dc_gpu_read_world_body(reference, first + i, &uninterrupted[i], err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_read_body_motion(reference, first + i, &uninterrupted_motion[i], err, sizeof(err)));
+        }
+        dc_gpu_destroy(reference);
+        ASSERT_TRUE(dc_level_view_step_timed(view, intervals[0], err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    }
+    double handoff_seconds = view->world_seconds;
     ASSERT_TRUE(dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(view->camera_offscreen.workspace);
@@ -178,6 +209,16 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     dc_gpu_world_body_t confirmed[2], restored;
     for (unsigned i = 0; i < 2; ++i)
         ASSERT_TRUE(dc_gpu_read_world_body(remote, first + i, &confirmed[i], err, sizeof(err)));
+    if (check == BOND_CAMERA) {
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_EQ(memcmp(&uninterrupted[i], &confirmed[i], sizeof(confirmed[i])), 0);
+            ASSERT_TRUE(dc_gpu_read_body_motion(remote, first + i, &motion, err, sizeof(err)));
+            ASSERT_EQ(motion.mass, uninterrupted_motion[i].mass);
+            ASSERT_EQ(motion.inertia, uninterrupted_motion[i].inertia);
+            ASSERT_EQ(motion.angle, uninterrupted_motion[i].angle);
+            ASSERT_EQ(motion.angular_velocity, uninterrupted_motion[i].angular_velocity);
+        }
+    }
     char failed_page[512];
     if (check == BOND_RETRY) {
         const char *draft = dc_world_save_directory(view->save, true);
@@ -227,7 +268,7 @@ static void check_camera_bonded_assembly(enum bond_check check) {
         ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, first + i, &restored, err, sizeof(err)));
         ASSERT_EQ(memcmp(&restored, &confirmed[i], sizeof(restored)), 0);
     }
-    ASSERT_EQ(view->world_seconds, 2.03125);
+    ASSERT_EQ(view->world_seconds, handoff_seconds + .03125);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     PASS();
 }

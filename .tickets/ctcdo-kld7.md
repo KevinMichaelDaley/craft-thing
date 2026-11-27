@@ -27,3 +27,7 @@ A moving body and a spanning bonded assembly cross the camera boundary in both d
 **2026-11-27T12:57:15Z**
 
 Native RTX tests now cover a two-page bonded camera pan, remapped runtime slots, member generations, terrain contact records, a failed page return followed by shutdown, and cold reopen. The current transfer accepts one connected converted authored graph. Combined Vulkan validation and the full regression suite are still running; mixed authored graphs and uninterrupted momentum comparison remain to verify.
+
+**2026-11-27T13:00:02Z**
+
+The floor-contact camera case preserves the complete world-space terrain contact records. Bonded member position, velocity, mass, inertia, angle and angular velocity also match an independently authored uninterrupted native solver after a fractional tick before eviction and a timed tick offscreen. Both camera paths passed, including cold recovery after a failed return.
