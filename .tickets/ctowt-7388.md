@@ -1,7 +1,7 @@
 ---
 id: ctowt-7388
 status: in_progress
-deps: [ctowt-o11u, ctowp-v2rf]
+deps: [ctowt-o11u, ctowp-v2rf, ctowtb-yr4g]
 links: []
 created: 2026-11-27T06:30:47Z
 type: task

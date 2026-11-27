@@ -62,6 +62,7 @@ typedef struct {
 typedef struct {
     dc_liquid_seam_sample_t projection[DC_CHUNK_SIDE];
     int32_t crossing_fp[DC_CHUNK_SIDE];
+    int32_t advected_fp[DC_CHUNK_SIDE];
     float pressure_work[DC_CHUNK_SIDE];
     dc_water_seam_cell_t cells[2][DC_CHUNK_CELLS];
     dc_water_seam_payload_t payload[2][DC_CHUNK_CELLS];
