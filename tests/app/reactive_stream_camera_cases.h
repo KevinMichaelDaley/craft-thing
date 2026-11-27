@@ -93,6 +93,61 @@ static void camera_seal_room(dc_chunk_t *chunk, dc_chunk_coord_t coord) {
     }
 }
 
+static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
+    char directory[] = "build/camera_water_basin_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(view && chunk && dc_level_view_set_fluid_interval(view, 2u));
+    const dc_chunk_coord_t first = {view->origin.x - HALO_CHUNKS, view->origin.y};
+    const uint32_t row = 32u * DC_CHUNK_SIDE;
+    for (unsigned tile = 0; tile < 2u; ++tile) {
+        memset(chunk, 0, sizeof(*chunk));
+        chunk->coord = (dc_chunk_coord_t){first.x + tile, first.y};
+        for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i)
+            chunk->cells[i] = (dc_cell_t){.material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
+        for (unsigned x = tile ? 0u : 48u; x < (tile ? 48u : DC_CHUNK_SIDE); ++x) {
+            chunk->cells[row+x] = (dc_cell_t){.fluid_mass = !tile && x >= 53u ? DC_FLUID_FULL/2u : 0u};
+            chunk->face_velocity[row+x].x = 7.5f;
+        }
+        uint32_t slot;
+        uint64_t generation;
+        ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, chunk->coord, &slot, &generation) &&
+            dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
+            dc_chunk_table_finish_load(&view->table, slot, generation));
+        view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
+        ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, slot));
+    }
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+    const float elapsed = 1.f / 60.f;
+    for (unsigned cycle = 0; cycle < 2u; ++cycle) {
+        ASSERT_TRUE(dc_level_view_move(view, 1, 0));
+        ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_offscreen_owns(view, first));
+        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                    dc_level_view_tick(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
+        ASSERT_TRUE(dc_level_view_move(view, -1, 0));
+        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                    dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        ASSERT_TRUE(!dc_level_offscreen_owns(view, first));
+        ASSERT_EQ(view->world_seconds, 2. + (2u * cycle + 2u) * (double)elapsed);
+        uint64_t stock[2] = {0};
+        for (unsigned tile = 0; tile < 2u; ++tile) {
+            uint32_t slot;
+            ASSERT_TRUE(dc_chunk_table_find(&view->table, (dc_chunk_coord_t){first.x+tile, first.y}, &slot));
+            ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
+            ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, chunk, err, sizeof(err)));
+            stock[tile] = camera_stock(chunk, NULL, false);
+        }
+        ASSERT_TRUE(stock[1] > 0u);
+        ASSERT_EQ(stock[0] + stock[1], 11u * (DC_FLUID_FULL/2u));
+    }
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    free(chunk);
+    PASS();
+}
+
 static void test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner(void) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
     ASSERT_TRUE(mkdtemp(directory));
