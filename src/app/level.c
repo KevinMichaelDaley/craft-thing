@@ -463,6 +463,8 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state != DC_SLOT_SLEEPING || !slot->dirty || slot->pinned) continue;
+        if (!view->closing && has_checkpoint_receipt(slot) && !dc_camera_offscreen_reserve(view))
+            return error(err, cap, "Cannot track a camera eviction");
         if (!save_world_clock(view, err, cap)) return false;
         dc_chunk_t chunk = { .coord = slot->coord };
         dc_chunk_colors_t colors;
@@ -540,7 +542,8 @@ static bool bind_transfer_destination(dc_level_view_t *view, char *err, uint32_t
     if (!view->transfer_pending || view->destination_bound) return true;
     uint32_t index;
     if (!dc_chunk_table_find(&view->table, view->transfer_to, &index)) {
-        if (dc_level_offscreen_owns(view, view->transfer_to)) return true;
+        if (dc_level_offscreen_owns(view, view->transfer_to) ||
+            dc_camera_offscreen_pending(view, view->transfer_to)) return true;
         uint64_t generation;
         if (!dc_chunk_table_begin_load(&view->table, view->transfer_to,
                                        &index, &generation)) return true;
@@ -741,7 +744,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             uint32_t page = UINT32_MAX, index;
             if (dc_chunk_table_find(&view->table, coord, &index)) {
                 if (view->table.slots[index].state == DC_SLOT_ACTIVE) page = index;
-            } else if (load_queued && !dc_level_offscreen_owns(view, coord)) {
+            } else if (load_queued && !dc_level_offscreen_owns(view, coord) &&
+                       !dc_camera_offscreen_pending(view, coord)) {
                 uint64_t generation;
                 if (dc_chunk_table_begin_load(&view->table, coord, &index, &generation))
                     load_queued = queue_reserved_load(view, index, generation, err, cap);

@@ -33,6 +33,10 @@ unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_st
 bool dc_camera_offscreen_ready(dc_level_view_t *view);
 /** Check the current mapped owners before changing the camera during a water cycle. */
 bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err, uint32_t cap);
+/** Reserve a durable-owner tracking entry before queuing a resident save. */
+bool dc_camera_offscreen_reserve(dc_level_view_t *view);
+/** Whether a camera room must finish catch-up before its resident load. */
+bool dc_camera_offscreen_pending(const dc_level_view_t *view, dc_chunk_coord_t coord);
 /** Elect one eligible camera eviction after its worker request has been accepted. */
 void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *snapshot,
     dc_chunk_owner_t owner, uint64_t write_generation);

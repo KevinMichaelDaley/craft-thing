@@ -55,7 +55,8 @@ struct dc_offscreen {
     dc_chunk_coord_t origin;
     uint64_t generations[OFFSCREEN_SLOTS];
     dc_chunk_time_t time;
-    uint32_t held_writes;
+    double due_seconds;
+    uint32_t held_writes, references;
     bool failed, water_coupled;
 };
 

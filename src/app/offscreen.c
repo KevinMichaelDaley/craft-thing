@@ -63,6 +63,7 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
         error(err, cap, "Cannot allocate offscreen workspace");
         return NULL;
     }
+    workspace->references = 1;
     workspace->origin = origin;
     if (!dc_gpu_create_shared(&workspace->gpu, parent, OFFSCREEN_SIDE * DC_CHUNK_SIDE,
                               OFFSCREEN_SIDE * DC_CHUNK_SIDE, "build/shaders/pattern.comp.spv", err, cap) ||
@@ -77,7 +78,7 @@ dc_offscreen_t *dc_offscreen_create(dc_gpu_t *parent, dc_chunk_coord_t origin,
 }
 
 void dc_offscreen_destroy(dc_offscreen_t *workspace) {
-    if (!workspace) return;
+    if (!workspace || --workspace->references) return;
     dc_gpu_destroy(workspace->gpu);
     free(workspace);
 }
