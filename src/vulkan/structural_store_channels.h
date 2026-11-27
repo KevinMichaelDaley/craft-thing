@@ -36,6 +36,11 @@ bool dc_checkpoint_channels_set_fluids(dc_gpu_t *gpu, dc_checkpoint_channels_t *
 bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *channels,uint32_t count);
 /** Extend the outer snapshot checksum with canonical lengths and channel bytes. */
 uint64_t dc_checkpoint_channels_hash(uint64_t hash,const dc_checkpoint_channels_t *channels);
+/** Hash the structure record and its ordered channel payloads. */
+uint64_t dc_gpu_structure_checksum(dc_structural_store_header_t header,
+    const dc_structural_store_payload_t *payload, const uint32_t *pixels,
+    const dc_chunk_t *chunks, const float *body_colors, const dc_chunk_colors_t *colors,
+    const dc_checkpoint_channels_t *channels);
 /** Write/read exact framed extension bytes; read owns temporary buffers only. */
 bool dc_checkpoint_channels_write(FILE *file,const dc_checkpoint_channels_t *channels);
 bool dc_checkpoint_channels_read(FILE *file,uint32_t version,dc_checkpoint_channels_t *channels);

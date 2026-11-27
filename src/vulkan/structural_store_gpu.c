@@ -38,37 +38,6 @@ static bool error(char *err, uint32_t cap, const char *message) {
     return false;
 }
 
-static uint64_t hash_bytes(uint64_t hash, const void *bytes, size_t count) {
-    const unsigned char *p = bytes;
-    for (size_t i = 0; i < count; i++)
-        hash = (hash ^ p[i]) * UINT64_C(1099511628211);
-    return hash;
-}
-
-static uint64_t checksum(dc_structural_store_header_t header,
-                         const dc_structural_store_payload_t *payload,
-                         const uint32_t *pixels, const dc_chunk_t *chunks,
-                         const float *body_colors,const dc_chunk_colors_t *colors,
-                         const dc_checkpoint_channels_t *channels) {
-    header.checksum = 0;
-    uint64_t hash =
-        hash_bytes(UINT64_C(14695981039346656037), &header, sizeof(header));
-    hash = hash_bytes(hash, payload->control, sizeof(payload->control));
-    hash = hash_bytes(hash, payload->bodies, (size_t)header.body_words*4u);
-    hash = hash_bytes(hash, payload->graph, sizeof(payload->graph));
-    if(header.version>=7) hash=hash_bytes(hash,payload->states,
-        (size_t)payload->body_count*sizeof(*payload->states));
-    hash =
-        hash_bytes(hash, pixels, (size_t)header.reserved[1] * sizeof(*pixels));
-    hash=hash_bytes(hash,chunks,(size_t)header.reserved[0]*sizeof(*chunks));
-    if(header.version>=6) {
-        hash=hash_bytes(hash,body_colors,(size_t)header.reserved[1]*128);
-        hash=hash_bytes(hash,colors,(size_t)header.reserved[0]*sizeof(*colors));
-    }
-    if(header.version>=8) hash=dc_checkpoint_channels_hash(hash,channels);
-    return hash;
-}
-
 static dc_structural_store_payload_t *payload_create(uint32_t count) {
     if(!count||count>UINT32_MAX/sizeof(dc_gpu_body_record_t)) return NULL;
     dc_structural_store_payload_t *p=calloc(1,sizeof(*p));
@@ -247,7 +216,8 @@ static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
     if(okay) okay=fr_gpu_reactive_checkpoint_mass_valid(channels.reactive_length?&channels.reactive:NULL,
         payload,pixels,header.reserved[1],err,cap);
     if (okay)
-        header.checksum = checksum(header, payload, pixels, chunks,body_colors,colors,&channels);
+        header.checksum = dc_gpu_structure_checksum(header, payload, pixels, chunks,
+                                                    body_colors, colors, &channels);
     FILE *file = okay ? fopen(temporary, "wb") : NULL;
     if (file) {
         okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
@@ -440,7 +410,8 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     }
     if (fclose(file) != 0)
         okay = false;
-    okay = okay && header.checksum == checksum(header, payload, pixels, chunks,body_colors,colors,&channels);
+    okay = okay && header.checksum == dc_gpu_structure_checksum(header, payload, pixels, chunks,
+                                                                body_colors, colors, &channels);
     okay = okay && dc_checkpoint_channels_decode_times(&channels,header.reserved[0]);
     if (okay && header.version == 4)
         okay = dc_gpu_upgrade_dense_pixels(gpu, payload->bodies, &pixels,

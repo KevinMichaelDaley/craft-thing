@@ -126,6 +126,31 @@ bool dc_checkpoint_channels_write(FILE *file,const dc_checkpoint_channels_t *p) 
         (!p->time_length||fwrite(p->time_bytes,1,p->time_length,file)==p->time_length)&&
         (!p->fluid_length||fwrite(p->fluid_bytes,1,p->fluid_length,file)==p->fluid_length);
 }
+
+uint64_t dc_gpu_structure_checksum(dc_structural_store_header_t header,
+                         const dc_structural_store_payload_t *payload,
+                         const uint32_t *pixels, const dc_chunk_t *chunks,
+                         const float *body_colors,const dc_chunk_colors_t *colors,
+                         const dc_checkpoint_channels_t *channels) {
+    header.checksum = 0;
+    uint64_t hash =
+        hash_bytes(UINT64_C(14695981039346656037), &header, sizeof(header));
+    hash = hash_bytes(hash, payload->control, sizeof(payload->control));
+    hash = hash_bytes(hash, payload->bodies, (size_t)header.body_words*4u);
+    hash = hash_bytes(hash, payload->graph, sizeof(payload->graph));
+    if(header.version>=7) hash=hash_bytes(hash,payload->states,
+        (size_t)payload->body_count*sizeof(*payload->states));
+    hash =
+        hash_bytes(hash, pixels, (size_t)header.reserved[1] * sizeof(*pixels));
+    hash=hash_bytes(hash,chunks,(size_t)header.reserved[0]*sizeof(*chunks));
+    if(header.version>=6) {
+        hash=hash_bytes(hash,body_colors,(size_t)header.reserved[1]*128);
+        hash=hash_bytes(hash,colors,(size_t)header.reserved[0]*sizeof(*colors));
+    }
+    if(header.version>=8) hash=dc_checkpoint_channels_hash(hash,channels);
+    return hash;
+}
+
 bool dc_checkpoint_channels_read(FILE *file,uint32_t version,dc_checkpoint_channels_t *out) {
     uint8_t lengths[40]={0};size_t framing=channel_framing(version);
     if(fread(lengths,1,framing,file)!=framing) return false;
