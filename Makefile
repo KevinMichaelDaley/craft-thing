@@ -375,6 +375,11 @@ build/presentation_tests: tests/app/presentation_tests.c $(GPU_OBJ) $(CHUNK_OBJ)
 test_presentation: build/presentation_tests
 	./build/presentation_tests
 
+build/software_present_tests: tests/vulkan/software_present_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCreateDevice,--wrap=vkDestroyDevice,--wrap=vkCreateSwapchainKHR
+
+test: build/software_present_tests
+
 test_ui test_quarter_native: build/rigid_dynamics_visual_tests build/presentation_tests
 $(GPU_OBJ): $(BROADPHASE_SHADER) $(CONTACT_SHADER)
 $(RIGID_SHADER) $(PROBE_SHADER) $(BROADPHASE_SHADER): shaders/sim/rigid_body.glsl
@@ -878,6 +883,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/benchmark_brush_tests
 	./build/benchmark_clock_tests
 	./build/present_mode_tests
+	./build/software_present_tests
 	./build/appearance_tests
 	./build/brush_region_tests
 	./build/mpm_swap_tests
