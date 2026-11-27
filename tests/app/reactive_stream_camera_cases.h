@@ -93,6 +93,10 @@ static void camera_seal_room(dc_chunk_t *chunk, dc_chunk_coord_t coord) {
     }
 }
 
+static int camera_marker_order(const void *left, const void *right) {
+    return memcmp(left, right, sizeof(dc_marker_t));
+}
+
 static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
     char directory[] = "build/camera_water_basin_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
@@ -115,6 +119,11 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
         for (unsigned x = tile ? 0u : 48u; x < (tile ? 48u : DC_CHUNK_SIDE); ++x) {
             chunk->cells[row+x] = (dc_cell_t){.fluid_mass = !tile && x >= 53u ? DC_FLUID_FULL/2u : 0u};
             chunk->face_velocity[row+x].x = 7.5f;
+        }
+        if (!tile) {
+            chunk->marker_count = 1;
+            chunk->markers[0] = (dc_marker_t){62u * DC_FLUID_FULL, 32u * DC_FLUID_FULL + DC_FLUID_FULL / 2u,
+                                               1001u, DC_MARKER_INSIDE};
         }
         memset(&colors, 0, sizeof(colors));
         for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
@@ -252,6 +261,10 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             stock[tile] = camera_stock(chunk, NULL, false);
             dc_chunk_t expected;
             ASSERT_TRUE(dc_gpu_download_chunk(reference, tile, &expected, err, sizeof(err)));
+            ASSERT_EQ(chunk->marker_count, expected.marker_count);
+            qsort(chunk->markers, chunk->marker_count, sizeof(dc_marker_t), camera_marker_order);
+            qsort(expected.markers, expected.marker_count, sizeof(dc_marker_t), camera_marker_order);
+            ASSERT_EQ(memcmp(chunk->markers, expected.markers, chunk->marker_count * sizeof(dc_marker_t)), 0);
             for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
                 ASSERT_EQ(chunk->cells[i].fluid_mass, expected.cells[i].fluid_mass);
                 ASSERT_TRUE(fabsf(chunk->face_velocity[i].x - expected.face_velocity[i].x) <= 1e-5f);
