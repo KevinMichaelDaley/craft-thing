@@ -215,6 +215,7 @@ bool dc_level_view_place_structure(dc_level_view_t *view,
 }
 
 static dc_level_step_run_t *pending_runs(dc_level_view_t *view) {
+    /* The ordinary one-duration frame fits in the level view itself. */
     return view->step_runs ? view->step_runs : &view->inline_step;
 }
 
@@ -664,6 +665,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
     uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
     if (ready_steps && (view->players || view->end_run - view->first_run > 1u)) {
+        /* A mixed frame publishes each completed step before trying to present. */
         if (view->players && !dc_players_present(view, err, cap)) return false;
         if (!execute_level_steps(view, err, cap)) return false;
         ready_steps = 0;

@@ -2,7 +2,7 @@
 id: ctolt-6it2
 status: in_progress
 deps: []
-links: []
+links: [ctolt-po5m]
 created: 2026-11-27T00:35:15Z
 type: bug
 priority: 1
@@ -18,3 +18,9 @@ The live level adds queued step durations then divides by the count. Unequal acc
 
 Preserve the order and exact requested time of unequal, valid ticks, reject invalid intervals at enqueue, and retain the existing single-frame batch for equal intervals. Verify behavior through the production level queue and render entry points, including retry after partial mixed progress and the gameplay loading cadence.
 
+
+## Notes
+
+**2026-11-27T00:41:02Z**
+
+The production level control-path fixture reproduced three defects before the fix and now passes seven cases with recording GPU boundaries. Unequal durations and player time remain in request order, equal requests share one presentation batch, invalid requests do not mutate the queue, and retries consume only unfinished mixed ticks. Loading frames continue to discard frame debt. Native controls and make test are queued. Batched presentation completion reporting is tracked separately.

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../../src/app/level_internal.h"
+#include "../../src/app/player_session_internal.h"
 #include "../../src/app/view_config.h"
 
 static int g_pass, g_fail;
@@ -19,8 +20,8 @@ static int g_pass, g_fail;
 #define PASS() ++g_pass
 
 static struct {
-    float elapsed[24], seconds;
-    unsigned steps, presents, presented_steps;
+    float elapsed[24], player_elapsed[24], seconds;
+    unsigned steps, player_steps, presents, presented_steps, reject_step;
     bool reject_present;
 } g_frame;
 
@@ -57,7 +58,25 @@ bool __wrap_dc_gpu_tick_step(dc_gpu_t *gpu, char *err, uint32_t cap) {
     (void)gpu; (void)err; (void)cap;
     if (g_frame.steps >= sizeof(g_frame.elapsed) / sizeof(g_frame.elapsed[0]))
         return false;
+    if (g_frame.steps + 1u == g_frame.reject_step) return false;
     g_frame.elapsed[g_frame.steps++] = g_frame.seconds;
+    return true;
+}
+
+void __wrap_dc_players_prepare_view(dc_level_view_t *view) {
+    (void)view;
+}
+
+bool __wrap_dc_players_present(dc_level_view_t *view, char *err, uint32_t cap) {
+    (void)view; (void)err; (void)cap;
+    return true;
+}
+
+bool __wrap_dc_players_step(dc_level_view_t *view, float seconds, char *err, uint32_t cap) {
+    (void)view; (void)err; (void)cap;
+    if (g_frame.player_steps >= sizeof(g_frame.player_elapsed) / sizeof(g_frame.player_elapsed[0]))
+        return false;
+    g_frame.player_elapsed[g_frame.player_steps++] = seconds;
     return true;
 }
 
@@ -168,12 +187,52 @@ static void test_loading_frame_does_not_build_catch_up_debt(void) {
     PASS();
 }
 
+static void test_partial_tick_failure_retains_only_unfinished_steps(void) {
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    ASSERT_TRUE(dc_level_view_step_timed(view, .01f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .02f, NULL, 0));
+    g_frame.reject_step = 2;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    g_frame.reject_step = 0;
+    ASSERT_TRUE(dc_level_view_step_timed(view, .03f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    dc_level_view_discard(view);
+    const float steps[] = {.01f, .02f, .03f};
+    ASSERT_INT_EQ(g_frame.presents, 1);
+    ASSERT_INT_EQ(g_frame.steps, 3);
+    ASSERT_TRUE(memcmp(g_frame.elapsed, steps, sizeof(steps)) == 0);
+    PASS();
+}
+
+static void test_player_actions_receive_the_same_ordered_time_as_physics(void) {
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    struct dc_player_session session = {0};
+    bool okay = true;
+    const float steps[] = {.02f, .01f, .02f};
+    view->players = &session;
+    for (unsigned i = 0; okay && i < sizeof(steps) / sizeof(steps[0]); ++i)
+        okay = dc_level_view_step_timed(view, steps[i], NULL, 0);
+    okay = okay && dc_level_view_tick(view, NULL, 0);
+    view->players = NULL;
+    dc_level_view_discard(view);
+    ASSERT_TRUE(okay);
+    ASSERT_INT_EQ(g_frame.steps, 3);
+    ASSERT_INT_EQ(g_frame.player_steps, 3);
+    ASSERT_TRUE(memcmp(g_frame.elapsed, steps, sizeof(steps)) == 0);
+    ASSERT_TRUE(memcmp(g_frame.player_elapsed, steps, sizeof(steps)) == 0);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
     RUN(test_invalid_time_is_rejected_without_changing_valid_requests);
     RUN(test_mixed_ticks_are_consumed_before_retrying_failed_present);
     RUN(test_loading_frame_does_not_build_catch_up_debt);
+    RUN(test_partial_tick_failure_retains_only_unfinished_steps);
+    RUN(test_player_actions_receive_the_same_ordered_time_as_physics);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
