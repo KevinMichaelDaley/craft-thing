@@ -214,11 +214,10 @@ static void copy_transport_fields(VkCommandBuffer command, const struct dc_gpu_s
                     scratch->offset[WATER_COLOR], tile, color_bytes);
     copy_atlas_tile(command, endpoint.slot, source->water_color_buffer, scratch->buffer,
                     scratch->offset[INITIAL_COLOR], tile, color_bytes);
-    const VkBuffer markers = source->marker_ping ? source->marker_b_buffer : source->marker_a_buffer;
-    const VkBuffer counts = source->marker_ping ? source->marker_count_b_buffer : source->marker_count_a_buffer;
-    copy_atlas_tile(command, endpoint.slot, markers, scratch->buffer, scratch->offset[MARKER_A],
+    const dc_gpu_seam_markers_t markers = dc_gpu_seam_active_markers(source);
+    copy_atlas_tile(command, endpoint.slot, markers.records, scratch->buffer, scratch->offset[MARKER_A],
                     tile, DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t));
-    copy_atlas_tile(command, endpoint.slot, counts, scratch->buffer, scratch->offset[COUNT_A],
+    copy_atlas_tile(command, endpoint.slot, markers.counts, scratch->buffer, scratch->offset[COUNT_A],
                     tile, sizeof(uint32_t));
     copy_atlas_tile(command, endpoint.slot, source->slot_seed_buffer, scratch->buffer, scratch->offset[SLOT_SEED],
                     tile, sizeof(uint32_t));
@@ -348,6 +347,8 @@ static bool prepare_publication(dc_gpu_t *gpu, dc_gpu_t *peer, bool thermal,
     struct dc_gpu_seam_projection *scratch = gpu->seam_projection;
     const unsigned fields[] = {PUBLICATION_RECEIPT, INITIAL_CELLS, CELLS, INITIAL_COLOR, WATER_COLOR,
                                VELOCITY, OCCUPANCY, BULK_PHASE, THERMAL_CONTROL, MARKER_B, COUNT_B, MARKER_GRID};
+    _Static_assert(sizeof(fields) / sizeof(fields[0]) == DC_WATER_PUBLICATION_SCRATCH_BINDINGS,
+                   "Water publication scratch binding count mismatch");
     VkDescriptorBufferInfo buffers[DC_WATER_PUBLICATION_SCRATCH_BINDINGS];
     for (unsigned i = 0; i < DC_WATER_PUBLICATION_SCRATCH_BINDINGS; ++i) {
         unsigned field = fields[i];
@@ -390,17 +391,17 @@ static dc_liquid_seam_result_t run_seam(dc_liquid_seam_endpoint_t first, dc_liqu
             }
 
     dc_gpu_t *gpu = first.gpu;
-    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS) {
-        error(err, cap, "Cannot synchronize liquid seam projection endpoints");
-        return DC_LIQUID_SEAM_REJECTED;
-    }
-    const bool thermal = gpu->thermal != NULL;
     const bool transport = plan || publish;
     if (transport && (gpu->marker_correction != second.gpu->marker_correction ||
         (gpu->marker_correction && ((gpu->fluid_tick ^ second.gpu->fluid_tick) & 1u)))) {
         error(err, cap, "Liquid seam owners have different marker correction settings or parity");
         return DC_LIQUID_SEAM_REJECTED;
     }
+    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS) {
+        error(err, cap, "Cannot synchronize liquid seam projection endpoints");
+        return DC_LIQUID_SEAM_REJECTED;
+    }
+    const bool thermal = gpu->thermal != NULL;
     if (!prepare_projection(gpu, err, cap) ||
         (transport && !prepare_transport(gpu, thermal, err, cap)) ||
         (publish && !prepare_publication(gpu, second.gpu, thermal, err, cap)))

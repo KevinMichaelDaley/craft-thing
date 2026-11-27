@@ -15,6 +15,16 @@ typedef struct {
 
 enum { DC_WATER_PUBLICATION_SCRATCH_BINDINGS = 12u };
 
+typedef struct {
+    VkBuffer records, counts;
+} dc_gpu_seam_markers_t;
+
+static inline dc_gpu_seam_markers_t dc_gpu_seam_active_markers(const dc_gpu_t *gpu) {
+    if (gpu->marker_ping)
+        return (dc_gpu_seam_markers_t){gpu->marker_b_buffer, gpu->marker_count_b_buffer};
+    return (dc_gpu_seam_markers_t){gpu->marker_a_buffer, gpu->marker_count_a_buffer};
+}
+
 dc_gpu_seam_push_t dc_gpu_seam_push(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis);
 void dc_gpu_seam_bind_buffers(dc_gpu_t *gpu, VkDescriptorSet set,

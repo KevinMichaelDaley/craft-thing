@@ -25,10 +25,9 @@ bool dc_gpu_prepare_water_publication(dc_gpu_t *gpu, dc_gpu_t *peer,
         out[1] = (VkDescriptorBufferInfo){owner->water_color_buffer, 0, VK_WHOLE_SIZE};
         out[2] = (VkDescriptorBufferInfo){owner->velocity_buffer, 0, VK_WHOLE_SIZE};
         out[3] = (VkDescriptorBufferInfo){heat ? heat : owner->thermal_control_buffer, 0, VK_WHOLE_SIZE};
-        const VkBuffer markers = owner->marker_ping ? owner->marker_b_buffer : owner->marker_a_buffer;
-        const VkBuffer counts = owner->marker_ping ? owner->marker_count_b_buffer : owner->marker_count_a_buffer;
-        out[4] = (VkDescriptorBufferInfo){markers, 0, VK_WHOLE_SIZE};
-        out[5] = (VkDescriptorBufferInfo){counts, 0, VK_WHOLE_SIZE};
+        const dc_gpu_seam_markers_t markers = dc_gpu_seam_active_markers(owner);
+        out[4] = (VkDescriptorBufferInfo){markers.records, 0, VK_WHOLE_SIZE};
+        out[5] = (VkDescriptorBufferInfo){markers.counts, 0, VK_WHOLE_SIZE};
         out[6] = (VkDescriptorBufferInfo){owner->marker_grid_buffer, 0, VK_WHOLE_SIZE};
     }
     if (compute->pipeline) {
