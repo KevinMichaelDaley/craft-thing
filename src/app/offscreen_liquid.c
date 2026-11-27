@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "dungeoncraft/liquid_seam.h"
+#include "dungeoncraft/terrain_flags.h"
 #include "../vulkan/gpu_internal.h"
 #include "level_internal.h"
 #include "offscreen_internal.h"
@@ -97,6 +98,59 @@ static bool touches_resident(const dc_level_view_t *view, dc_chunk_coord_t coord
     return false;
 }
 
+typedef struct {
+    uint64_t west, east, north, south;
+    bool active;
+} water_region_tile_t;
+
+/* Tiles on different clocks can share a dispatch when the only open paths
+ * between their epochs contain stationary dry air. Keep each owner's time. */
+static bool water_regions_aligned(const dc_level_view_t *view, const dc_liquid_seam_endpoint_t *tiles,
+                                 uint32_t count, uint32_t residents, char *err, uint32_t cap) {
+    water_region_tile_t regions[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS] = {0};
+    uint32_t queue[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS], queued = 0;
+    _Static_assert(DC_CHUNK_SIDE == 64, "Water boundary mask needs one bit per cell");
+    for (uint32_t t = 0; t < count; ++t) {
+        dc_gpu_t *gpu = tiles[t].gpu;
+        uint32_t slot = tiles[t].slot;
+        dc_chunk_t chunk;
+        if (!dc_gpu_chunk_physics_isolated(gpu) || gpu->gas || gpu->tick_water_source ||
+            !dc_gpu_download_chunk(gpu, slot, &chunk, err, cap) || chunk.particle_count) return false;
+        const fr_bulk_phase_chunk_t *bulk = (fr_bulk_phase_chunk_t *)gpu->bulk_phase_mapped + slot;
+        water_region_tile_t *r = &regions[t];
+        r->active = t >= residents || chunk.marker_count;
+        for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+            const dc_cell_t cell = chunk.cells[i];
+            if (bulk->oil_fp[i] || bulk->slime_fp[i]) return false;
+            r->active |= cell.fluid_mass || chunk.face_velocity[i].x || chunk.face_velocity[i].y;
+            if (cell.material == DC_MATERIAL_STONE && (cell.flags & DC_CELL_LOADED_TERRAIN) &&
+                !(cell.flags & (DC_CELL_RELEASED_TERRAIN | DC_CELL_BURNING_SMOKE_PASS))) continue;
+            if (cell.material != DC_MATERIAL_AIR || cell.flags) return false;
+            uint32_t x = i % DC_CHUNK_SIDE, y = i / DC_CHUNK_SIDE;
+            if (!x) r->west |= UINT64_C(1) << y;
+            if (x == DC_CHUNK_SIDE - 1u) r->east |= UINT64_C(1) << y;
+            if (!y) r->north |= UINT64_C(1) << x;
+            if (y == DC_CHUNK_SIDE - 1u) r->south |= UINT64_C(1) << x;
+        }
+        if (r->active) queue[queued++] = t;
+    }
+    for (uint32_t next = 0; next < queued; ++next) {
+        uint32_t t = queue[next];
+        if (t < residents && view->table.slots[tiles[t].slot].time.seconds != view->world_seconds)
+            return false;
+        for (uint32_t n = 0; n < count; ++n) {
+            dc_liquid_seam_axis_t axis;
+            bool first;
+            if (regions[n].active || !shared_face(tiles[t].coord, tiles[n].coord, &axis, &first)) continue;
+            const water_region_tile_t *a = &regions[first ? t : n], *b = &regions[first ? n : t];
+            if (!(axis == DC_LIQUID_SEAM_X ? a->east & b->west : a->south & b->north)) continue;
+            regions[n].active = true;
+            queue[queued++] = n;
+        }
+    }
+    return true;
+}
+
 dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
     char *err, uint32_t cap) {
     dc_offscreen_t *workspace = NULL;
@@ -117,12 +171,18 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
     uint32_t count = 0;
     if (workspace->failed || workspace->held_writes || view->closing || view->liquid_seam_failed ||
         dc_gpu_liquid_seam_pending(view->gpu) || dc_gpu_liquid_seam_pending(workspace->gpu)) goto stale;
+    bool different_times = false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         const dc_chunk_slot_t *s = &view->table.slots[i];
         if (s->state != DC_SLOT_ACTIVE) continue;
-        if (i >= dc_gpu_slot_capacity(view->gpu) || !s->time.known || s->time.seconds != view->world_seconds ||
+        if (i >= dc_gpu_slot_capacity(view->gpu) || !s->time.known || !isfinite(s->time.seconds) ||
+            s->time.seconds < 0. || s->time.seconds > view->world_seconds ||
             !s->generation || s->pinned != (view->water_generations[i] != 0u) ||
             (s->pinned && s->generation != view->water_generations[i])) goto stale;
+        if (s->time.seconds != view->world_seconds) {
+            if (!s->admitted_time.known || s->time.seconds < s->admitted_time.seconds) goto stale;
+            different_times = true;
+        }
         uint32_t page = view->gpu->slot_page[i];
         if (page == UINT32_MAX || !view->gpu->page_width) goto stale;
         tiles[count++] = (dc_liquid_seam_endpoint_t){.gpu = view->gpu, .coord = s->coord, .slot = i,
@@ -138,6 +198,7 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
         tiles[count++] = (dc_liquid_seam_endpoint_t){.gpu = workspace->gpu, .coord = p->coord, .slot = slot,
             .tile_x = slot % OFFSCREEN_SIDE, .tile_y = slot / OFFSCREEN_SIDE};
     }
+    if (different_times && !water_regions_aligned(view, tiles, count, residents, err, cap)) goto stale;
     if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
     dc_liquid_seam_result_t result = dc_gpu_tick_water_cohort(tiles, count, seconds, err, cap);
     if (result != DC_LIQUID_SEAM_COMMITTED) {
