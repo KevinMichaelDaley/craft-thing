@@ -34,3 +34,7 @@ Paired publication now includes native marker advection, correction and velocity
 **2026-11-27T07:47:40Z**
 
 The sealed two-tile water cycle now begins with native rigid displacement using current occupancy and ends with native marker correction and damping. ctowd-09br tracks the shared solve and atomic receipt for a connected set of mapped owners. The level still needs to schedule that cycle once at a common interval, advance both owner clocks after confirmation, and publish the resulting snapshots through the staged world save.
+
+**2026-11-27T08:12:55Z**
+
+One scratch domain now covers the connected mapped tiles of the resident context and a shared-device workspace. One retained receipt confirms all supplied tiles, including a tile that touches multiple seams. Live scheduling of the partial native water phases and durable camera admission remain open. ctowc-ccrm tracks the shared phase cadence.
