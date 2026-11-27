@@ -16,3 +16,9 @@ At d50c4f60, MPM consumed 16–22% of sampled owner stage time in the saturated 
 ## Acceptance Criteria
 
 Prove the grain stage is omitted for empty independent rooms, retained for grain-bearing rooms even when another owner is empty, and activated after re-admission of grain stock. Compare full physical state and confirmed time with scalar execution. Keep populated and shared-seam behavior, and measure both camera modes under hidden Xephyr.
+
+## Notes
+
+**2026-11-27T18:49:23Z**
+
+The mixed water/grain room regression failed only its per-owner stage expectation before the change and passed on the RTX A2000 after it. Serial and batched replay agree on all mapped cell, face velocity, live marker, particle, bulk and color state and confirmed timestamps. Grain admission on an additional page activates the previously empty owner. Production timings and the full suite at 8abb9206 are scheduled on hidden :93.
