@@ -11,7 +11,7 @@ struct dc_offscreen {
     uint64_t generations[OFFSCREEN_SLOTS];
     dc_chunk_time_t time;
     uint32_t held_writes;
-    bool failed;
+    bool failed, water_coupled;
 };
 
 typedef struct dc_level_offscreen_handoff {

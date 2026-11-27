@@ -101,6 +101,8 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
     char *err, uint32_t cap) {
     dc_offscreen_t *workspace = NULL;
     for (dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        if (p->workspace->water_coupled &&
+            (!p->workspace->time.known || p->workspace->time.seconds != view->world_seconds)) goto stale;
         if (p->disk_source || !p->admitted || !p->workspace->time.known ||
             p->workspace->time.seconds != view->world_seconds || !touches_resident(view, p->coord)) continue;
         if (workspace && workspace != p->workspace) {
@@ -142,6 +144,7 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
         return DC_LEVEL_OFFSCREEN_FAILED;
     }
     workspace->time.seconds = view->world_seconds + seconds;
+    workspace->water_coupled = true;
     for (uint32_t i = 0; i < residents; ++i) {
         const uint32_t slot = tiles[i].slot;
         dc_chunk_slot_t *s = &view->table.slots[slot];

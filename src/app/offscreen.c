@@ -119,7 +119,8 @@ bool dc_offscreen_advance(dc_offscreen_t *workspace, double world_seconds, uint3
                           char *err, uint32_t cap) {
     if (!workspace || workspace->failed || !isfinite(world_seconds) || world_seconds < 0.)
         return error(err, cap, "Invalid offscreen advance or failed workspace");
-    if (!workspace->time.known || workspace->held_writes || dc_gpu_liquid_owner_held(workspace->gpu))
+    if (!workspace->time.known || workspace->held_writes || workspace->water_coupled ||
+        dc_gpu_liquid_owner_held(workspace->gpu))
         return true;
     if (step_budget > OFFSCREEN_STEP_LIMIT) step_budget = OFFSCREEN_STEP_LIMIT;
     for (uint32_t i = 0; i < step_budget && workspace->time.seconds < world_seconds; ++i) {
@@ -223,6 +224,7 @@ static bool retire_page(dc_level_offscreen_handoff_t *handoff, char *err, uint32
         if (workspace->generations[i]) return true;
     }
     workspace->time = (dc_chunk_time_t){0};
+    workspace->water_coupled = false;
     return true;
 }
 

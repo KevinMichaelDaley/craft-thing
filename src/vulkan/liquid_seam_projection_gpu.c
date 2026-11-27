@@ -484,8 +484,10 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
     if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, true, err, cap)) {
         dc_liquid_seam_result_t result = run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds,
             NULL, NULL, NULL, true, &schedule, err, cap);
-        if (result == DC_LIQUID_SEAM_UNCONFIRMED)
+        if (result == DC_LIQUID_SEAM_UNCONFIRMED) {
             result = dc_gpu_resolve_liquid_seam(gpu, peer, err, cap);
+            if (result == DC_LIQUID_SEAM_COMMITTED && err && cap) err[0] = '\0';
+        }
         if (result == DC_LIQUID_SEAM_COMMITTED &&
             dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, false, err, cap)) return result;
     }
