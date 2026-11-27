@@ -259,7 +259,7 @@ build/draw_gpu.o: src/vulkan/draw_gpu.c src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 CHUNK_OBJ = build/chunk.o
-STREAM_OBJ = build/stream.o build/bulk_phase_packet.o build/world_save.o
+STREAM_OBJ = build/stream.o build/stream_packet.o build/bulk_phase_packet.o build/world_save.o
 GENERATE_OBJ = build/generate.o
 SHADER = build/shaders/pattern.comp.spv
 RIGID_SHADER = build/shaders/rigid.comp.spv
@@ -305,7 +305,7 @@ test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
 OFFSCREEN_SRC = src/app/offscreen.c
-NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
+NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/stream_packet.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
 PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_view.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 PLAYER_RUNTIME_SRC += src/app/player_inventory_save.c src/app/player_join.c
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
@@ -686,7 +686,10 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/stream.o: src/world/stream.c src/fire/gas_checkpoint_internal.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
+build/stream.o: src/world/stream.c src/world/stream_packet.h src/fire/gas_checkpoint_internal.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
+	@mkdir -p build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/stream_packet.o: src/world/stream_packet.c src/world/stream_packet.h src/fire/gas_checkpoint_internal.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/world_save.o: src/world/world_save.c include/dungeoncraft/color.h include/dungeoncraft/world_save.h
@@ -762,9 +765,10 @@ build/shutdown.o: src/app/shutdown.c src/app/shutdown.h
 build/dungeoncraft: build/shutdown.o src/app/structural_demo.c src/app/structural_demo.h src/app/main.c src/app/level.c src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h src/app/shutdown.c src/app/player_session.c src/app/player_clock.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/registry.c src/player/state.c src/player/animation.c src/player/beaver_art.c src/player/beaver_asset.c src/vulkan/player_drive_gpu.c build/shutdown.o $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c build/shutdown.o src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 build/dungeoncraft: $(OFFSCREEN_SRC) src/app/offscreen.h
+build/dungeoncraft build/controls_tests build/level_ticks_tests build/offscreen_workspace_tests: src/app/level_internal.h src/app/level_offscreen.h src/vulkan/reactive_gpu_internal.h src/vulkan/structural_store_fluids.h src/vulkan/thermal_gpu_internal.h
 
-build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(OFFSCREEN_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
 LEVEL_TICK_CALLS = dc_gpu_set_page dc_gpu_set_body_origin dc_gpu_prepare_body_origin dc_gpu_set_tick_water_source dc_gpu_set_tick_seconds dc_gpu_tick_step dc_gpu_present_chunks_steps_progress
 LEVEL_TICK_CALLS += dc_players_prepare_view dc_players_present dc_players_step
@@ -773,8 +777,8 @@ LEVEL_TICK_CALLS += fr_renderer_upload_chunk_colors fr_renderer_download_chunk_c
 LEVEL_TICK_CALLS += fr_gpu_reactive_import_chunk fr_gpu_reactive_export_chunk
 LEVEL_TICK_CALLS += fr_bulk_phase_gpu_export_chunk
 LEVEL_TICK_CALLS += dc_stream_request_load dc_stream_request_save_snapshot dc_stream_poll
-build/level_ticks_tests: tests/app/level_ticks_tests.c src/app/level.c src/app/level.h src/app/level_internal.h src/app/view_config.h src/app/player_session_internal.h $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/level.c $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(LEVEL_TICK_CALLS),-Xlinker --wrap=$(fn))
+build/level_ticks_tests: tests/app/level_ticks_tests.c src/app/level.c src/app/level.h src/app/level_internal.h src/app/view_config.h src/app/player_session_internal.h $(PLAYER_RUNTIME_SRC) $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/level.c $(PLAYER_RUNTIME_SRC) $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(LEVEL_TICK_CALLS),-Xlinker --wrap=$(fn))
 .PHONY: test_level_ticks
 test: test_level_ticks
 test_level_ticks: build/level_ticks_tests
@@ -2291,6 +2295,7 @@ test: build/reactive_arena_gpu_tests build/reactive_address_gpu_tests build/reac
 build/reactive_stream_view_display_tests: tests/app/reactive_stream_view_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_level_structure_snapshots
+build/reactive_stream_view_display_tests: tests/app/reactive_stream_takeover_cases.h src/app/level_offscreen.h
 test: test_level_structure_snapshots
 test_level_structure_snapshots: build/reactive_stream_view_display_tests
 	DC_TEST_STRUCTURE_TIME_ONLY=1 ./build/reactive_stream_view_display_tests

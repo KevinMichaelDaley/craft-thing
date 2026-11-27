@@ -9,6 +9,11 @@
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "../vulkan/gas_gpu_state.h"
+#include "../vulkan/reactive_gpu_internal.h"
+#include "../vulkan/structural_store_fluids.h"
+#include "../vulkan/thermal_gpu_internal.h"
+#include "level_internal.h"
+#include "level_offscreen.h"
 #include "offscreen.h"
 
 enum {
@@ -24,8 +29,19 @@ struct dc_offscreen {
     dc_chunk_coord_t origin;
     uint64_t generations[OFFSCREEN_SLOTS];
     dc_chunk_time_t time;
+    uint32_t held_writes;
     bool failed;
 };
+
+typedef struct dc_level_offscreen_handoff {
+    struct dc_level_offscreen_handoff *next;
+    dc_offscreen_t *workspace;
+    dc_chunk_coord_t coord;
+    dc_chunk_owner_t owner;
+    dc_chunk_time_t source_time;
+    uint64_t generation, write_generation;
+    bool admitted;
+} dc_level_offscreen_handoff_t;
 
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
@@ -120,7 +136,7 @@ bool dc_offscreen_advance(dc_offscreen_t *workspace, double world_seconds, uint3
                           char *err, uint32_t cap) {
     if (!workspace || workspace->failed || !isfinite(world_seconds) || world_seconds < 0.)
         return error(err, cap, "Invalid offscreen advance or failed workspace");
-    if (!workspace->time.known) return true;
+    if (!workspace->time.known || workspace->held_writes) return true;
     if (step_budget > OFFSCREEN_STEP_LIMIT) step_budget = OFFSCREEN_STEP_LIMIT;
     for (uint32_t i = 0; i < step_budget && workspace->time.seconds < world_seconds; ++i) {
         double interval = fmin(world_seconds - workspace->time.seconds, OFFSCREEN_MAX_STEP_SECONDS);
@@ -178,4 +194,180 @@ bool dc_offscreen_snapshot(dc_offscreen_t *workspace, dc_chunk_coord_t coord,
     }
     *out = result;
     return true;
+}
+
+static dc_level_offscreen_handoff_t **find_handoff(dc_level_view_t *view, dc_chunk_coord_t coord) {
+    dc_level_offscreen_handoff_t **link = &view->offscreen_handoffs;
+    while (*link && ((*link)->coord.x != coord.x || (*link)->coord.y != coord.y))
+        link = &(*link)->next;
+    return link;
+}
+
+static void remove_handoff(dc_level_offscreen_handoff_t **link) {
+    dc_level_offscreen_handoff_t *old = *link;
+    *link = old->next;
+    if (old->write_generation) --old->workspace->held_writes;
+    free(old);
+}
+
+static uint32_t pending_source(const dc_gpu_t *gpu, dc_chunk_coord_t coord) {
+    uint32_t index = dc_gpu_pending_chunk_index(gpu, coord);
+    if (index == UINT32_MAX || !gpu->checkpoint_owners || !gpu->checkpoint_times ||
+        !gpu->checkpoint_fluids || !gpu->checkpoint_fluids[index].known ||
+        !gpu->checkpoint_times[index].known || !dc_chunk_owner_valid(gpu->checkpoint_owners[index]))
+        return UINT32_MAX;
+    return index;
+}
+
+static bool retire_page(dc_level_offscreen_handoff_t *handoff, char *err, uint32_t cap) {
+    dc_offscreen_t *workspace = handoff->workspace;
+    uint32_t slot;
+    if (!page_at(workspace, handoff->coord, &slot) || workspace->generations[slot] != handoff->generation)
+        return error(err, cap, "Offscreen retirement owner changed");
+    if (!dc_gpu_set_page(workspace->gpu, slot % OFFSCREEN_SIDE, slot / OFFSCREEN_SIDE,
+                        UINT32_MAX, err, cap) ||
+        !fr_gpu_reactive_clear_chunk(workspace->gpu, slot, err, cap)) {
+        workspace->failed = true;
+        return false;
+    }
+    workspace->generations[slot] = 0;
+    for (uint32_t i = 0; i < OFFSCREEN_SLOTS; ++i) {
+        if (workspace->generations[i]) return true;
+    }
+    workspace->time = (dc_chunk_time_t){0};
+    return true;
+}
+
+bool dc_level_offscreen_owns(dc_level_view_t *view, dc_chunk_coord_t coord) {
+    return *find_handoff(view, coord) != NULL;
+}
+
+bool dc_level_offscreen_begin(dc_level_view_t *view, dc_offscreen_t *workspace,
+    dc_chunk_coord_t coord, uint64_t *generation, char *err, uint32_t cap) {
+    uint32_t slot;
+    if (!view || !view->gpu || !view->stream || view->closing || !workspace || workspace->failed ||
+        !generation || !view->table.next_generation || view->table.next_generation == UINT64_MAX ||
+        !page_at(workspace, coord, &slot) || workspace->generations[slot] ||
+        dc_chunk_table_find(&view->table, coord, NULL) || dc_level_offscreen_owns(view, coord))
+        return error(err, cap, "Offscreen chunk cannot be reserved");
+    uint32_t index = pending_source(view->gpu, coord);
+    if (index == UINT32_MAX) return error(err, cap, "Offscreen chunk has no versioned structure owner");
+    dc_level_offscreen_handoff_t *handoff = calloc(1, sizeof(*handoff));
+    if (!handoff) return error(err, cap, "Cannot allocate offscreen handoff");
+    handoff->generation = view->table.next_generation++;
+    if (!dc_stream_request_load(view->stream, coord, handoff->generation)) {
+        free(handoff);
+        return error(err, cap, "Cannot queue offscreen source load");
+    }
+    handoff->workspace = workspace;
+    handoff->coord = coord;
+    handoff->owner = view->gpu->checkpoint_owners[index];
+    handoff->next = view->offscreen_handoffs;
+    view->offscreen_handoffs = handoff;
+    *generation = handoff->generation;
+    return true;
+}
+
+bool dc_level_offscreen_publish(dc_level_view_t *view, dc_chunk_coord_t coord,
+    uint64_t generation, char *err, uint32_t cap) {
+    dc_level_offscreen_handoff_t *handoff = view ? *find_handoff(view, coord) : NULL;
+    if (!handoff || !handoff->admitted || handoff->generation != generation ||
+        handoff->write_generation || view->closing || view->table.next_generation == UINT64_MAX)
+        return error(err, cap, "Offscreen owner cannot publish");
+    uint32_t index = pending_source(view->gpu, coord);
+    if (index == UINT32_MAX || !dc_chunk_owner_equal(view->gpu->checkpoint_owners[index], handoff->owner))
+        return error(err, cap, "Offscreen replacement parent changed");
+    dc_stream_result_t snapshot = {0};
+    if (!dc_offscreen_snapshot(handoff->workspace, coord, generation, &snapshot, err, cap)) return false;
+    bool okay = snapshot.time.seconds >= handoff->source_time.seconds &&
+                snapshot.time.seconds <= view->world_seconds;
+    if (!okay) error(err, cap, "Offscreen replacement time is outside the world clock");
+    if (okay && view->save) okay = dc_world_save_store_clock(view->save, view->world_seconds, err, cap);
+    if (okay) {
+        uint64_t write = view->table.next_generation++;
+        if (dc_stream_request_save_takeover(view->stream, &snapshot, handoff->owner, write)) {
+            handoff->write_generation = write;
+            ++handoff->workspace->held_writes;
+        } else {
+            okay = error(err, cap, "Cannot queue offscreen replacement write");
+        }
+    }
+    dc_stream_result_release(&snapshot);
+    return okay;
+}
+
+bool dc_level_offscreen_cancel(dc_level_view_t *view, dc_chunk_coord_t coord,
+    uint64_t generation, char *err, uint32_t cap) {
+    if (!view) return false;
+    dc_level_offscreen_handoff_t **link = find_handoff(view, coord);
+    dc_level_offscreen_handoff_t *handoff = *link;
+    if (!handoff || handoff->generation != generation || handoff->write_generation)
+        return error(err, cap, "Offscreen owner cannot be canceled");
+    bool okay = !handoff->admitted || handoff->workspace->failed || retire_page(handoff, err, cap);
+    remove_handoff(link);
+    return okay;
+}
+
+static bool accept_source(dc_level_view_t *view, dc_level_offscreen_handoff_t *handoff,
+    const dc_stream_result_t *result, char *err, uint32_t cap) {
+    if (result->kind == DC_STREAM_FAILED) return error(err, cap, "Offscreen source load failed");
+    dc_gpu_t *gpu = view->gpu;
+    uint32_t index = pending_source(gpu, handoff->coord);
+    if (index == UINT32_MAX || !dc_chunk_owner_equal(gpu->checkpoint_owners[index], handoff->owner))
+        return error(err, cap, "Offscreen source owner changed");
+    dc_checkpoint_fluid_t *fluid = gpu->checkpoint_fluids + index;
+    dc_stream_result_t checkpoint = {.kind = DC_STREAM_LOADED, .coord = handoff->coord,
+        .generation = handoff->generation, .chunk = gpu->checkpoint_chunks + index,
+        .time = gpu->checkpoint_times[index], .gas = fluid->gas, .bulk = fluid->bulk,
+        .colors = gpu->checkpoint_colors ? gpu->checkpoint_colors + index : NULL,
+        .reactive = gpu->checkpoint_reactive ? gpu->checkpoint_reactive + index : NULL,
+        .water_excess = fr_thermal_checkpoint_pending_water(gpu, index)};
+    const dc_stream_result_t *source = &checkpoint;
+    if (dc_chunk_owner_equal(result->replaces_owner, handoff->owner) && result->time.known &&
+        result->time.seconds >= checkpoint.time.seconds) source = result;
+    if (!dc_offscreen_admit(handoff->workspace, source, handoff->generation, err, cap)) return false;
+    handoff->source_time = source->time;
+    handoff->admitted = true;
+    return true;
+}
+
+dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
+    const dc_stream_result_t *result, char *err, uint32_t cap) {
+    dc_level_offscreen_handoff_t **link = find_handoff(view, result->coord);
+    dc_level_offscreen_handoff_t *handoff = *link;
+    if (!handoff) return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    if (!handoff->admitted && handoff->generation == result->generation &&
+        (result->kind == DC_STREAM_LOADED || result->kind == DC_STREAM_FAILED)) {
+        if (view->closing) {
+            remove_handoff(link);
+            return DC_LEVEL_OFFSCREEN_HANDLED;
+        }
+        if (accept_source(view, handoff, result, err, cap)) return DC_LEVEL_OFFSCREEN_HANDLED;
+        remove_handoff(link);
+        return DC_LEVEL_OFFSCREEN_FAILED;
+    }
+    if (!handoff->write_generation || handoff->write_generation != result->generation)
+        return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    if (result->kind == DC_STREAM_FAILED) {
+        --handoff->workspace->held_writes;
+        handoff->write_generation = 0;
+        error(err, cap, "Offscreen replacement write failed");
+        return DC_LEVEL_OFFSCREEN_FAILED;
+    }
+    if (result->kind != DC_STREAM_SAVED || !dc_chunk_owner_equal(result->replaces_owner, handoff->owner))
+        return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    bool okay = retire_page(handoff, err, cap);
+    remove_handoff(link);
+    return okay ? DC_LEVEL_OFFSCREEN_HANDLED : DC_LEVEL_OFFSCREEN_FAILED;
+}
+
+bool dc_level_offscreen_writing(const dc_level_view_t *view) {
+    for (const dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        if (p->write_generation) return true;
+    }
+    return false;
+}
+
+void dc_level_offscreen_discard(dc_level_view_t *view) {
+    while (view->offscreen_handoffs) remove_handoff(&view->offscreen_handoffs);
 }

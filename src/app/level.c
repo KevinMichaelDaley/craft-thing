@@ -16,6 +16,7 @@
 #include "bonfire.h"
 #include "level.h"
 #include "level_internal.h"
+#include "level_offscreen.h"
 #include "player_session.h"
 #include "thermal_bench.h"
 #include "view_config.h"
@@ -380,6 +381,12 @@ static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
 static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
     dc_stream_result_t result;
     while (dc_stream_poll(view->stream, &result)) {
+        dc_level_offscreen_result_t offscreen = dc_level_offscreen_result(view, &result, err, cap);
+        if (offscreen != DC_LEVEL_OFFSCREEN_UNMATCHED) {
+            dc_stream_result_release(&result);
+            if (offscreen == DC_LEVEL_OFFSCREEN_FAILED) return false;
+            continue;
+        }
         uint32_t index;
         if (!dc_chunk_table_find(&view->table, result.coord, &index)) {
             dc_stream_result_release(&result);
@@ -508,6 +515,7 @@ static bool bind_transfer_destination(dc_level_view_t *view, char *err, uint32_t
     if (!view->transfer_pending || view->destination_bound) return true;
     uint32_t index;
     if (!dc_chunk_table_find(&view->table, view->transfer_to, &index)) {
+        if (dc_level_offscreen_owns(view, view->transfer_to)) return true;
         uint64_t generation;
         if (!dc_chunk_table_begin_load(&view->table, view->transfer_to,
                                        &index, &generation)) return true;
@@ -616,6 +624,7 @@ void dc_level_view_discard(dc_level_view_t *view) {
     if (!view) return;
     dc_players_destroy(view);
     dc_stream_destroy(view->stream);
+    dc_level_offscreen_discard(view);
     dc_world_save_close(view->save);
     free(view->save_colors);
     free(view->step_runs);
@@ -701,7 +710,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             uint32_t page = UINT32_MAX, index;
             if (dc_chunk_table_find(&view->table, coord, &index)) {
                 if (view->table.slots[index].state == DC_SLOT_ACTIVE) page = index;
-            } else if (load_queued) {
+            } else if (load_queued && !dc_level_offscreen_owns(view, coord)) {
                 uint64_t generation;
                 if (dc_chunk_table_begin_load(&view->table, coord, &index, &generation))
                     load_queued = queue_reserved_load(view, index, generation, err, cap);
@@ -1120,7 +1129,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         if (!deadline) deadline = SDL_GetTicks64() +
                         (uint64_t)view->table.capacity * 50u + 5000u;
         if (!process_results(view, err, cap)) { okay = false; break; }
-        bool pending = false;
+        bool pending = dc_level_offscreen_writing(view);
         for (uint32_t i = 0; i < view->table.capacity; ++i) {
             dc_chunk_slot_t *slot = &view->table.slots[i];
             if (slot->dirty || slot->state == DC_SLOT_SAVING) pending = true;
@@ -1134,6 +1143,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if(okay&&!view->closing_structure_saved)
         okay = save_level_structure(view, err, cap);
     dc_stream_destroy(view->stream);
+    dc_level_offscreen_discard(view);
     if (okay && staged) okay = dc_world_save_commit(view->save, err, cap);
     dc_world_save_close(view->save);
     free(view->save_colors);

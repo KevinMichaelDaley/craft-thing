@@ -30,6 +30,8 @@ void fr_thermal_checkpoint_discard(dc_gpu_t *gpu,struct fr_thermal_gpu *prepared
 /** Preflight and bind one immutable pending liquid channel before/after physical upload. */
 bool fr_thermal_checkpoint_preflight_chunk(dc_gpu_t *gpu,uint32_t index,char *err,uint32_t cap);
 bool fr_thermal_checkpoint_bind_chunk(dc_gpu_t *gpu,uint32_t slot,uint32_t index,char *err,uint32_t cap);
+/** Borrow pending liquid heat for synchronous admission into another workspace. */
+float *fr_thermal_checkpoint_pending_water(const dc_gpu_t *gpu, uint32_t index);
 /** Remove a consumed pending packet in lockstep with the physical checkpoint. */
 void fr_thermal_checkpoint_remove_pending(dc_gpu_t *gpu,uint32_t index,uint32_t last);
 #endif

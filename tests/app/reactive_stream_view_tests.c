@@ -1,4 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
+#include <inttypes.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "ferrum/fire/bulk_phase_gpu.h"
 #define main reactive_view_fixture_main
 #include "../vulkan/reactive_cell_gpu_tests.c"
@@ -111,6 +115,8 @@ static bool structure_time_gpu(dc_gpu_t **gpu, char *err, uint32_t cap) {
     return dc_gpu_create(gpu, 64, 64, "build/shaders/pattern.comp.spv", err, cap);
 }
 
+#include "reactive_stream_takeover_cases.h"
+
 typedef enum { STOCK_CONFLICT, STOCK_LEGACY, STOCK_INTERRUPTED, STOCK_TAKEOVER, STOCK_STALE } stock_reopen_t;
 
 static void check_structure_stock_reopen(stock_reopen_t route) {
@@ -173,6 +179,8 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
     ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
     ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
+    if (route != STOCK_INTERRUPTED)
+        ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     if (route != STOCK_INTERRUPTED) {
         dc_chunk_time_t stream_time = {.seconds = 5., .known = true};
         if (route == STOCK_CONFLICT || has_receipt) {
@@ -189,6 +197,8 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
             if (route == STOCK_STALE) ++owner.serial;
             dc_stream_result_t update = {.kind = DC_STREAM_LOADED, .coord = coord, .generation = 2u,
                 .time = stream_time, .chunk = chunk, .reactive = &parcels, .gas = gas, .bulk = bulk};
+            if (replace)
+                ASSERT_TRUE(reject_duplicate_parcel_takeover(&view, &update, owner, err, sizeof(err)));
             ASSERT_TRUE(dc_stream_request_save_takeover(view.stream, &update, owner, 3u));
         } else {
             ASSERT_TRUE(dc_stream_request_save_snapshot(view.stream, chunk, NULL, NULL, NULL,
@@ -211,8 +221,8 @@ static void check_structure_stock_reopen(stock_reopen_t route) {
         view.gpu = NULL;
         ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
         ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     }
-    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
     ASSERT_TRUE(publish_timed_chunk(&view, coord, &slot, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_download_chunk(view.gpu, slot, chunk, err, sizeof(err)));
     ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view.gpu, slot, bulk, err, sizeof(err)));
@@ -358,6 +368,7 @@ int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--takeover") == 0) {
         RUN(test_cold_reopen_replaces_exact_owner_with_all_updated_channels);
         RUN(test_cold_reopen_rejects_receipt_for_previous_owner);
+        RUN(test_workspace_takeover_retries_and_commits_exactly_once);
         return g_fail != 0;
     }
     if (!getenv("DC_TEST_STRUCTURE_TIME_ONLY")) {
@@ -370,5 +381,6 @@ int main(int argc, char **argv) {
     RUN(test_pending_stock_survives_failed_publication_and_missing_stream);
     RUN(test_cold_reopen_replaces_exact_owner_with_all_updated_channels);
     RUN(test_cold_reopen_rejects_receipt_for_previous_owner);
+    RUN(test_workspace_takeover_retries_and_commits_exactly_once);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

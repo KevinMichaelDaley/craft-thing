@@ -525,6 +525,10 @@ bool fr_thermal_checkpoint_bind_chunk(dc_gpu_t *g,uint32_t slot,uint32_t index,c
         g->thermal->pending_water+(size_t)index*4096u,4096u*sizeof(float));
     return true;
 }
+float *fr_thermal_checkpoint_pending_water(const dc_gpu_t *g, uint32_t index) {
+    if (!g->thermal || !g->thermal->pending_water || index >= g->thermal->pending_count) return NULL;
+    return g->thermal->pending_water + (size_t)index * DC_CHUNK_CELLS;
+}
 void fr_thermal_checkpoint_remove_pending(dc_gpu_t *g,uint32_t index,uint32_t last) {
     if(!g->thermal||!g->thermal->pending_count) return;
     struct fr_thermal_gpu *t=g->thermal;

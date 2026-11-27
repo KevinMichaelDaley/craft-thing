@@ -1,6 +1,7 @@
 #ifndef FERRUM_FIRE_GAS_CHECKPOINT_INTERNAL_H
 #define FERRUM_FIRE_GAS_CHECKPOINT_INTERNAL_H
 #include <math.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include "ferrum/fire/gas_checkpoint.h"
 static inline bool gas_checkpoint_valid(const fr_gas_checkpoint_chunk_t *gas) {
