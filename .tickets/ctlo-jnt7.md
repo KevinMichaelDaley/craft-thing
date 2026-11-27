@@ -47,3 +47,7 @@ The still-running full suite at 1d0fc902 measured 130.949 ms against the unchang
 **2026-11-26T21:51:16Z**
 
 The 1d0fc902 make test process exited 2 after body_carve_tests reported 10 passed and two timing failures. In addition to the 130.949 ms large cut, the warm miss exceeded 3 ms while still using one GPU submission. An exact source probe with separate host recording, queue, GPU carve and GPU terrain timings compiled and is queued behind the paired thermal run. The masked work counter diagnostic is also queued.
+
+**2026-11-27T00:13:08Z**
+
+The pinned 3c94b591 integrated full run exited 2 at the large-body brush timing gate. The brush retained the exact 36051 pixels and passed its mass assertion but took 138.608 ms against 30 ms. The warm zero-hit check measured 1.419 ms and one submission. Other GPU work was present. The separate stale-root correctness fix is now on the integration stack, and isolated timing remains an open gate.

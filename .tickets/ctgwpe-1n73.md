@@ -1,6 +1,6 @@
 ---
 id: ctgwpe-1n73
-status: in_progress
+status: closed
 deps: []
 links: [ctfls-xxfd]
 created: 2026-11-26T23:57:55Z
@@ -28,3 +28,7 @@ RED builds the actual forest fixture and passes an unbound page to its warmth re
 **2026-11-27T00:07:02Z**
 
 GREEN and refactor pass the mapped-packet test, including swizzled residency, partial cell volume, the live model, compensated energy and existing chunk reads. Unbound, invalid volume, empty stock and device-loss paths keep the output untouched. The three focused gas cases also pass with ASan/UBSan. The forest contract reports unavailable samples and records covered dry-bridge sites as skipped. Still/control samples now publish temperature, density inputs, pressure and work as each observation is accepted. Native warm-probe validation and the matched comparison remain due.
+
+**2026-11-27T00:13:08Z**
+
+Exact 3b4e1ac1 ran the live probe on the RTX A2000 at the locked location. Startup measured 293.150 K, mass 0.00120000006, capacity 0.000868071692, internal energy 0.254475206, pressure 51.906566 and void 1. The locked starter audit also passed. This verifies the probe path, with matched combustion and spread acceptance tracked separately.

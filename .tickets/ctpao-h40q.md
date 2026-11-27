@@ -35,3 +35,7 @@ The controlled loader failure now reports the actual Vulkan error on every faile
 **2026-11-26T23:51:52Z**
 
 The guarded NVIDIA RED reproduced overlapping-context failure. The fixed NVIDIA fixture completed all four transfers under the same one-context budget. A separate llvmpipe run also passed all four through a test-only device-selection override. The exact historical, unguarded 486563d0 replay remains queued and the original failure cause is still unconfirmed.
+
+**2026-11-27T00:13:08Z**
+
+A separate pinned integrated run at 3c94b591 exited 2 on the later large-body carve timing gate. It preserved exact pixel and mass results. The original unguarded 486563d0 halo replay is still pending under the GPU headroom gate.
