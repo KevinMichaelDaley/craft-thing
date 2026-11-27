@@ -832,6 +832,8 @@ cleanup:
     free(chunk);
 }
 
+#include "liquid_gas_cohort_cases.h"
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
@@ -849,7 +851,10 @@ int main(int argc, char **argv) {
     } else if (argc == 2 && strcmp(argv[1], "--grain-crossing") == 0) {
         RUN(test_grains_cross_the_owner_face_in_both_directions);
         RUN(test_unmapped_neighbor_contains_the_edge_grain);
+    } else if (argc == 2 && strcmp(argv[1], "--gas-crossing") == 0) {
+        RUN(test_each_gas_species_and_pressure_work_cross_the_owner_face);
     } else if (argc == 1) {
+        RUN(test_each_gas_species_and_pressure_work_cross_the_owner_face);
         RUN(test_grains_cross_the_owner_face_in_both_directions);
         RUN(test_unmapped_neighbor_contains_the_edge_grain);
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
