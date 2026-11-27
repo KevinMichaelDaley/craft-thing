@@ -450,6 +450,36 @@ static void test_untimed_structure_checkpoint_does_not_inherit_stream_time(void)
     PASS();
 }
 
+static void test_generated_chunks_start_at_confirmed_world_time(void) {
+    char directory[] = "build/level_world_clock_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    view->stream = dc_stream_create(directory, 42, 64);
+    ASSERT_TRUE(view->stream);
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
+    g_frame.reject_present = true;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    g_frame.reject_present = false;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .0625f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_step_timed(view, .125f, NULL, 0));
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    const dc_chunk_coord_t legacy = {0, 0};
+    const dc_chunk_coord_t generated = {VIEW_CHUNKS_X + HALO_CHUNKS, 0};
+    ASSERT_TRUE(pan_until_ready(view, 1));
+    uint32_t index;
+    ASSERT_TRUE(dc_chunk_table_find(&view->table, legacy, &index));
+    ASSERT_TRUE(!view->table.slots[index].time.known);
+    ASSERT_TRUE(dc_chunk_table_find(&view->table, generated, &index));
+    dc_chunk_time_t time = view->table.slots[index].time;
+    dc_level_view_discard(view);
+    printf("Generated chunk time known %d, %.9f seconds at admission\n", time.known, time.seconds);
+    ASSERT_TRUE(time.known && time.seconds == .4375);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
@@ -463,6 +493,7 @@ int main(void) {
     RUN(test_player_actions_receive_the_same_ordered_time_as_physics);
     RUN(test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reopen);
     RUN(test_untimed_structure_checkpoint_does_not_inherit_stream_time);
+    RUN(test_generated_chunks_start_at_confirmed_world_time);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
