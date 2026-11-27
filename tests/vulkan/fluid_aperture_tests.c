@@ -70,7 +70,8 @@ static void run_case(unsigned axis,unsigned unknown) {
     ASSERT_TRUE(begin(&f->p));bind(f);
     uint32_t push[8]={WIDTH,HEIGHT,axis,0,leaves};
     vkCmdPushConstants(f->p.command,f->p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
-    vkCmdDispatch(f->p.command,lines*((leaves+3)/4),1,1);barrier(f);
+    unsigned groups=axis?(lines*leaves+63u)/64u:lines*((leaves+3u)/4u);
+    vkCmdDispatch(f->p.command,groups,1,1);barrier(f);
     for (unsigned nodes=leaves/2;nodes;nodes/=2) {
         push[3]=nodes;
         vkCmdPushConstants(f->p.command,f->p.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
@@ -122,7 +123,8 @@ static void run_case(unsigned axis,unsigned unknown) {
 static void test_horizontal_fractional_ranges_are_exact(void) {run_case(0,0);}
 static void test_vertical_partial_tiles_are_exact(void) {run_case(1,0);}
 static void test_unknown_pages_are_conservative(void) {run_case(0,1);}
+static void test_vertical_cache_handles_missing_pages_at_partial_tiles(void) {run_case(1,1);}
 int main(void) {
     RUN(test_horizontal_fractional_ranges_are_exact);RUN(test_vertical_partial_tiles_are_exact);
-    RUN(test_unknown_pages_are_conservative);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
+    RUN(test_unknown_pages_are_conservative);RUN(test_vertical_cache_handles_missing_pages_at_partial_tiles);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
