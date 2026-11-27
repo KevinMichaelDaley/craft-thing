@@ -83,6 +83,8 @@ bool dc_offscreen_admit(dc_offscreen_t *workspace, const dc_stream_result_t *sou
         !source->chunk || !generation || source->generation != generation ||
         source->coord.x != source->chunk->coord.x || source->coord.y != source->chunk->coord.y)
         return error(err, cap, "Invalid offscreen chunk owner");
+    if (dc_gpu_liquid_owner_held(workspace->gpu))
+        return error(err, cap, "Water cycle holds the offscreen workspace");
     if (!source->time.known || !isfinite(source->time.seconds) || source->time.seconds < 0.)
         return error(err, cap, "Offscreen chunk has no confirmed time");
     if (workspace->time.known && workspace->time.seconds != source->time.seconds)
@@ -114,7 +116,8 @@ bool dc_offscreen_advance(dc_offscreen_t *workspace, double world_seconds, uint3
                           char *err, uint32_t cap) {
     if (!workspace || workspace->failed || !isfinite(world_seconds) || world_seconds < 0.)
         return error(err, cap, "Invalid offscreen advance or failed workspace");
-    if (!workspace->time.known || workspace->held_writes) return true;
+    if (!workspace->time.known || workspace->held_writes || dc_gpu_liquid_owner_held(workspace->gpu))
+        return true;
     if (step_budget > OFFSCREEN_STEP_LIMIT) step_budget = OFFSCREEN_STEP_LIMIT;
     for (uint32_t i = 0; i < step_budget && workspace->time.seconds < world_seconds; ++i) {
         double interval = fmin(world_seconds - workspace->time.seconds, OFFSCREEN_MAX_STEP_SECONDS);
@@ -157,7 +160,7 @@ bool dc_offscreen_snapshot(dc_offscreen_t *workspace, dc_chunk_coord_t coord,
                            uint64_t generation, dc_stream_result_t *out,
                            char *err, uint32_t cap) {
     uint32_t slot;
-    if (!workspace || workspace->failed || !out || !generation ||
+    if (!workspace || workspace->failed || !out || !generation || dc_gpu_liquid_owner_held(workspace->gpu) ||
         !dc_offscreen_page_at(workspace, coord, &slot) || workspace->generations[slot] != generation)
         return error(err, cap, "Offscreen snapshot owner is unavailable");
     dc_stream_result_t result = {.kind = DC_STREAM_LOADED, .coord = coord,
@@ -319,7 +322,8 @@ bool dc_level_offscreen_cancel(dc_level_view_t *view, dc_chunk_coord_t coord,
     if (!view) return false;
     dc_level_offscreen_handoff_t **link = find_handoff(view, coord);
     dc_level_offscreen_handoff_t *handoff = *link;
-    if (!handoff || handoff->generation != generation || handoff->write_generation || handoff->liquid_paired)
+    if (!handoff || handoff->generation != generation || handoff->write_generation || handoff->liquid_paired ||
+        dc_gpu_liquid_owner_held(handoff->workspace->gpu))
         return error(err, cap, "Offscreen owner cannot be canceled");
     bool okay = !handoff->admitted || handoff->workspace->failed || retire_page(handoff, err, cap);
     remove_handoff(link);
