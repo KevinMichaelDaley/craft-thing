@@ -14,6 +14,13 @@ typedef enum {
  * The caller keeps the workspace alive until the handoff completes or is canceled. */
 bool dc_level_offscreen_begin(dc_level_view_t *view, dc_offscreen_t *workspace,
     dc_chunk_coord_t coord, uint64_t *generation, char *err, uint32_t cap);
+/** Start from an acknowledged resident eviction, even when its archive is now absent. */
+bool dc_level_offscreen_begin_disk(dc_level_view_t *view, dc_offscreen_t *workspace,
+    dc_chunk_coord_t coord, dc_chunk_owner_t owner, dc_chunk_time_t time,
+    uint64_t *generation, char *err, uint32_t cap);
+/** Query the admitted clock and whether a checked write is already in flight. */
+bool dc_level_offscreen_progress(dc_level_view_t *view, dc_chunk_coord_t coord,
+    uint64_t generation, dc_chunk_time_t *time, bool *writing);
 /** Queue an immutable confirmed replacement and suspend workspace ticks until the reply. */
 bool dc_level_offscreen_publish(dc_level_view_t *view, dc_chunk_coord_t coord,
     uint64_t generation, char *err, uint32_t cap);

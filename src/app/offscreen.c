@@ -40,7 +40,7 @@ typedef struct dc_level_offscreen_handoff {
     dc_chunk_owner_t owner;
     dc_chunk_time_t source_time;
     uint64_t generation, write_generation;
-    bool admitted;
+    bool admitted, disk_source;
 } dc_level_offscreen_handoff_t;
 
 static bool error(char *err, uint32_t cap, const char *message) {
@@ -242,16 +242,18 @@ bool dc_level_offscreen_owns(dc_level_view_t *view, dc_chunk_coord_t coord) {
     return *find_handoff(view, coord) != NULL;
 }
 
-bool dc_level_offscreen_begin(dc_level_view_t *view, dc_offscreen_t *workspace,
-    dc_chunk_coord_t coord, uint64_t *generation, char *err, uint32_t cap) {
+static bool can_reserve(dc_level_view_t *view, dc_offscreen_t *workspace,
+    dc_chunk_coord_t coord, uint64_t *generation) {
     uint32_t slot;
-    if (!view || !view->gpu || !view->stream || view->closing || !workspace || workspace->failed ||
-        !generation || !view->table.next_generation || view->table.next_generation == UINT64_MAX ||
-        !page_at(workspace, coord, &slot) || workspace->generations[slot] ||
-        dc_chunk_table_find(&view->table, coord, NULL) || dc_level_offscreen_owns(view, coord))
-        return error(err, cap, "Offscreen chunk cannot be reserved");
-    uint32_t index = pending_source(view->gpu, coord);
-    if (index == UINT32_MAX) return error(err, cap, "Offscreen chunk has no versioned structure owner");
+    return view && view->gpu && view->stream && !view->closing && workspace && !workspace->failed &&
+        generation && view->table.next_generation && view->table.next_generation != UINT64_MAX &&
+        page_at(workspace, coord, &slot) && !workspace->generations[slot] &&
+        !dc_chunk_table_find(&view->table, coord, NULL) && !dc_level_offscreen_owns(view, coord);
+}
+
+static bool begin_handoff(dc_level_view_t *view, dc_offscreen_t *workspace,
+    dc_chunk_coord_t coord, dc_chunk_owner_t owner, dc_chunk_time_t disk_time,
+    uint64_t *generation, char *err, uint32_t cap) {
     dc_level_offscreen_handoff_t *handoff = calloc(1, sizeof(*handoff));
     if (!handoff) return error(err, cap, "Cannot allocate offscreen handoff");
     handoff->generation = view->table.next_generation++;
@@ -261,10 +263,40 @@ bool dc_level_offscreen_begin(dc_level_view_t *view, dc_offscreen_t *workspace,
     }
     handoff->workspace = workspace;
     handoff->coord = coord;
-    handoff->owner = view->gpu->checkpoint_owners[index];
+    handoff->owner = owner;
+    handoff->disk_source = disk_time.known;
+    handoff->source_time = disk_time;
     handoff->next = view->offscreen_handoffs;
     view->offscreen_handoffs = handoff;
     *generation = handoff->generation;
+    return true;
+}
+
+bool dc_level_offscreen_begin(dc_level_view_t *view, dc_offscreen_t *workspace,
+    dc_chunk_coord_t coord, uint64_t *generation, char *err, uint32_t cap) {
+    if (!can_reserve(view, workspace, coord, generation))
+        return error(err, cap, "Offscreen chunk cannot be reserved");
+    uint32_t index = pending_source(view->gpu, coord);
+    if (index == UINT32_MAX) return error(err, cap, "Offscreen chunk has no versioned structure owner");
+    return begin_handoff(view, workspace, coord, view->gpu->checkpoint_owners[index],
+                         (dc_chunk_time_t){0}, generation, err, cap);
+}
+
+bool dc_level_offscreen_begin_disk(dc_level_view_t *view, dc_offscreen_t *workspace,
+    dc_chunk_coord_t coord, dc_chunk_owner_t owner, dc_chunk_time_t time,
+    uint64_t *generation, char *err, uint32_t cap) {
+    if (!can_reserve(view, workspace, coord, generation) || !dc_chunk_owner_valid(owner) ||
+        !time.known || !isfinite(time.seconds) || time.seconds < 0.)
+        return error(err, cap, "Offscreen eviction cannot be reserved");
+    return begin_handoff(view, workspace, coord, owner, time, generation, err, cap);
+}
+
+bool dc_level_offscreen_progress(dc_level_view_t *view, dc_chunk_coord_t coord,
+    uint64_t generation, dc_chunk_time_t *time, bool *writing) {
+    dc_level_offscreen_handoff_t *handoff = *find_handoff(view, coord);
+    if (!handoff || handoff->generation != generation) return false;
+    *time = handoff->admitted ? handoff->workspace->time : (dc_chunk_time_t){0};
+    *writing = handoff->write_generation != 0;
     return true;
 }
 
@@ -274,9 +306,11 @@ bool dc_level_offscreen_publish(dc_level_view_t *view, dc_chunk_coord_t coord,
     if (!handoff || !handoff->admitted || handoff->generation != generation ||
         handoff->write_generation || view->closing || view->table.next_generation == UINT64_MAX)
         return error(err, cap, "Offscreen owner cannot publish");
-    uint32_t index = pending_source(view->gpu, coord);
-    if (index == UINT32_MAX || !dc_chunk_owner_equal(view->gpu->checkpoint_owners[index], handoff->owner))
-        return error(err, cap, "Offscreen replacement parent changed");
+    if (!handoff->disk_source) {
+        uint32_t index = pending_source(view->gpu, coord);
+        if (index == UINT32_MAX || !dc_chunk_owner_equal(view->gpu->checkpoint_owners[index], handoff->owner))
+            return error(err, cap, "Offscreen replacement parent changed");
+    }
     dc_stream_result_t snapshot = {0};
     if (!dc_offscreen_snapshot(handoff->workspace, coord, generation, &snapshot, err, cap)) return false;
     bool okay = snapshot.time.seconds >= handoff->source_time.seconds &&
@@ -311,6 +345,16 @@ bool dc_level_offscreen_cancel(dc_level_view_t *view, dc_chunk_coord_t coord,
 static bool accept_source(dc_level_view_t *view, dc_level_offscreen_handoff_t *handoff,
     const dc_stream_result_t *result, char *err, uint32_t cap) {
     if (result->kind == DC_STREAM_FAILED) return error(err, cap, "Offscreen source load failed");
+    if (handoff->disk_source) {
+        if (!dc_chunk_owner_equal(result->replaces_owner, handoff->owner) || !result->time.known ||
+            result->time.seconds < handoff->source_time.seconds ||
+            !dc_camera_offscreen_isolated(view, result))
+            return error(err, cap, "Offscreen eviction source changed");
+        if (!dc_offscreen_admit(handoff->workspace, result, handoff->generation, err, cap)) return false;
+        handoff->source_time = result->time;
+        handoff->admitted = true;
+        return true;
+    }
     dc_gpu_t *gpu = view->gpu;
     uint32_t index = pending_source(gpu, handoff->coord);
     if (index == UINT32_MAX || !dc_chunk_owner_equal(gpu->checkpoint_owners[index], handoff->owner))

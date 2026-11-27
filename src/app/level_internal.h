@@ -1,9 +1,11 @@
 #ifndef DC_APP_LEVEL_INTERNAL_H
 #define DC_APP_LEVEL_INTERNAL_H
+#include "camera_offscreen.h"
 #include "dungeoncraft/stream.h"
 #include "dungeoncraft/world_save.h"
 #include "level.h"
 #include "player_inventory_save.h"
+#include "view_config.h"
 
 typedef struct {
     float seconds;
@@ -16,6 +18,7 @@ struct dc_level_view {
     dc_streamer_t *stream;
     dc_world_save_t *save;
     struct dc_level_offscreen_handoff *offscreen_handoffs;
+    dc_camera_offscreen_t camera_offscreen;
     double world_seconds;
     fr_player_inventory_t saved_inventory[FR_INPUT_PLAYERS];
     dc_chunk_table_t table;
@@ -43,6 +46,14 @@ struct dc_level_view {
     uint32_t smoke_closed;
     bool gas_admitted[DC_GPU_CHUNK_SLOTS];
 };
+
+/** Test whether a chunk is required by the current camera and its solver halo. */
+static inline bool dc_level_chunk_visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
+    return coord.x >= view->origin.x - HALO_CHUNKS &&
+           coord.x < view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS &&
+           coord.y >= view->origin.y - HALO_CHUNKS &&
+           coord.y < view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
+}
 
 /** Dispose of an unpublished level during failed construction. */
 void dc_level_view_discard(dc_level_view_t *view);

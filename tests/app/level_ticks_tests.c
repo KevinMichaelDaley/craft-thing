@@ -733,6 +733,29 @@ static void test_transfer_releases_rejected_request_and_rebinds_failed_worker_de
     PASS();
 }
 
+static void test_camera_workspace_requires_a_closed_stationary_rim(void) {
+    dc_gpu_t gpu = {0};
+    dc_level_view_t view = {.gpu = &gpu};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    const dc_cell_t terrain = {.material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) chunk->cells[i] = terrain;
+    dc_stream_result_t snapshot = {.chunk = chunk, .time = {.seconds = 2., .known = true}};
+    ASSERT_TRUE(dc_camera_offscreen_isolated(&view, &snapshot));
+
+    chunk->cells[DC_CHUNK_SIDE / 2u] = (dc_cell_t){0};
+    ASSERT_TRUE(!dc_camera_offscreen_isolated(&view, &snapshot));
+    chunk->cells[DC_CHUNK_SIDE / 2u] = terrain;
+    chunk->cells[DC_CHUNK_CELLS - 1u].flags |= DC_CELL_RELEASED_TERRAIN;
+    ASSERT_TRUE(!dc_camera_offscreen_isolated(&view, &snapshot));
+    chunk->cells[DC_CHUNK_CELLS - 1u] = terrain;
+    chunk->particle_count = 1;
+    ASSERT_TRUE(!dc_camera_offscreen_isolated(&view, &snapshot));
+
+    free(chunk);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
@@ -753,6 +776,7 @@ int main(void) {
     RUN(test_corrupt_disk_load_allows_camera_retry_after_repair);
     RUN(test_duplicate_load_reply_cannot_overwrite_a_live_slot);
     RUN(test_transfer_releases_rejected_request_and_rebinds_failed_worker_destination);
+    RUN(test_camera_workspace_requires_a_closed_stationary_rim);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

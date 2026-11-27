@@ -129,7 +129,13 @@ static void test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner(vo
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_EQ(view->world_seconds, 2.0625);
 
+    ASSERT_EQ(mkdir(temporary, 0700), 0);
     ASSERT_TRUE(dc_level_view_pan_pixels(view, -2 * VIEW_WIDTH, 0));
+    ASSERT_TRUE(!dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+    ASSERT_TRUE(strstr(err, "Offscreen replacement write failed"));
+    ASSERT_TRUE(!dc_chunk_table_find(&view->table, coord, NULL));
+    ASSERT_TRUE(dc_level_offscreen_owns(view, coord));
+    ASSERT_EQ(rmdir(temporary), 0);
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, &slot));
     ASSERT_TRUE(!dc_level_offscreen_owns(view, coord));

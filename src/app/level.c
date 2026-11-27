@@ -320,13 +320,6 @@ bool dc_level_view_contacts(dc_level_view_t *view, dc_gpu_contact_stats_t *stats
     return view && dc_gpu_read_contacts(view->gpu, stats, contacts, contact_cap, err, cap);
 }
 
-static bool visible(const dc_level_view_t *view, dc_chunk_coord_t coord) {
-    return coord.x >= view->origin.x - HALO_CHUNKS &&
-           coord.x < view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS &&
-           coord.y >= view->origin.y - HALO_CHUNKS &&
-           coord.y < view->origin.y + VIEW_CHUNKS_Y + HALO_CHUNKS;
-}
-
 static bool cancel_load(dc_level_view_t *view, uint32_t index, uint64_t generation) {
     if (!dc_chunk_table_cancel_load(&view->table, index, generation)) return false;
     if (view->destination_bound && view->to_slot == index && view->to_generation == generation)
@@ -409,6 +402,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             continue;
         }
         if (failed) {
+            if (saving) dc_camera_offscreen_saved(view, &result);
             bool released = loading ? cancel_load(view, index, result.generation) :
                 dc_chunk_table_cancel_save(&view->table, index, result.generation);
             dc_stream_result_release(&result);
@@ -421,9 +415,12 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                 dc_stream_result_release(&result);
                 return false;
             }
-        } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
-            dc_stream_result_release(&result);
-            return error(err, cap, "Cannot complete chunk save");
+        } else {
+            if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
+                dc_stream_result_release(&result);
+                return error(err, cap, "Cannot complete chunk save");
+            }
+            dc_camera_offscreen_saved(view, &result);
         }
         dc_stream_result_release(&result);
     }
@@ -496,6 +493,8 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             dc_stream_request_save_takeover(view->stream, &snapshot, slot->checkpoint_owner, generation) :
             dc_stream_request_save_snapshot(view->stream, &chunk, &colors, channel,
                 liquid, gas, bulk, slot->time, generation);
+        if (queued && has_checkpoint_receipt(slot))
+            dc_camera_offscreen_offer(view, &snapshot, slot->checkpoint_owner, generation);
         free(bulk);
         free(gas);
         fr_reactive_chunk_release(&reactive);
@@ -636,6 +635,7 @@ void dc_level_view_discard(dc_level_view_t *view) {
     dc_players_destroy(view);
     dc_stream_destroy(view->stream);
     dc_level_offscreen_discard(view);
+    dc_camera_offscreen_discard(view);
     dc_world_save_close(view->save);
     free(view->save_colors);
     free(view->step_runs);
@@ -700,7 +700,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
         if (slot->state == DC_SLOT_ACTIVE || slot->state == DC_SLOT_SLEEPING)
-            dc_chunk_table_set_active(&view->table, i, visible(view, slot->coord));
+            dc_chunk_table_set_active(&view->table, i, dc_level_chunk_visible(view, slot->coord));
     }
     if (!schedule_saves(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
@@ -709,6 +709,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
             !dc_chunk_table_evict(&view->table, i, UINT64_MAX))
             return error(err, cap, "Cannot evict clean sleeping chunk");
     }
+    if (!dc_camera_offscreen_service(view, false, err, cap)) return false;
     if ((view->pending_chunk_dx || view->pending_chunk_dy) &&
         !dc_gpu_shift_velocity(view->gpu, view->pending_chunk_dx,
                                 view->pending_chunk_dy, err, cap)) return false;
@@ -1109,7 +1110,8 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool staged = dc_world_save_directory(view->save, true) != NULL;
-    bool okay = !staged || dc_players_save_inventory(view, err, cap);
+    bool okay = dc_camera_offscreen_service(view, true, err, cap) &&
+        (!staged || dc_players_save_inventory(view, err, cap));
     dc_players_destroy(view);
     view->closing=true;
     uint64_t save_start=SDL_GetTicks64();
@@ -1155,6 +1157,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         okay = save_level_structure(view, err, cap);
     dc_stream_destroy(view->stream);
     dc_level_offscreen_discard(view);
+    dc_camera_offscreen_discard(view);
     if (okay && staged) okay = dc_world_save_commit(view->save, err, cap);
     dc_world_save_close(view->save);
     free(view->save_colors);
