@@ -44,9 +44,19 @@ static bool prepare(dc_gpu_t *owner,char *err,uint32_t cap) {
     g->page_width=g->width/64u; g->page_height=g->height/64u; g->workspace_slots=water->tiles;
     VkDeviceSize grid=(VkDeviceSize)g->width*g->height,atlas=(VkDeviceSize)water->tiles*DC_CHUNK_CELLS;
     uint32_t groups=(g->width/16u)*(g->height/16u);
-    VkDeviceSize sizes[]={grid/DC_CHUNK_CELLS*4u,atlas*sizeof(dc_cell_t),grid*OCCUPANCY_PLANES*4u,grid*16u,
-        grid*16u,(3u+groups)*4u,atlas*16u,water->tiles*sizeof(fr_bulk_phase_chunk_t),
-        DC_HYDRO_CONTROL_BYTES,atlas*4u,grid*4u};
+    const VkDeviceSize sizes[FIELD_COUNT]={
+        [PAGE]=grid/DC_CHUNK_CELLS*sizeof(uint32_t),
+        [CELL]=atlas*sizeof(dc_cell_t),
+        [OCC]=grid*OCCUPANCY_PLANES*sizeof(uint32_t),
+        [GRID]=grid*4u*sizeof(uint32_t),
+        [FORCE]=grid*4u*sizeof(uint32_t),
+        [WORK]=(3u+groups)*sizeof(uint32_t),
+        [COLOR]=atlas*4u*sizeof(float),
+        [BULK]=water->tiles*sizeof(fr_bulk_phase_chunk_t),
+        [CONTROL]=DC_HYDRO_CONTROL_BYTES,
+        [HEAT]=atlas*sizeof(float),
+        [DISPLAY_FIELD]=grid*sizeof(uint32_t)
+    };
     for (unsigned i=0;i<FIELD_COUNT;i++)
         if (!dc_gpu_address_buffer_create(g,sizes[i],i==PAGE||i==WORK||i==CONTROL,&d->fields[i],err,cap))
             goto fail;
@@ -128,8 +138,12 @@ bool dc_gpu_run_gas_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tiles,
     }
     const struct fr_gas_gpu *reference=gpu->gas;
     const float *params=reference->parameters.mapped;
-    if (!fr_gas_gpu_set_pressure_policy(g,reference->policy,err,cap) ||
-        !fr_gas_gpu_set_gravity(g,params[FR_GAS_GRAVITY_WORD],err,cap) ||
+    const float *current=g->gas->parameters.mapped;
+    if (g->gas->policy!=reference->policy &&
+        !fr_gas_gpu_set_pressure_policy(g,reference->policy,err,cap)) return false;
+    if (current[FR_GAS_GRAVITY_WORD]!=params[FR_GAS_GRAVITY_WORD] &&
+        !fr_gas_gpu_set_gravity(g,params[FR_GAS_GRAVITY_WORD],err,cap)) return false;
+    if (current[FR_GAS_WIND_WORD]!=params[FR_GAS_WIND_WORD] &&
         !fr_gas_gpu_set_wind(g,params[FR_GAS_WIND_WORD],err,cap)) return false;
     uint32_t *control=d->fields[CONTROL].mapped;
     control[0]=fr_thermal_gpu_water_buffer(gpu)?DC_THERMAL_WATER_MAGIC:0u;
@@ -142,7 +156,11 @@ bool dc_gpu_run_gas_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tiles,
     g->gas->clock=reference->clock;
     g->gas->large_step_hint=reference->large_step_hint;
     fr_gas_gpu_invalidate_cache(g);
-    fr_gas_gpu_geometry_changed(g,true);
+    g->gas->geometry_dirty=owners[0]->gas->geometry_dirty || owners[1]->gas->geometry_dirty;
+    g->gas->geometry_dynamic=owners[0]->gas->geometry_dynamic || owners[1]->gas->geometry_dynamic ||
+        owners[0]->fluid_work_possible || owners[1]->fluid_work_possible ||
+        owners[0]->body_count || owners[1]->body_count;
+    g->gas->geometry_routes_dirty=true;
     if (!fr_gas_gpu_step_with_conduction(g,seconds,!fr_combustion_gpu_enabled(gpu),err,cap) ||
         !fr_gas_gpu_materialize_owners(g,UINT32_MAX,true,err,cap) ||
         !exchange(d,tiles,locations,count,true)) return false;
@@ -150,7 +168,9 @@ bool dc_gpu_run_gas_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tiles,
         owners[i]->gas->clock=g->gas->clock;
         owners[i]->gas->large_step_hint=g->gas->large_step_hint;
         fr_gas_gpu_invalidate_cache(owners[i]);
-        fr_gas_gpu_geometry_changed(owners[i],true);
+        owners[i]->gas->geometry_dirty=g->gas->geometry_dirty;
+        owners[i]->gas->geometry_dynamic=g->gas->geometry_dynamic;
+        owners[i]->gas->geometry_routes_dirty=true;
     }
     return true;
 }

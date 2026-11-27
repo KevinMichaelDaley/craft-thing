@@ -851,14 +851,18 @@ int main(int argc, char **argv) {
     } else if (argc == 2 && strcmp(argv[1], "--grain-crossing") == 0) {
         RUN(test_grains_cross_the_owner_face_in_both_directions);
         RUN(test_unmapped_neighbor_contains_the_edge_grain);
+    } else if (argc == 2 && strcmp(argv[1], "--gas-hole") == 0) {
+        RUN(test_gas_domain_preserves_the_unmapped_corner);
     } else if (argc == 2 && strcmp(argv[1], "--gas-crossing") == 0) {
         RUN(test_each_gas_species_and_pressure_work_cross_the_owner_face);
         RUN(test_implicit_gas_pressure_work_matches_across_the_owner_face);
         RUN(test_practical_gas_transport_matches_across_the_owner_face);
+        RUN(test_gas_domain_preserves_the_unmapped_corner);
     } else if (argc == 1) {
         RUN(test_each_gas_species_and_pressure_work_cross_the_owner_face);
         RUN(test_implicit_gas_pressure_work_matches_across_the_owner_face);
         RUN(test_practical_gas_transport_matches_across_the_owner_face);
+        RUN(test_gas_domain_preserves_the_unmapped_corner);
         RUN(test_grains_cross_the_owner_face_in_both_directions);
         RUN(test_unmapped_neighbor_contains_the_edge_grain);
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);

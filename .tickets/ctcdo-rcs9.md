@@ -1,6 +1,6 @@
 ---
 id: ctcdo-rcs9
-status: in_progress
+status: closed
 deps: [ctdot-kbys, ctols-xhuy, ctols-vhg9, ctopo-yhkb, ctowpe-boo0, ctowpe-vzz1]
 links: []
 created: 2026-11-27T04:17:01Z
@@ -40,3 +40,7 @@ The shared-device liquid commit can apply a signed plan for water, oil and slime
 **2026-11-27T05:40:45Z**
 
 The level now binds a supplied face plan to current resident and offscreen generations and their common interval. It reconciles a lost GPU acknowledgement before progressing, and the existing staged world transaction publishes both states together. ctopo-yhkb covers pressure-derived planning and scheduling. Gas and grain exchange remain under this parent.
+
+**2026-11-27T14:07:02Z**
+
+Current gas packet, geometry, gate, return and recovery regressions passed under synchronization validation. The earlier constituent tickets cover water, retained bulk stock and energy, grains, staged-write failures and sealed owners.
