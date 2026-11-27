@@ -12,7 +12,7 @@ bool fr_thermal_prepare_liquid_seam(dc_gpu_t *first, dc_gpu_t *second, char *err
 void fr_thermal_record_liquid_seams(dc_gpu_t *first, const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds);
 bool dc_gpu_finish_paired_tick(dc_gpu_t *first, dc_gpu_t *second, const dc_liquid_seam_endpoint_t *tiles,
-    uint32_t count, float seconds, char *err, uint32_t cap);
+    uint32_t count, float seconds, bool shared_grains, char *err, uint32_t cap);
 /** Refresh and render thermal feedback without changing physical state. */
 void fr_thermal_record_overlay(dc_gpu_t *gpu);
 /** Release thermal resources before their reactive backing storage. */

@@ -492,7 +492,7 @@ static bool run_paired_rigid(const water_domain_t *domain, float seconds, char *
     const int32_t dy = (int32_t)a->scratch_y - (int32_t)a->y - (int32_t)b->scratch_y + (int32_t)b->y;
     bind_hydro_peer(domain->gpu, domain->peer, dx, dy, domain->bulk);
     bind_hydro_peer(domain->peer, domain->gpu, -dx, -dy, domain->bulk);
-    bool okay = dc_gpu_submit_paired_tick_stage(domain->gpu, domain->peer, seconds, true, err, cap);
+    bool okay = dc_gpu_submit_paired_tick_stage(domain->gpu, domain->peer, seconds, true, false, err, cap);
     const size_t control_bytes = DC_HYDRO_PEER_WORDS * sizeof(uint32_t);
     memset((uint32_t *)domain->gpu->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, control_bytes);
     memset((uint32_t *)domain->peer->thermal_control_mapped + DC_HYDRO_PEER_WIDTH, 0, control_bytes);
@@ -547,7 +547,12 @@ static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tile
                 dc_gpu_mark_bulk_step(gpu);
                 dc_gpu_mark_bulk_step(peer);
             }
-            if (dc_gpu_finish_paired_tick(gpu, peer, tiles, count, seconds, err, cap)) return result;
+            bool grains=false;
+            for (uint32_t i=0;i<count;i++)
+                grains |= ((const uint32_t *)tiles[i].gpu->particle_count_mapped)[tiles[i].slot]!=0u;
+            if ((!grains || (dc_gpu_prepare_water_projection(gpu,domain.width,domain.height,count,err,cap) &&
+                dc_gpu_run_grain_domain(gpu,tiles,locations,count,err,cap))) &&
+                dc_gpu_finish_paired_tick(gpu,peer,tiles,count,seconds,grains,err,cap)) return result;
         }
     }
     gpu->liquid_seam_orphaned = peer->liquid_seam_orphaned = true;

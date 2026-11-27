@@ -371,11 +371,10 @@ static void bind_mpm_phase(dc_gpu_t *gpu,uint32_t phase,VkPipeline *bound) {
     *bound=pipeline;
 }
 
-void dc_gpu_record_mpm_with_peer_occupancy(dc_gpu_t *gpu, bool use_peer) {
+void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
     dc_gpu_mpm_swap_descriptors(gpu);
     dc_gpu_record_components(gpu, false);
-    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u,
-        use_peer ? DC_HYDRO_MPM_OCCUPANCY_PLANE*gpu->width*gpu->height : 0u, 0u};
+    uint32_t push[7] = {gpu->width, gpu->height, 0u, 0u, 0u, 0u, 0u};
     VkPipeline bound=VK_NULL_HANDLE;
     bind_mpm_phase(gpu,DC_MPM_MOISTURE_MODE,&bound);
     push[2] = DC_MPM_MOISTURE_MODE;
@@ -421,8 +420,4 @@ void dc_gpu_record_mpm_with_peer_occupancy(dc_gpu_t *gpu, bool use_peer) {
             }
         }
     }
-}
-
-void dc_gpu_record_mpm_uncached(dc_gpu_t *gpu) {
-    dc_gpu_record_mpm_with_peer_occupancy(gpu,false);
 }

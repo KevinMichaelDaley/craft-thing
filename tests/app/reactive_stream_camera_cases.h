@@ -166,6 +166,13 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
             dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
             fr_renderer_upload_chunk_colors(view->gpu, slot, &colors, err, sizeof(err)) &&
             dc_chunk_table_finish_load(&view->table, slot, generation));
+        if (grains && !tile) {
+            const unsigned index=10u*64u+59u;
+            fr_reactive_state_t state;
+            ASSERT_TRUE(fr_reactive_state_from_particle(chunk->particles+index,475.f,901u,&state,err,sizeof(err)) &&
+                fr_gpu_reactive_seed_particle(view->gpu,slot*DC_MPM_PARTICLES_PER_CHUNK+index,&state,err,sizeof(err)) &&
+                fr_gpu_reactive_seed_particle(reference,index,&state,err,sizeof(err)));
+        }
         view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
         if (bulk_liquid) ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(view->gpu, slot, chunk, phase, err, sizeof(err)) &&
             fr_bulk_phase_gpu_import_chunk(reference, tile, chunk, phase, err, sizeof(err)));
@@ -307,6 +314,15 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
                 ASSERT_EQ(chunk->particle_count,expected.particle_count);
                 ASSERT_EQ(memcmp(chunk->particles,expected.particles,sizeof(chunk->particles)),0);
                 if (tile && !cycle) ASSERT_EQ(expected.particle_count,1u);
+                for (unsigned j=0;j<DC_MPM_PARTICLES_PER_CHUNK;j++) if (expected.particles[j].mass_fp) {
+                    fr_reactive_record_t actual,native;
+                    bool found=false;
+                    ASSERT_TRUE(fr_gpu_reactive_read_particle(view->gpu,slot*DC_MPM_PARTICLES_PER_CHUNK+j,
+                        &actual,&found,err,sizeof(err)) && found);
+                    ASSERT_TRUE(fr_gpu_reactive_read_particle(reference,tile*DC_MPM_PARTICLES_PER_CHUNK+j,
+                        &native,&found,err,sizeof(err)) && found);
+                    ASSERT_EQ(memcmp(&actual,&native,sizeof(actual)),0);
+                }
             }
             if (bulk_liquid) {
                 ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view->gpu, slot, phase, err, sizeof(err)) &&

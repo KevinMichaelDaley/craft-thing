@@ -108,8 +108,8 @@ typedef struct {
 static bool inspect_water_region(dc_liquid_seam_endpoint_t tile, water_region_tile_t *r) {
     _Static_assert(DC_CHUNK_SIDE == 64, "Water boundary mask needs one bit per cell");
     const dc_gpu_t *gpu = tile.gpu;
-    if (tile.tile_x >= gpu->width / DC_CHUNK_SIDE || tile.tile_y >= gpu->height / DC_CHUNK_SIDE ||
-        ((const uint32_t *)gpu->particle_count_mapped)[tile.slot]) return false;
+    if (tile.tile_x >= gpu->width / DC_CHUNK_SIDE || tile.tile_y >= gpu->height / DC_CHUNK_SIDE) return false;
+    r->active |= ((const uint32_t *)gpu->particle_count_mapped)[tile.slot] != 0;
     const uint32_t *markers = gpu->marker_ping ? gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
     r->active |= markers[tile.slot] != 0;
     const dc_cell_t *cells = (const dc_cell_t *)gpu->chunk_mapped + (size_t)tile.slot * DC_CHUNK_CELLS;
@@ -122,7 +122,7 @@ static bool inspect_water_region(dc_liquid_seam_endpoint_t tile, water_region_ti
         r->active |= cells[i].fluid_mass || bulk->oil_fp[i] || bulk->slime_fp[i] || velocity.x || velocity.y;
         if (cells[i].material == DC_MATERIAL_STONE && (cells[i].flags & DC_CELL_LOADED_TERRAIN) &&
             !(cells[i].flags & (DC_CELL_RELEASED_TERRAIN | DC_CELL_BURNING_SMOKE_PASS))) continue;
-        if (cells[i].material != DC_MATERIAL_AIR || cells[i].flags) return false;
+        if (!DC_CELL_LIQUID_PERMEABLE(cells[i].material) || cells[i].flags) return false;
         if (!x) r->west |= UINT64_C(1) << y;
         if (x == DC_CHUNK_SIDE - 1u) r->east |= UINT64_C(1) << y;
         if (!y) r->north |= UINT64_C(1) << x;

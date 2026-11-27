@@ -96,8 +96,12 @@ uint particle_index(ivec2 cell, uint layer) {
     return (page_at(cell) - 1u) * PARTICLES + layer * CELLS + local_cell(cell);
 }
 
+#ifdef DC_MPM_DOMAIN
+#include "mpm_domain_storage.glsl"
+#else
 #include "mpm_terrain_support.glsl"
 #include "../reactive/particle_storage.glsl"
+#endif
 
 bool grain_at(ivec2 cell) {
     uint page = page_at(cell);
@@ -603,7 +607,17 @@ void main() {
     if(mode==5u) {coalesced_commit(tile,tiles_x);return;}
 #endif
     if (!in_grid(cell)) return;
-    if (mode == MODE_MOISTURE) { exchange_moisture(cell); return; }
+    if (mode == MODE_MOISTURE) {
+#ifdef DC_MPM_DOMAIN
+        if (page_at(cell)!=0u) {
+            uint primary=particle_index(cell,0u);
+            grain_sources[primary]=primary+1u;
+            grain_sources[primary+CELLS]=primary+CELLS+1u;
+        }
+#endif
+        exchange_moisture(cell);
+        return;
+    }
     if (mode == 0u) {
         p2g(cell);
         if(FUSED_GRID_NODES) {solve_grid(cell);apply_feedback(cell);}

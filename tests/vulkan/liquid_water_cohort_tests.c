@@ -806,6 +806,32 @@ cleanup:
     free(expected);
 }
 
+static void test_unmapped_neighbor_contains_the_edge_grain(void) {
+    dc_gpu_t *gpu=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    unsigned cell=20u*64u+63u;
+    ASSERT_TRUE(chunk && dc_gpu_create(&gpu,128,64,"build/shaders/pattern.comp.spv",g_err,sizeof(g_err)));
+    chunk->cells[cell].material=DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(chunk);
+    dc_mpm_particle_t initial=chunk->particles[cell];
+    chunk->particles[cell].vx_fp=2*DC_FLUID_FULL;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,g_err,sizeof(g_err)) &&
+        dc_gpu_set_page(gpu,0,0,0,g_err,sizeof(g_err)) && dc_gpu_tick_step(gpu,g_err,sizeof(g_err)) &&
+        dc_gpu_download_chunk(gpu,0,chunk,g_err,sizeof(g_err)));
+    ASSERT_EQ(chunk->particle_count,1u);
+    bool retained=false;
+    for(unsigned i=0;i<DC_MPM_PARTICLES_PER_CHUNK;i++) if(chunk->particles[i].mass_fp) {
+        dc_mpm_particle_t grain=chunk->particles[i];
+        retained=grain.id_lo==initial.id_lo && grain.id_hi==initial.id_hi &&
+            grain.mass_fp==initial.mass_fp && grain.x_fp>=0 && grain.x_fp<(int32_t)(64u*DC_FLUID_FULL);
+    }
+    ASSERT_TRUE(retained);
+    PASS();
+cleanup:
+    dc_gpu_destroy(gpu);
+    free(chunk);
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
@@ -822,8 +848,10 @@ int main(int argc, char **argv) {
         RUN(test_grain_owner_can_submit_first);
     } else if (argc == 2 && strcmp(argv[1], "--grain-crossing") == 0) {
         RUN(test_grains_cross_the_owner_face_in_both_directions);
+        RUN(test_unmapped_neighbor_contains_the_edge_grain);
     } else if (argc == 1) {
         RUN(test_grains_cross_the_owner_face_in_both_directions);
+        RUN(test_unmapped_neighbor_contains_the_edge_grain);
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
         RUN(test_grain_owner_can_submit_first);
         RUN(test_moving_body_receives_shared_liquid_feedback);

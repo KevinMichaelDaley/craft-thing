@@ -143,7 +143,7 @@ static bool submit_pair(dc_gpu_t *first, dc_gpu_t *second, char *err, uint32_t c
 }
 
 bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float seconds,
-    bool before_water, char *err, uint32_t cap) {
+    bool before_water, bool shared_grains, char *err, uint32_t cap) {
     dc_gpu_t *owners[] = {first, second};
     VkCommandBuffer commands[] = {first->command, second->command};
     for (unsigned i = 0; i < 2u; ++i) {
@@ -159,8 +159,8 @@ bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float se
         } else {
             stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                           VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-            if (owners[1u-i]->body_count) dc_gpu_record_mpm_with_peer_occupancy(gpu,true);
-            else dc_gpu_record_mpm(gpu);
+            if (!shared_grains) dc_gpu_record_mpm(gpu);
+            else dc_gpu_record_mpm_activity(gpu,false);
             fr_thermal_record_face_fluxes(gpu, seconds);
         }
         stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
@@ -171,9 +171,9 @@ bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float se
 }
 
 bool dc_gpu_finish_paired_tick(dc_gpu_t *first, dc_gpu_t *second, const dc_liquid_seam_endpoint_t *tiles,
-    uint32_t count, float seconds, char *err, uint32_t cap) {
+    uint32_t count, float seconds, bool shared_grains, char *err, uint32_t cap) {
     dc_gpu_t *owners[] = {first, second};
-    if (!dc_gpu_submit_paired_tick_stage(first, second, seconds, false, err, cap)) return false;
+    if (!dc_gpu_submit_paired_tick_stage(first, second, seconds, false, shared_grains, err, cap)) return false;
     if (first->thermal) {
         for (unsigned i = 0; i < 2; ++i) {
             dc_gpu_t *gpu = owners[i];

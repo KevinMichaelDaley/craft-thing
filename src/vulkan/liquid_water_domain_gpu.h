@@ -27,6 +27,7 @@ enum {
 };
 
 struct dc_gpu_seam_projection {
+    struct dc_mpm_domain *grains;
     VkBuffer buffer;
     VkDeviceMemory memory;
     VkDescriptorPool pool;
@@ -51,6 +52,10 @@ static inline void *projection_field(const struct dc_gpu_seam_projection *scratc
 /** Resolve a reopened cohort against its new device pages before restoring phase scratch. */
 bool dc_gpu_water_checkpoint_layout(const dc_liquid_seam_endpoint_t *tiles, uint32_t count,
     dc_gpu_water_tile_t *locations, uint32_t *width, uint32_t *height);
+
+void dc_gpu_grain_domain_destroy(dc_gpu_t *gpu, struct dc_mpm_domain *domain);
+bool dc_gpu_run_grain_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tiles,
+    const dc_gpu_water_tile_t *locations,uint32_t count,char *err,uint32_t cap);
 
 bool dc_gpu_prepare_water_projection(dc_gpu_t *gpu, uint32_t width, uint32_t height, uint32_t tiles,
     char *err, uint32_t cap);

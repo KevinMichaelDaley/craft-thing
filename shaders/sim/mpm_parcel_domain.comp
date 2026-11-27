@@ -1,0 +1,75 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#include "../reactive/address.glsl"
+
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) readonly buffer Sources {uint sources[];};
+layout(set=0,binding=1,std430) readonly buffer Tiles {uvec2 tiles[];};
+layout(set=0,binding=2,std430) buffer Receipt {uint tile_dirty_and_status[];};
+layout(buffer_reference,std430,buffer_reference_align=4) coherent buffer Words {uint words[];};
+layout(buffer_reference,std430,buffer_reference_align=8) coherent buffer Handles {uvec2 handles[];};
+layout(push_constant) uniform Params {uvec2 roots[2];uint phase;} params;
+const uint PER_TILE=8192u;
+
+uvec2 address(Words root,uint i) {return uvec2(root.words[i],root.words[i+1u]);}
+Words entry(Words root,uint index) {
+    return Words(reactive_entry_address(address(root,FR_ARENA_ENTRIES),index));
+}
+uvec2 owner_slot(uint index) {
+    uvec2 tile=tiles[index/PER_TILE];
+    return uvec2(tile.x,tile.y*PER_TILE+index%PER_TILE);
+}
+uint reserve(Words root,uint hint) {
+    Words bits=Words(address(root,FR_ARENA_BITS));
+    uint words=(root.words[FR_ARENA_CAPACITY]-1u)/32u+1u,start=hint%words;
+    for(uint k=0u;k<words;k++) {
+        uint at=(start+k)%words,mask=atomicAdd(bits.words[at],0u);
+        while(mask!=0u) {
+            uint bit=uint(findLSB(mask));
+            uint before=atomicCompSwap(bits.words[at],mask,mask&~(1u<<bit));
+            if(before==mask) return at*32u+bit;
+            mask=before;
+        }
+    }
+    return 0xffffffffu;
+}
+void main() {
+    uint index=gl_WorkGroupID.y*PER_TILE+gl_GlobalInvocationID.x;
+    uvec2 target=owner_slot(index);
+    Words dst=Words(params.roots[target.x]);
+    uint ref=sources[index];
+    uvec2 selected=uvec2(0);
+    if(ref!=0u) {
+        uvec2 origin=owner_slot(ref-1u);
+        Words src=Words(params.roots[origin.x]);
+        uvec2 handle=Handles(address(src,14u)).handles[origin.y];
+        if(handle.y!=0u) {
+            if(origin.x==target.x) selected=handle;
+            else if(params.phase==0u) {
+                uint slot=reserve(dst,index);
+                Words mail=Words(address(dst,FR_ARENA_MAILBOX));
+                if(slot==0xffffffffu) {atomicOr(tile_dirty_and_status[gl_NumWorkGroups.y],FR_ARENA_STATUS_CAPACITY);return;}
+                Words from=entry(src,handle.x),to=entry(dst,slot);
+                selected=uvec2(slot,max(to.words[FR_ENTRY_GENERATION],1u));
+                for(uint k=1u;k<FR_ENTRY_WORDS;k++) to.words[k]=from.words[k];
+                to.words[FR_ENTRY_GENERATION]=selected.y;
+                atomicAdd(mail.words[FR_ARENA_MAIL_FREE],0xffffffffu);
+                atomicAdd(mail.words[FR_ARENA_MAIL_LIVE],1u);
+            } else {
+                Words old=entry(src,handle.x),mail=Words(address(src,FR_ARENA_MAILBOX));
+                uint generation=handle.y+1u;
+                old.words[FR_ENTRY_GENERATION]=generation;
+                old.words[FR_ENTRY_OWNER]=0u;
+                atomicAdd(mail.words[FR_ARENA_MAIL_LIVE],0xffffffffu);
+                if(generation==0xffffffffu) atomicAdd(mail.words[FR_ARENA_MAIL_RETIRED],1u);
+                else {
+                    atomicOr(Words(address(src,FR_ARENA_BITS)).words[handle.x/32u],1u<<(handle.x%32u));
+                    atomicAdd(mail.words[FR_ARENA_MAIL_FREE],1u);
+                }
+            }
+        }
+    }
+    if(params.phase==0u) Handles(address(dst,16u)).handles[target.y]=selected;
+}

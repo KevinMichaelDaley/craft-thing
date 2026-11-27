@@ -120,7 +120,7 @@ dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoin
 dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap);
 
-/** Advance both complete mapped contexts through source, rigid, shared water and remaining physics.
+/** Advance both complete mapped contexts through sources, rigid solving, shared water, shared particle substeps and heat.
  * The caller holds all generations at one interval start. A failure after native physics begins
  * fences both contexts for restoration from their last durable world save. */
 dc_liquid_seam_result_t dc_gpu_tick_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
