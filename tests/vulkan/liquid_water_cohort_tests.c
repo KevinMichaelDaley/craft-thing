@@ -12,7 +12,7 @@
 enum { CENTER, EAST, SOUTH, TILE_COUNT, EXCLUDED = TILE_COUNT, FIXTURE_TILES };
 static const float step_seconds = 1.f / 30.f;
 static int g_pass, g_fail;
-static bool g_lose_ack;
+static bool g_lose_ack, g_drop_submit;
 static bool g_forbid_queue;
 static char g_err[256];
 
@@ -25,6 +25,11 @@ VkResult __wrap_vkQueueWaitIdle(VkQueue queue) {
 }
 
 bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {
+    if (g_drop_submit) {
+        g_drop_submit = false;
+        vkEndCommandBuffer(gpu->command);
+        return false;
+    }
     const bool lose = g_lose_ack;
     g_lose_ack = false;
     return __real_fr_renderer_submit(gpu) && !lose;
@@ -331,6 +336,9 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
                     ASSERT_TRUE(!dc_gpu_tick_step(resident, g_err, sizeof(g_err)));
                     ASSERT_TRUE(!dc_gpu_set_fluid_interval(offscreen, intervals[i]));
                     ASSERT_TRUE(!dc_gpu_set_page(offscreen, 1u, 0u, UINT32_MAX, g_err, sizeof(g_err)));
+                    const dc_liquid_seam_endpoint_t reordered[] = {tiles[CENTER], tiles[SOUTH], tiles[EAST]};
+                    ASSERT_EQ(dc_gpu_step_water_cohort(reordered, TILE_COUNT, elapsed[step] / 60.f, g_err, sizeof(g_err)),
+                              DC_LIQUID_SEAM_REJECTED);
                     float *color = (float *)offscreen->water_color_mapped +
                         ((tiles[SOUTH].slot + 1u) * DC_CHUNK_CELLS - 1u) * 4u;
                     const float saved = *color;
@@ -370,6 +378,18 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
         ASSERT_EQ(resident->fluid_phase, 0u);
         ASSERT_EQ(resident->fluid_tick, intervals[i] == 1u ? TICKS : 12u / intervals[i]);
     }
+    const uint32_t final_tick = resident->fluid_tick;
+    g_drop_submit = true;
+    ASSERT_EQ(dc_gpu_step_water_cohort(tiles, TILE_COUNT, 1.f / 60.f, g_err, sizeof(g_err)),
+              DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_EQ(dc_gpu_resolve_liquid_seam(resident, offscreen, g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_EQ(resident->fluid_phase, 0u);
+    ASSERT_EQ(offscreen->fluid_phase, 0u);
+    ASSERT_EQ(resident->fluid_phase_budget, 0.f);
+    ASSERT_EQ(offscreen->fluid_phase_budget, 0.f);
+    ASSERT_EQ(resident->fluid_tick, final_tick);
+    ASSERT_EQ(offscreen->fluid_tick, final_tick);
+    ASSERT_TRUE(!dc_gpu_set_page(resident, 0u, 1u, UINT32_MAX, g_err, sizeof(g_err)));
     dc_gpu_destroy(resident);
     dc_gpu_destroy(offscreen);
     resident = offscreen = NULL;
@@ -410,6 +430,7 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
 
 cleanup:
     g_lose_ack = false;
+    g_drop_submit = false;
     dc_gpu_destroy(mono);
     dc_gpu_destroy(offscreen);
     dc_gpu_destroy(resident);

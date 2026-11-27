@@ -164,8 +164,10 @@ void dc_gpu_complete_water_phases(dc_gpu_t *gpu, dc_gpu_t *peer,
 }
 
 static void record_phase_backup(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch) {
+    /* The first two pressure planes also hold the marker correction's saved mass. */
     const unsigned fields[] = {PREVIOUS_VERTICAL, HEAD, PRESSURE};
-    VkBufferCopy regions[3];
+    _Static_assert(sizeof(fields) / sizeof(fields[0]) == WATER_PHASE_BACKUP_FIELDS, "Phase backup layout mismatch");
+    VkBufferCopy regions[WATER_PHASE_BACKUP_FIELDS];
     VkDeviceSize backup = scratch->offset[PHASE_BACKUP];
     for (unsigned i = 0; i < sizeof(fields) / sizeof(fields[0]); ++i) {
         const VkDeviceSize field = scratch->offset[fields[i]];
@@ -174,7 +176,7 @@ static void record_phase_backup(VkCommandBuffer command, const struct dc_gpu_sea
                                              (VkBufferCopy){field, backup, size};
         backup += size;
     }
-    vkCmdCopyBuffer(command, scratch->buffer, scratch->buffer, 3u, regions);
+    vkCmdCopyBuffer(command, scratch->buffer, scratch->buffer, WATER_PHASE_BACKUP_FIELDS, regions);
 }
 
 static void record_water_phases(dc_gpu_t *gpu, const struct dc_gpu_seam_projection *scratch,

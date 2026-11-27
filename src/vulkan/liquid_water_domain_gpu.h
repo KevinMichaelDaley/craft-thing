@@ -9,7 +9,8 @@ enum {
     OCCUPANCY_PLANES = 5,
     CELL_COVERAGE = 2,
     X_FACE_COVERAGE = 3,
-    Y_FACE_COVERAGE = 4
+    Y_FACE_COVERAGE = 4,
+    WATER_PHASE_BACKUP_FIELDS = 3
 };
 
 typedef struct {

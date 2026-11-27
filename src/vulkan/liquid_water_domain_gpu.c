@@ -82,7 +82,7 @@ static void set_buffer_sizes(struct dc_gpu_seam_projection *scratch, uint32_t wi
         [ADVECTION_CROSSINGS] = atlas * sizeof(seam_crossing_t),
         [PUBLICATION_RECEIPT] = sizeof(uint32_t),
         [PUBLICATION_TILES] = tiles * sizeof(dc_gpu_water_tile_t),
-        [PHASE_BACKUP] = 3u * grid * sizeof(uint32_t),
+        [PHASE_BACKUP] = WATER_PHASE_BACKUP_FIELDS * grid * sizeof(uint32_t),
     };
     memcpy(scratch->size, sizes, sizeof(sizes));
 }
