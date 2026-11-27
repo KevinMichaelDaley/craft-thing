@@ -639,6 +639,67 @@ static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_b
 static void test_reverse_bulk_flow_conducts_heat_across_the_west_face(void) { check_bulk_crossing(false, true, false); }
 static void test_moving_body_receives_shared_liquid_feedback(void) { check_bulk_crossing(false, true, true); }
 
+static void test_rigid_contact_transfers_momentum_to_the_neighboring_grain(void) {
+    const char *shader = "build/shaders/pattern.comp.spv";
+    dc_gpu_t *owner[2] = {0}, *mono = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *expected = calloc(1, sizeof(*expected));
+    dc_liquid_seam_endpoint_t tiles[2] = {0};
+    ASSERT_TRUE(chunk && expected && dc_gpu_create(&owner[0], 64, 64, shader, g_err, sizeof(g_err)) &&
+        dc_gpu_create_shared(&owner[1], owner[0], 64, 64, shader, g_err, sizeof(g_err)) &&
+        dc_gpu_create(&mono, 128, 64, shader, g_err, sizeof(g_err)));
+    ASSERT_TRUE(dc_gpu_set_rigid_solver(mono, true) && dc_gpu_set_fluid_interval(mono, 6u));
+    for (unsigned i = 0; i < 2; ++i) {
+        chunk->coord = (dc_chunk_coord_t){i, 0};
+        if (i) {
+            chunk->cells[30u * 64u + 4u].material = DC_MATERIAL_SAND;
+            dc_chunk_seed_particles(chunk);
+            ASSERT_EQ(chunk->particle_count, 1u);
+        }
+        tiles[i] = (dc_liquid_seam_endpoint_t){.gpu = owner[i], .coord = chunk->coord};
+        ASSERT_TRUE(dc_gpu_set_body_origin(owner[i], chunk->coord, g_err, sizeof(g_err)) &&
+            dc_gpu_set_rigid_solver(owner[i], true) && dc_gpu_set_fluid_interval(owner[i], 6u) &&
+            dc_gpu_upload_chunk(owner[i], 0, chunk, g_err, sizeof(g_err)) &&
+            dc_gpu_set_page(owner[i], 0, 0, 0, g_err, sizeof(g_err)) &&
+            dc_gpu_upload_chunk(mono, i, chunk, g_err, sizeof(g_err)) &&
+            dc_gpu_set_page(mono, i, 0, i, g_err, sizeof(g_err)));
+    }
+    dc_gpu_world_body_t body = {.body = {.id = 403u, .active = 1u, .width = 8u, .height = 2u,
+        .x_fp = 61 * DC_FLUID_FULL, .y_fp = 28 * DC_FLUID_FULL + DC_FLUID_FULL / 2,
+        .vy_fp = DC_FLUID_FULL / 5}};
+    ASSERT_TRUE(dc_gpu_spawn_world_body(owner[0], body, g_err, sizeof(g_err)) &&
+        dc_gpu_spawn_world_body(mono, body, g_err, sizeof(g_err)));
+    dc_gpu_contact_t contacts[128];
+    dc_gpu_contact_stats_t stats;
+    ASSERT_TRUE(dc_gpu_read_contacts(mono, &stats, contacts, 128, g_err, sizeof(g_err)));
+    bool touched = false;
+    for (unsigned i = 0; i < stats.count; ++i) touched |= contacts[i].kind == DC_GPU_CONTACT_MPM;
+    ASSERT_TRUE(touched);
+    ASSERT_TRUE(dc_gpu_read_contacts(owner[0], &stats, contacts, 128, g_err, sizeof(g_err)));
+    bool boundary = false;
+    for (unsigned i = 0; i < stats.count; ++i) boundary |= contacts[i].kind == DC_GPU_CONTACT_BOUNDARY;
+    ASSERT_TRUE(boundary);
+    const float dt = 1.f / 60.f;
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, dt) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
+    ASSERT_EQ(dc_gpu_tick_water_cohort(tiles, 2, dt, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+    dc_gpu_world_body_t split, native;
+    ASSERT_TRUE(dc_gpu_read_world_body(owner[0], 403u, &split, g_err, sizeof(g_err)) &&
+        dc_gpu_read_world_body(mono, 403u, &native, g_err, sizeof(g_err)));
+    ASSERT_EQ(memcmp(&split, &native, sizeof(split)), 0);
+    ASSERT_TRUE(dc_gpu_download_chunk(owner[1], 0, chunk, g_err, sizeof(g_err)) &&
+        dc_gpu_download_chunk(mono, 1, expected, g_err, sizeof(g_err)));
+    ASSERT_EQ(chunk->particle_count, 1u);
+    ASSERT_EQ(expected->particle_count, chunk->particle_count);
+    ASSERT_EQ(memcmp(expected->particles, chunk->particles, sizeof(chunk->particles)), 0);
+    ASSERT_EQ(dc_gpu_validation_errors(owner[0]), 0u);
+    PASS();
+cleanup:
+    dc_gpu_destroy(mono);
+    dc_gpu_destroy(owner[1]);
+    dc_gpu_destroy(owner[0]);
+    free(chunk);
+    free(expected);
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
@@ -650,7 +711,10 @@ int main(int argc, char **argv) {
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
         RUN(test_reverse_bulk_flow_conducts_heat_across_the_west_face);
+    } else if (argc == 2 && strcmp(argv[1], "--peer-grain") == 0) {
+        RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
     } else if (argc == 1) {
+        RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
         RUN(test_moving_body_receives_shared_liquid_feedback);
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
