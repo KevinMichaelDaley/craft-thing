@@ -355,13 +355,17 @@ static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) 
 
     const uint32_t id = 507u;
     dc_gpu_world_body_t initial = {.chunk = coord, .body = {.id = id, .active = 1u, .width = 2u,
-        .height = 3u, .x_fp = 12*DC_FLUID_FULL, .y_fp = 12*DC_FLUID_FULL, .vx_fp = DC_FLUID_FULL/4}};
+        .height = 3u, .x_fp = 2*DC_FLUID_FULL, .y_fp = 12*DC_FLUID_FULL, .vx_fp = DC_FLUID_FULL/4}};
     dc_gpu_world_body_t returned = {0}, observed;
     dc_gpu_body_motion_t motion = {0}, observed_motion;
     if (moving_body) {
         ASSERT_TRUE(dc_gpu_set_rigid_solver(view->gpu, true));
         ASSERT_TRUE(dc_gpu_spawn_world_body(view->gpu, initial, err, sizeof(err)) &&
                     dc_gpu_set_body_motion(view->gpu, id, .125f, .0625f, 0u, err, sizeof(err)));
+        dc_gpu_world_body_t other = initial;
+        other.chunk.x += 2;
+        other.body.id = id + 1u;
+        ASSERT_TRUE(dc_gpu_spawn_world_body(view->gpu, other, err, sizeof(err)));
     }
     snprintf(temporary, sizeof(temporary), "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin.tmp",
         directory, (uint64_t)coord.x, (uint64_t)coord.y);
@@ -380,6 +384,8 @@ static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) 
         ASSERT_TRUE(!dc_gpu_read_world_body(view->gpu, id, &observed, NULL, 0));
         ASSERT_TRUE(dc_gpu_read_world_body(view->camera_offscreen.workspace->gpu, id, &observed, err, sizeof(err)));
         ASSERT_EQ(memcmp(&initial, &observed, sizeof(initial)), 0);
+        ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, id + 1u, &observed, err, sizeof(err)));
+        ASSERT_TRUE(!dc_gpu_read_world_body(view->camera_offscreen.workspace->gpu, id + 1u, &observed, NULL, 0));
     }
     ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
