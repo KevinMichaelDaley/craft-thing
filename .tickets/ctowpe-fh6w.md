@@ -22,3 +22,7 @@ Reproduce on the current revision, determine whether the fixture or epoch handli
 **2026-11-27T19:23:30Z**
 
 Focused Xephyr reproduction on 65bd762b: all seven far halo rooms were admitted at exactly 2.1333333403 s during cycle 2, the same as world time. The focused RED regression selects the intended far room by world coordinate and fails the age precondition. The parked-room marker regression passes.
+
+**2026-11-27T19:31:15Z**
+
+Focused GPU regression at 7de09c5f passed all three pan cycles, exact shared gas stock/pressure and independent older room advancement on Xephyr :93. Vulkan synchronization validation reached the final pan and timed out waiting 25 seconds for residency. Testing outward-facing openings on all seven far rooms to avoid six unrelated sealed gas workspaces in this fixture. The parked-room case, four paired-seam cases, and all 22 stream/gas-stream/world-save host tests passed. Aggregate run pending.
