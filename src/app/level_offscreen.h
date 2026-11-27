@@ -3,12 +3,25 @@
 
 #include "level.h"
 #include "offscreen.h"
+#include "dungeoncraft/liquid_seam.h"
 
 typedef enum {
     DC_LEVEL_OFFSCREEN_UNMATCHED,
     DC_LEVEL_OFFSCREEN_HANDLED,
     DC_LEVEL_OFFSCREEN_FAILED
 } dc_level_offscreen_result_t;
+
+typedef struct {
+    dc_chunk_coord_t resident, offscreen;
+    uint64_t resident_generation, offscreen_generation;
+    double begin_seconds, end_seconds;
+    dc_liquid_seam_flux_t flux[DC_CHUNK_SIDE];
+} dc_level_liquid_exchange_t;
+
+/** Commit a face plan after both admitted endpoints have completed its interval.
+ * Flux is signed along the positive world axis of the shared face. */
+dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *view,
+    const dc_level_liquid_exchange_t *exchange, char *err, uint32_t cap);
 
 /** Reserve a cold structure owner and queue its source load into a workspace.
  * The caller keeps the workspace alive until the handoff completes or is canceled. */

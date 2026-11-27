@@ -48,6 +48,15 @@ static bool error(char *err, uint32_t cap, const char *message) {
     return false;
 }
 
+dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *view,
+    const dc_level_liquid_exchange_t *exchange, char *err, uint32_t cap) {
+    (void)view;
+    (void)exchange;
+    (void)err;
+    (void)cap;
+    return DC_LIQUID_SEAM_REJECTED;
+}
+
 static bool page_at(const dc_offscreen_t *workspace, dc_chunk_coord_t coord, uint32_t *slot) {
     if (coord.x < workspace->origin.x || coord.y < workspace->origin.y) return false;
     uint64_t x = (uint64_t)coord.x - (uint64_t)workspace->origin.x;
