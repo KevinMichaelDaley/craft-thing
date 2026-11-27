@@ -8,7 +8,7 @@
 #include "ferrum/renderer/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
 
-enum { CENTER, EAST, SOUTH, TILE_COUNT };
+enum { CENTER, EAST, SOUTH, TILE_COUNT, EXCLUDED = TILE_COUNT, FIXTURE_TILES };
 static const float step_seconds = 1.f / 30.f;
 static int g_pass, g_fail;
 static bool g_lose_ack;
@@ -85,6 +85,16 @@ static bool download(dc_liquid_seam_endpoint_t tile, water_tile_t *state) {
     return true;
 }
 
+static void seed_apertures(dc_liquid_seam_endpoint_t center) {
+    dc_gpu_t *gpu = center.gpu;
+    uint32_t *occupancy = gpu->occupancy_mapped;
+    const uint32_t cells = gpu->width * gpu->height;
+    const uint32_t base = center.tile_y * DC_CHUNK_SIDE * gpu->width + center.tile_x * DC_CHUNK_SIDE;
+    occupancy[3u * cells + base + 56u * gpu->width + 63u] = 3u * DC_FLUID_FULL / 4u;
+    occupancy[4u * cells + base + 63u * gpu->width + 56u] = DC_FLUID_FULL / 4u;
+    gpu->rigid_occupancy_present = true;
+}
+
 static int compare_markers(const void *a, const void *b) {
     const dc_marker_t *left = a, *right = b;
 #define COMPARE(field) if (left->field != right->field) return left->field < right->field ? -1 : 1
@@ -106,10 +116,10 @@ static bool same_water(water_tile_t *a, water_tile_t *b) {
     if (memcmp(a->chunk.markers, b->chunk.markers, markers * sizeof(dc_marker_t))) return false;
     for (uint32_t cell = 0; cell < DC_CHUNK_CELLS; ++cell) {
         const dc_face_velocity_t va = a->chunk.face_velocity[cell], vb = b->chunk.face_velocity[cell];
-        if (fabsf(va.x - vb.x) > 1e-5f || fabsf(va.y - vb.y) > 1e-5f ||
-            fabsf(a->heat[cell] - b->heat[cell]) > 1e-5f) return false;
+        if (!(fabsf(va.x - vb.x) <= 1e-5f && fabsf(va.y - vb.y) <= 1e-5f &&
+              fabsf(a->heat[cell] - b->heat[cell]) <= 1e-5f)) return false;
         for (uint32_t color = 0; color < 4u; ++color)
-            if (fabsf(a->colors.water[cell][color] - b->colors.water[cell][color]) > 1e-5f) return false;
+            if (!(fabsf(a->colors.water[cell][color] - b->colors.water[cell][color]) <= 1e-5f)) return false;
     }
     return true;
 }
@@ -124,17 +134,20 @@ static void test_connected_tiles_match_monolithic_water_and_share_one_receipt(vo
     const char shader[] = "build/shaders/pattern.comp.spv";
     const dc_chunk_coord_t origin = {-7, -3};
     dc_gpu_t device = {0}, *resident = NULL, *offscreen = NULL, *mono = NULL;
-    water_tile_t *initial = calloc(TILE_COUNT, sizeof(*initial));
-    water_tile_t *before = calloc(TILE_COUNT, sizeof(*before));
+    water_tile_t *initial = calloc(FIXTURE_TILES, sizeof(*initial));
+    water_tile_t *before = calloc(FIXTURE_TILES, sizeof(*before));
     water_tile_t *published = calloc(TILE_COUNT, sizeof(*published));
     water_tile_t *observed = calloc(1, sizeof(*observed));
-    dc_liquid_seam_endpoint_t tiles[TILE_COUNT] = {
+    dc_liquid_seam_endpoint_t tiles[FIXTURE_TILES] = {
         [CENTER] = {.coord = origin, .tile_x = 1, .tile_y = 1, .slot = 2},
         [EAST] = {.coord = {origin.x + 1, origin.y}, .tile_x = 1, .slot = 3},
-        [SOUTH] = {.coord = {origin.x, origin.y + 1}, .tile_y = 1, .slot = 1}
+        [SOUTH] = {.coord = {origin.x, origin.y + 1}, .tile_y = 1, .slot = 1},
+        [EXCLUDED] = {.coord = {origin.x + 1, origin.y + 1}, .tile_x = 1, .tile_y = 1, .slot = 0}
     };
     ASSERT_TRUE(initial && before && published && observed);
     seed(initial, tiles);
+    initial[EXCLUDED].chunk.coord = tiles[EXCLUDED].coord;
+    open_corridor(&initial[EXCLUDED], false, true);
     ASSERT_TRUE(dc_gpu_initialize_device(&device, 4u * DC_CHUNK_CELLS * sizeof(dc_cell_t),
                                         0, 0, 0, g_err, sizeof(g_err)));
     ASSERT_TRUE(dc_gpu_create_shared(&resident, &device, 128, 128, shader, g_err, sizeof(g_err)));
@@ -145,18 +158,27 @@ static void test_connected_tiles_match_monolithic_water_and_share_one_receipt(vo
                                       g_err, sizeof(g_err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(offscreen, origin, g_err, sizeof(g_err)));
     tiles[CENTER].gpu = resident;
-    tiles[EAST].gpu = tiles[SOUTH].gpu = offscreen;
+    tiles[EAST].gpu = tiles[SOUTH].gpu = tiles[EXCLUDED].gpu = offscreen;
     offscreen->marker_ping = 1u;
-    for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) {
+    for (uint32_t tile = 0; tile < FIXTURE_TILES; ++tile) {
         ASSERT_TRUE(upload(tiles[tile], &initial[tile]));
         ASSERT_TRUE(download(tiles[tile], &before[tile]));
     }
+    seed_apertures(tiles[CENTER]);
 
-    dc_liquid_seam_endpoint_t reordered[] = {tiles[SOUTH], tiles[EAST], tiles[CENTER]};
-    reordered[1].slot = tiles[SOUTH].slot;
+    dc_liquid_seam_sample_t samples[DC_CHUNK_SIDE];
+    ASSERT_TRUE(dc_gpu_project_liquid_seam(tiles[CENTER], tiles[EAST], DC_LIQUID_SEAM_X,
+        step_seconds, NULL, samples, g_err, sizeof(g_err)));
+    ASSERT_EQ(samples[56].aperture_fp, DC_FLUID_FULL / 4u);
+
+    dc_liquid_seam_endpoint_t reordered[] = {tiles[CENTER], tiles[SOUTH], tiles[EAST]};
+    reordered[1].slot = tiles[EAST].slot;
     ASSERT_EQ(dc_gpu_execute_water_cohort(reordered, TILE_COUNT, step_seconds, g_err, sizeof(g_err)),
               DC_LIQUID_SEAM_REJECTED);
-    reordered[1] = tiles[EAST];
+    reordered[1] = reordered[0];
+    ASSERT_EQ(dc_gpu_execute_water_cohort(reordered, TILE_COUNT, step_seconds, g_err, sizeof(g_err)),
+              DC_LIQUID_SEAM_REJECTED);
+    reordered[1] = tiles[SOUTH];
     float *bad_color = (float *)offscreen->water_color_mapped +
         (tiles[SOUTH].slot * DC_CHUNK_CELLS + DC_CHUNK_CELLS - 1u) * 4u;
     const float original_color = *bad_color;
@@ -166,7 +188,7 @@ static void test_connected_tiles_match_monolithic_water_and_share_one_receipt(vo
     ASSERT_TRUE(isnan(*bad_color));
     *bad_color = original_color;
     ASSERT_TRUE(!dc_gpu_liquid_seam_pending(resident) && !dc_gpu_liquid_seam_pending(offscreen));
-    for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) {
+    for (uint32_t tile = 0; tile < FIXTURE_TILES; ++tile) {
         ASSERT_TRUE(download(tiles[tile], observed));
         ASSERT_TRUE(same_water(observed, &before[tile]));
     }
@@ -175,10 +197,14 @@ static void test_connected_tiles_match_monolithic_water_and_share_one_receipt(vo
     ASSERT_EQ(dc_gpu_execute_water_cohort(reordered, TILE_COUNT, step_seconds, g_err, sizeof(g_err)),
               DC_LIQUID_SEAM_UNCONFIRMED);
     ASSERT_TRUE(dc_gpu_liquid_seam_pending(resident) && dc_gpu_liquid_seam_pending(offscreen));
-    ASSERT_EQ(dc_gpu_resolve_liquid_seam(resident, offscreen, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+    ASSERT_EQ(dc_gpu_execute_water_cohort(reordered, TILE_COUNT, step_seconds, g_err, sizeof(g_err)),
+              DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_EQ(dc_gpu_resolve_liquid_seam(offscreen, resident, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
     ASSERT_TRUE(!dc_gpu_liquid_seam_pending(resident) && !dc_gpu_liquid_seam_pending(offscreen));
     for (uint32_t tile = 0; tile < TILE_COUNT; ++tile)
         ASSERT_TRUE(download(tiles[tile], &published[tile]));
+    ASSERT_TRUE(download(tiles[EXCLUDED], observed));
+    ASSERT_TRUE(same_water(observed, &before[EXCLUDED]));
     ASSERT_TRUE(stock(&published[EAST]) > 0 && stock(&published[SOUTH]) > 0);
     ASSERT_EQ(stock(&published[CENTER]) + stock(&published[EAST]) + stock(&published[SOUTH]),
               stock(&initial[CENTER]));
@@ -195,6 +221,7 @@ static void test_connected_tiles_match_monolithic_water_and_share_one_receipt(vo
         {.gpu = mono, .coord = tiles[SOUTH].coord, .tile_y = 1, .slot = 2}
     };
     for (uint32_t tile = 0; tile < TILE_COUNT; ++tile) ASSERT_TRUE(upload(monolithic[tile], &initial[tile]));
+    seed_apertures(monolithic[CENTER]);
     mono->timed_fluid = true;
     mono->fluid_step_scale = step_seconds * 60.f;
     ASSERT_TRUE(dc_gpu_fluid_step(mono, g_err, sizeof(g_err)));

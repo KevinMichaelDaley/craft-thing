@@ -102,7 +102,9 @@ bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu);
 
 /** Run one native water cycle over connected mapped tiles in two shared-device contexts.
  * The caller holds all mappings and generations at the same interval start.
- * The returned receipt applies to both contexts and every supplied tile.
+ * Tiles outside the supplied set form a sealed boundary. Both contexts must
+ * agree on thermal and marker correction settings and the active correction parity.
+ * An unconfirmed result keeps both contexts fenced until the existing receipt is resolved.
  */
 dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap);

@@ -31,6 +31,7 @@ static const struct {
     [MARKER_GRID] = {0, 16, true},
     [SLOT_PAGES] = {0, 17, true},
     [SLOT_SEED] = {0, 18, true},
+    /* Dense dispatch still uses the native pressure descriptor layout. */
     [PRESSURE_WORK] = {1, 0, true},
     [PRESSURE_STENCIL] = {1, 1, true},
     [APERTURE_PREFIX] = {0, 28, true},
@@ -195,12 +196,13 @@ bool dc_gpu_prepare_water_transport(dc_gpu_t *gpu, bool occupancy, bool thermal,
         control[0] = 0u;
         return true;
     }
+    const uint32_t atlas_cells = scratch->tiles * DC_CHUNK_CELLS;
     if (!scratch->water_heat.buffer && !dc_gpu_address_buffer_create(gpu,
-        2u * (scratch->tiles * DC_CHUNK_CELLS) * sizeof(float), true, &scratch->water_heat, err, cap)) return false;
+        2u * atlas_cells * sizeof(float), true, &scratch->water_heat, err, cap)) return false;
     const VkDeviceAddress address = scratch->water_heat.address;
     control[DC_THERMAL_WATER_ADDRESS_WORD] = (uint32_t)address;
     control[DC_THERMAL_WATER_ADDRESS_WORD + 1u] = (uint32_t)(address >> 32);
-    control[DC_THERMAL_WATER_COUNT_WORD] = (scratch->tiles * DC_CHUNK_CELLS);
+    control[DC_THERMAL_WATER_COUNT_WORD] = atlas_cells;
     control[0] = DC_THERMAL_WATER_MAGIC;
     return true;
 }

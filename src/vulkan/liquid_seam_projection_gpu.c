@@ -8,7 +8,10 @@
 #include "dungeoncraft/terrain_flags.h"
 #include "liquid_water_domain_gpu.h"
 
-enum { SEAM_CELLS = SEAM_TILES * DC_CHUNK_CELLS };
+enum {
+    SEAM_CELLS = SEAM_TILES * DC_CHUNK_CELLS,
+    MAX_WATER_COHORT_TILES = 2u * DC_GPU_CHUNK_SLOTS
+};
 
 typedef struct {
     dc_gpu_t *gpu, *peer;
@@ -289,8 +292,8 @@ dc_liquid_seam_result_t dc_gpu_execute_water_seam(dc_liquid_seam_endpoint_t firs
 }
 
 static bool connected_tiles(const dc_gpu_water_tile_t *locations, uint32_t count) {
-    bool seen[2u * DC_GPU_CHUNK_SLOTS] = {true};
-    uint32_t queue[2u * DC_GPU_CHUNK_SLOTS] = {0};
+    bool seen[MAX_WATER_COHORT_TILES] = {true};
+    uint32_t queue[MAX_WATER_COHORT_TILES] = {0};
     uint32_t tail = 1;
     for (uint32_t head = 0; head < tail; ++head) {
         const dc_gpu_water_tile_t *a = &locations[queue[head]];
@@ -308,8 +311,8 @@ static bool connected_tiles(const dc_gpu_water_tile_t *locations, uint32_t count
 }
 
 static bool cohort_domain(const dc_liquid_seam_endpoint_t *tiles, uint32_t count,
-                          dc_gpu_water_tile_t locations[2u * DC_GPU_CHUNK_SLOTS], water_domain_t *domain) {
-    if (!tiles || count < 2u || count > 2u * DC_GPU_CHUNK_SLOTS || !tiles[0].gpu) return false;
+                          dc_gpu_water_tile_t locations[MAX_WATER_COHORT_TILES], water_domain_t *domain) {
+    if (!tiles || count < 2u || count > MAX_WATER_COHORT_TILES || !tiles[0].gpu) return false;
     dc_gpu_t *gpu = tiles[0].gpu, *peer = NULL;
     dc_chunk_coord_t min = tiles[0].coord, max = min;
     for (uint32_t tile = 0; tile < count; ++tile) {
@@ -343,7 +346,7 @@ static bool cohort_domain(const dc_liquid_seam_endpoint_t *tiles, uint32_t count
 
 dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap) {
-    dc_gpu_water_tile_t locations[2u * DC_GPU_CHUNK_SLOTS];
+    dc_gpu_water_tile_t locations[MAX_WATER_COHORT_TILES];
     water_domain_t domain;
     if (!cohort_domain(tiles, count, locations, &domain)) {
         error(err, cap, "Water cohort requires distinct connected tiles in two mapped contexts");
