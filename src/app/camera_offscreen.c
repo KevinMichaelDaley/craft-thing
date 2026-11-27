@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -363,6 +364,11 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
     }
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
         if (closing && !coupled && !camera->rigid_group) return true;
+        if (camera->restored_record && !independent && !closing) {
+            if (!needed) return true;
+            if (err && cap) snprintf(err, cap, "Restored room requires compatible physics before promotion");
+            return false;
+        }
         if (closing || (coupled ? !attached : !independent) || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
             (needed && !camera->restored_record && camera->time.seconds >= view->world_seconds)) {
             dc_camera_offscreen_release(camera);

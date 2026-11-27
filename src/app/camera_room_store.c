@@ -25,6 +25,9 @@ typedef struct {
     double seconds;
 } catalog_entry_t;
 
+_Static_assert(sizeof(catalog_header_t) == 24u, "Room catalog header layout changed");
+_Static_assert(sizeof(catalog_entry_t) == 40u, "Room catalog entry layout changed");
+
 static bool error(char *err, uint32_t cap, const char *message) {
     if (err && cap) snprintf(err, cap, "%s", message);
     return false;
@@ -73,7 +76,17 @@ bool dc_camera_catalog_stage(dc_level_view_t *view, char *err, uint32_t cap) {
     bool okay = true;
     for (size_t i = 0; i <= view->sealed_capacity && okay; ++i) {
         const dc_camera_offscreen_t *r = i ? view->sealed_rooms + i - 1u : &view->camera_offscreen;
-        if (!sealed(r) || dc_chunk_table_find(&view->table, r->coord, NULL)) continue;
+        if (!sealed(r)) continue;
+        uint32_t slot;
+        if (dc_chunk_table_find(&view->table, r->coord, &slot)) {
+            if (dc_level_chunk_visible(view, r->coord)) continue;
+            const dc_chunk_slot_t *resident = view->table.slots + slot;
+            if (resident->state != DC_SLOT_SLEEPING || resident->dirty || !resident->time.known ||
+                resident->time.seconds != r->time.seconds || !dc_chunk_owner_equal(resident->checkpoint_owner, r->owner)) {
+                okay = false;
+                break;
+            }
+        }
         entries[h.count] = (catalog_entry_t){r->coord, r->owner, r->time.seconds};
         okay = r->phase != DC_CAMERA_OFFSCREEN_SAVING && r->time.known && valid(entries + h.count, h.seconds);
         ++h.count;
@@ -106,7 +119,7 @@ bool dc_camera_catalog_load(dc_level_view_t *view, char *err, uint32_t cap) {
     catalog_header_t h;
     uint64_t hash;
     bool okay = fread(&h, sizeof(h), 1, f) == 1 && !memcmp(h.magic, "DCR1", 4) && h.version == 1u &&
-        (!h.count || h.seconds == view->world_seconds) &&
+        isfinite(h.seconds) && h.seconds >= 0. && (!h.count || h.seconds == view->world_seconds) &&
         h.count <= (SIZE_MAX-sizeof(h)-sizeof(hash))/sizeof(catalog_entry_t) &&
         h.count <= SIZE_MAX/sizeof(dc_camera_offscreen_t) &&
         (uint64_t)st.st_size == sizeof(h) + h.count*sizeof(catalog_entry_t) + sizeof(hash);
