@@ -1,6 +1,6 @@
 ---
 id: ctopp-pmw5
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-27T06:05:51Z
@@ -13,7 +13,7 @@ tags: [vulkan, testing]
 
 ## Design
 
-The shared sparse shader fixture emits a storage descriptor write for every declared binding, including unused binding 7 with a null buffer in the hydro-head and hydraulic aperture cases. Keep binding numbers stable while only writing descriptors backed by actual buffers.
+The shared sparse shader fixture emits a storage descriptor write for every declared binding, including unused bulk binding 37 with a null buffer in the hydro-head and hydraulic aperture cases. Keep binding numbers stable while only writing descriptors backed by actual buffers.
 
 ## Acceptance Criteria
 

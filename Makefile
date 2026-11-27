@@ -1298,7 +1298,7 @@ test_contact_barrier:
 test: test_contact_barrier
 
 build/hydro_head_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/hydro_head.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkUpdateDescriptorSets
 
 test: build/hydro_head_tests
 
@@ -1817,10 +1817,10 @@ build/diagnostics/hydro_head_profile.comp.spv: shaders/sim/hydro_head.comp
 	@mkdir -p $(@D)
 	glslangValidator -V --target-env vulkan1.1 -DDC_HYDRO_HEAD_PROFILE=1 -o $@ $<
 build/hydro_head_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/hydro_head_profile.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS) -Wl,--wrap=vkUpdateDescriptorSets
 
 build/hydro_head_tall_work_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/hydro_head_profile.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_HEIGHT=1153 -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DHYDRO_TEST_HEIGHT=1153 -DHYDRO_TEST_PROFILE=1 -DHYDRO_TEST_SHADER='"build/diagnostics/hydro_head_profile.comp.spv"' -o $@ $< $(GPU_OBJ) $(CHUNK_OBJ) $(LDLIBS) -Wl,--wrap=vkUpdateDescriptorSets
 test: build/hydro_head_work_tests build/hydro_head_tall_work_tests
 
 build/diagnostics/pixel_boundary_probe.spv: shaders/sim/contact_geometry.glsl

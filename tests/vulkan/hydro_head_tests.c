@@ -19,6 +19,24 @@ enum {
     CELLS = WIDTH * HEIGHT
 };
 static int g_pass, g_fail;
+static uint32_t storage_writes, null_storage_writes;
+
+VKAPI_ATTR void VKAPI_CALL __real_vkUpdateDescriptorSets(VkDevice device,
+    uint32_t write_count, const VkWriteDescriptorSet *writes,
+    uint32_t copy_count, const VkCopyDescriptorSet *copies);
+VKAPI_ATTR void VKAPI_CALL __wrap_vkUpdateDescriptorSets(VkDevice device,
+    uint32_t write_count, const VkWriteDescriptorSet *writes,
+    uint32_t copy_count, const VkCopyDescriptorSet *copies) {
+    for (uint32_t i = 0; i < write_count; ++i) {
+        const VkWriteDescriptorSet *write = &writes[i];
+        if (write->descriptorType != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) continue;
+        storage_writes += write->descriptorCount;
+        for (uint32_t j = 0; j < write->descriptorCount; ++j)
+            if (!write->pBufferInfo[j].buffer) ++null_storage_writes;
+    }
+    __real_vkUpdateDescriptorSets(device, write_count, writes, copy_count, copies);
+}
+
 #define RUN(fn)                                                                \
     do {                                                                       \
         printf("RUN %s\n", #fn);                                               \
@@ -227,10 +245,16 @@ static void test_fractional_coverage_and_lateral_fallback_match(void) {
 static void test_unknown_chunks_break_water_columns_conservatively(void) {
     run_case(2);
 }
+static void test_unused_storage_bindings_do_not_emit_null_descriptors(void) {
+    ASSERT_TRUE(storage_writes > 0);
+    ASSERT_INT_EQ(null_storage_writes, 0);
+    PASS();
+}
 int main(void) {
     RUN(test_partial_tall_column_matches_serial_recurrence);
     RUN(test_fractional_coverage_and_lateral_fallback_match);
     RUN(test_unknown_chunks_break_water_columns_conservatively);
+    RUN(test_unused_storage_bindings_do_not_emit_null_descriptors);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
