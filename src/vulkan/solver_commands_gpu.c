@@ -27,6 +27,11 @@ typedef struct {
 } solver_command_program_t;
 struct dc_solver_commands {solver_command_program_t programs[COMMAND_PROGRAM_COUNT];};
 
+static unsigned fluid_program_phase(unsigned program) {
+    if (program >= PREPARED_FLUID_PROGRAM) return 1u + (program - PREPARED_FLUID_PROGRAM) / 2u;
+    return (program - FLUID_PROGRAM) / 2u;
+}
+
 static solver_command_key_t command_key(const dc_gpu_t *g,unsigned program) {
     solver_command_key_t key;memset(&key,0,sizeof(key));
     key.origin_x=g->body_origin.x;key.origin_y=g->body_origin.y;
@@ -48,7 +53,8 @@ static solver_command_key_t command_key(const dc_gpu_t *g,unsigned program) {
         key.fluid_timed=g->timed_fluid;key.fluid_occupancy=g->rigid_occupancy_present;
         key.pressure_work=g->pressure_work_enabled;
         key.water_slot_extent=dc_gpu_water_slot_extent(g);
-        key.transport_extent=dc_gpu_water_transport_extent(g);
+        if (fluid_program_phase(program) >= 3u)
+            key.transport_extent = dc_gpu_water_transport_extent(g);
     }
     return key;
 }
@@ -97,9 +103,7 @@ bool dc_gpu_solver_commands_stats(const dc_gpu_t *g,uint64_t *recordings,uint64_
 static void record_program(dc_gpu_t *g,unsigned program) {
     if(program==RIGID_PROGRAM) dc_gpu_record_solver_uncached(g);
     else if(program==MPM_PROGRAM) dc_gpu_record_mpm_interval(g, 1.f, g->gas != NULL);
-    else if (program >= PREPARED_FLUID_PROGRAM)
-        dc_gpu_record_fluid_phase_uncached(g, 1u + (program - PREPARED_FLUID_PROGRAM) / 2u);
-    else dc_gpu_record_fluid_phase_uncached(g,(program-FLUID_PROGRAM)/2u);
+    else dc_gpu_record_fluid_phase_uncached(g, fluid_program_phase(program));
 }
 static bool execute_cached(dc_gpu_t *g,unsigned program) {
     if(!g->solver_commands||g->solver_cache_disabled||g->component_profile) return false;

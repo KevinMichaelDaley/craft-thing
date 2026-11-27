@@ -57,8 +57,8 @@ VkDeviceSize dc_gpu_fluid_aperture_tree_bytes(uint32_t width, uint32_t height) {
 }
 
 static void aperture_dispatch(dc_gpu_t *gpu, uint32_t groups) {
-    vkCmdDispatch(gpu->command, groups < 65535u ? groups : 65535u,
-                   groups ? (groups + 65534u) / 65535u : 1u, 1);
+    uint32_t rows = groups <= 65535u ? 1u : 1u + (groups - 1u) / 65535u;
+    vkCmdDispatch(gpu->command, groups < 65535u ? groups : 65535u, rows, 1);
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

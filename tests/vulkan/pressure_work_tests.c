@@ -270,6 +270,8 @@ static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
                        expected_slots, pressure_dispatches, mass_dispatches, wrong_dispatches);
                 ASSERT_TRUE(pressure_dispatches && mass_dispatches);
                 ASSERT_EQ(wrong_dispatches, 0u);
+                printf("Water transport: %u columns, %u rows, mode mask %#x, %u mismatches\n",
+                       expected_lines[0], expected_lines[1], transport_modes, wrong_lines);
                 ASSERT_EQ(transport_modes, 15u);
                 ASSERT_EQ(wrong_lines, 0u);
             }
