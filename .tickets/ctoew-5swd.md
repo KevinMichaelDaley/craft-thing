@@ -1,7 +1,7 @@
 ---
 id: ctoew-5swd
 status: in_progress
-deps: [ctswc-xr49, ctost-pneh, ctost-uuni, ctdot-kbys]
+deps: [ctswc-xr49, ctost-pneh, ctost-uuni, ctdot-kbys, ctcdo-rcs9, ctcdo-kld7]
 links: []
 created: 2026-11-27T02:31:49Z
 type: task
@@ -21,3 +21,9 @@ Use generation-checked level ownership and immutable snapshots through worker ad
 ## Acceptance Criteria
 
 The production camera route passes two-screen pans, world-time catch-up, conservative water, gas and grain seam tests, dynamic-body and cold reload checks, and the native frame budget.
+
+## Notes
+
+**2026-11-27T04:22:35Z**
+
+The production camera tick can demote, advance and promote one sealed stationary owner using a durable archive receipt. ctdot-kbys covers two-screen pans, failed outbound and return writes, exact water and oil stock, and cold reopen. ctcdo-rcs9 covers open liquid, gas and grain seams. ctcdo-kld7 covers dynamic and bonded assemblies. Verify the native frame budget after both ownership paths are integrated.

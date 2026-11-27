@@ -47,3 +47,7 @@ The pinned integrated 3c94b591 full suite measured a still-air peak of 334.86 K 
 **2026-11-26T23:41:56Z**
 
 Correction to the previous peak note: 334.86 K was the summary printed by the old evaluator. The raw nominal 120 s sample was 352.08 K. The eleven nominal samples from 20 through 120 s span 302.86–352.08 K, with six above the locked 318.15 K ceiling. The sampling-clock fix is covered independently in ctfwsc-pknt. The physical warmth criterion remains open.
+
+**2026-11-27T04:12:38Z**
+
+The ancestor gas-pigment full make test run exited 2 at tests/app/forest_bonfire_tests.c:455 (!run.timed_out) during the locked still-air 180-second case. The other four forest cases completed. Concurrent GPU workloads were present; the cause of the timeout is unconfirmed. Recheck the case in isolation before using it to assess a streaming change.
