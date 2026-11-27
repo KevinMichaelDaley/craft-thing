@@ -16,3 +16,9 @@ The full Xephyr suite at 8f26f761 failed test_camera_reopens_shared_gas_stock_an
 ## Acceptance Criteria
 
 Reproduce on the current revision, determine whether the fixture or epoch handling causes the failure, and verify shared gas and older resident clock behavior with the focused and aggregate suites.
+
+## Notes
+
+**2026-11-27T19:23:30Z**
+
+Focused Xephyr reproduction on 65bd762b: all seven far halo rooms were admitted at exactly 2.1333333403 s during cycle 2, the same as world time. The focused RED regression selects the intended far room by world coordinate and fails the age precondition. The parked-room marker regression passes.

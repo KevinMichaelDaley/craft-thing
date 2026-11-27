@@ -136,6 +136,7 @@ static void check_camera_water_returns(unsigned channels) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(view && chunk && dc_level_view_set_fluid_interval(view, 2u));
     const dc_chunk_coord_t first = {view->origin.x - HALO_CHUNKS, view->origin.y};
+    const dc_chunk_coord_t far_room = {view->origin.x + VIEW_CHUNKS_X + HALO_CHUNKS, first.y};
     const uint32_t row = 32u * DC_CHUNK_SIDE;
     dc_gpu_t *reference = NULL;
     ASSERT_TRUE(dc_gpu_create(&reference, 2u * DC_CHUNK_SIDE, DC_CHUNK_SIDE,
@@ -281,6 +282,7 @@ static void check_camera_water_returns(unsigned channels) {
         if (cycle == 2u) {
             for (uint32_t i = 0; i < view->table.capacity; ++i) {
                 const dc_chunk_slot_t *s = &view->table.slots[i];
+                if (gas && (s->coord.x != far_room.x || s->coord.y != far_room.y)) continue;
                 if (s->state == DC_SLOT_ACTIVE && s->time.known && s->time.seconds < view->world_seconds) {
                     older_slot = i;
                     older_start = s->time.seconds;
