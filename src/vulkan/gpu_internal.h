@@ -460,6 +460,12 @@ static inline uint32_t dc_gpu_render_flags(const dc_gpu_t *gpu) {
 }
 
 bool dc_gpu_pick_device(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap);
+bool dc_gpu_initialize_device(dc_gpu_t *gpu, VkDeviceSize bytes, uint32_t window_width,
+                              uint32_t window_height, Uint64 started, char *err, uint32_t cap);
+bool dc_gpu_inherit_device(dc_gpu_t *gpu, const dc_gpu_t *parent, VkDeviceSize bytes,
+                           char *err, uint32_t cap);
+void dc_gpu_release_device(dc_gpu_t *gpu);
+void dc_gpu_startup_trace(const char *stage, Uint64 started);
 bool dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path,
                                VkShaderModule *module, char *err, uint32_t cap);
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap);
