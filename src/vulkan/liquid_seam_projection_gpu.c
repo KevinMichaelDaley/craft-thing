@@ -380,3 +380,12 @@ bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
     char *err, uint32_t cap) {
     return run_seam(first, second, axis, seconds, previous_normal, NULL, plan, err, cap);
 }
+
+dc_liquid_seam_result_t dc_gpu_execute_water_seam(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
+    const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
+    char *err, uint32_t cap) {
+    (void)first; (void)second; (void)axis; (void)seconds;
+    (void)previous_normal; (void)plan; (void)err; (void)cap;
+    return DC_LIQUID_SEAM_REJECTED;
+}

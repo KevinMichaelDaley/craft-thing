@@ -79,6 +79,20 @@ bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
     const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
     char *err, uint32_t cap);
 
+/** Run and publish one native water sweep for a sealed pair.
+ * The caller holds both owner mappings and generations at the same interval start.
+ * Inputs require settled rigid displacement. A rejected sweep leaves both owners
+ * and the optional plan unchanged. An unconfirmed sweep fences both owners until
+ * dc_gpu_resolve_liquid_seam confirms the retained receipt or owners are recovered.
+ */
+dc_liquid_seam_result_t dc_gpu_execute_water_seam(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
+    const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
+    char *err, uint32_t cap);
+
+/** Whether this context participates in a seam write with an unresolved receipt. */
+bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.

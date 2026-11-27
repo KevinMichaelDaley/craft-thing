@@ -811,7 +811,7 @@ build/liquid_seam_tests: tests/vulkan/liquid_seam_tests.c include/dungeoncraft/l
 build/liquid_seam_projection_tests: tests/vulkan/liquid_seam_projection_tests.c include/dungeoncraft/liquid_seam.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 build/liquid_seam_water_tests: tests/vulkan/liquid_seam_water_tests.c include/dungeoncraft/liquid_seam.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_submit
 .PHONY: test_liquid_seam
 test_liquid_seam: build/liquid_seam_tests build/liquid_seam_projection_tests build/liquid_seam_water_tests
 	./build/liquid_seam_tests

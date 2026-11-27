@@ -204,3 +204,8 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam submission was not confirmed");
     return complete_dispatch(gpu, seam, err, cap);
 }
+
+bool dc_gpu_liquid_seam_pending(const dc_gpu_t *gpu) {
+    (void)gpu;
+    return false;
+}
