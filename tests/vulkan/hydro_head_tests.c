@@ -1,3 +1,4 @@
+#include "dungeoncraft/hydro_head_layout.h"
 #define main bounded_probe_main
 #include "../../tools/diagnostics/vulkan_probe.c"
 #undef main
@@ -199,7 +200,7 @@ static void run_case(unsigned scenario) {
         uint32_t push[8] = {WIDTH, HEIGHT, phase};
         vkCmdPushConstants(p->command, p->layout, VK_SHADER_STAGE_COMPUTE_BIT,
                            0, sizeof(push), push);
-        vkCmdDispatch(p->command, WIDTH, 1, 1);
+        vkCmdDispatch(p->command, (WIDTH + DC_HYDRO_HEAD_COLUMNS - 1u) / DC_HYDRO_HEAD_COLUMNS, 1, 1);
         VkMemoryBarrier barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
                                    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
                                    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |

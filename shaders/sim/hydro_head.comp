@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/hydro_head_layout.h"
 layout(local_size_x=128) in;
 layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
@@ -57,29 +59,41 @@ uvec3 cell_transform(ivec2 p) {
     uint water=cells[atlas].y;return uvec3(water,water,0u);
 }
 void main() {
-    uint x=gl_WorkGroupID.x,lane=gl_LocalInvocationIndex;
-    if(x>=params.width) return;
-    uint length=(params.height+LANES-1u)/LANES,begin=lane*length,end=min(begin+length,params.height);
-    const uint CACHE_LENGTH=8u;
-    uvec3 cached[CACHE_LENGTH];
-    bool reuse=length<=CACHE_LENGTH;
-    uvec3 own=uvec3(0);
-    for(uint y=begin;y<end;y++) {
-        uvec3 transform=cell_transform(ivec2(x,y));
-        if(reuse) cached[y-begin]=transform;
-        own=compose(own,transform);
-    }
-    transforms[lane]=own;barrier();
-    for(uint stride=1u;stride<LANES;stride*=2u) {
-        uvec3 previous=lane>=stride?transforms[lane-stride]:uvec3(0),current=transforms[lane];
+    const uint columns = DC_HYDRO_HEAD_COLUMNS;
+    const uint teams = LANES / columns;
+    const uint rows = 8u;
+    uint lane = gl_LocalInvocationIndex;
+    uint column = lane % columns;
+    uint team = lane / columns;
+    uint x = gl_WorkGroupID.x * columns + column;
+    uint head = 0u;
+    for (uint base = 0u; base < params.height; base += teams * rows) {
+        uint begin = base + team * rows;
+        uvec3 cached[rows], own = uvec3(0);
+        for (uint i = 0u; i < rows; ++i) {
+            cached[i] = x < params.width && begin + i < params.height
+                ? cell_transform(ivec2(x, begin + i)) : uvec3(0);
+            own = compose(own, cached[i]);
+        }
+
+        transforms[lane] = own;
         barrier();
-        if(lane>=stride) transforms[lane]=compose(previous,current);
+        for (uint stride = 1u; stride < teams; stride *= 2u) {
+            uvec3 previous = team >= stride ? transforms[lane - stride * columns] : uvec3(0);
+            uvec3 current = transforms[lane];
+            barrier();
+            if (team >= stride) transforms[lane] = compose(previous, current);
+            barrier();
+        }
+
+        uint entry = team == 0u ? head : apply_head(transforms[lane - columns], head);
+        head = apply_head(transforms[(teams - 1u) * columns + column], head);
         barrier();
-    }
-    uint head=lane==0u?0u:transforms[lane-1u].y;
-    for(uint y=begin;y<end;y++) {
-        head=apply_head(reuse?cached[y-begin]:cell_transform(ivec2(x,y)),head);
-        uint index=y*params.width+x;
-        if(params.phase==0u) raw_heads[index]=head;else heads[index]=head;
+        for (uint i = 0u; i < rows && begin + i < params.height && x < params.width; ++i) {
+            entry = apply_head(cached[i], entry);
+            uint index = (begin + i) * params.width + x;
+            if (params.phase == 0u) raw_heads[index] = entry;
+            else heads[index] = entry;
+        }
     }
 }

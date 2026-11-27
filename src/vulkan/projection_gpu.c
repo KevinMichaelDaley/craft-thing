@@ -1,3 +1,4 @@
+#include "dungeoncraft/hydro_head_layout.h"
 #include "gpu_internal.h"
 #include "renderer_internal.h"
 
@@ -27,7 +28,7 @@ static void record_hydro_head(dc_gpu_t *gpu, VkDescriptorSet descriptor,
         push[2] = phase;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        vkCmdDispatch(gpu->command, width, 1u, 1u);
+        vkCmdDispatch(gpu->command, (width + DC_HYDRO_HEAD_COLUMNS - 1u) / DC_HYDRO_HEAD_COLUMNS, 1u, 1u);
         projection_barrier(gpu);
     }
 }
