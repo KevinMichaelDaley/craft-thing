@@ -1,6 +1,6 @@
 ---
 id: ctowc-ccrm
-status: in_progress
+status: closed
 deps: [ctowd-09br]
 links: []
 created: 2026-11-27T08:02:26Z
@@ -25,3 +25,7 @@ A split basin reproduces a monolithic native simulation over repeated water cycl
 **2026-11-27T08:11:59Z**
 
 The ordinary tick recorder uses a prospective phase range, scale, and remaining budget. Five schedule checks cover every supported cadence, mixed elapsed steps, and float boundaries. Native recorder tests verify water runs after rigid work and before bulk, particles, and thermal work, including dry cycle advancement. Next, retain the shared pressure and transport state between these phase ranges and publish each confirmed range to both owners before their native post-water stages.
+
+**2026-11-27T09:56:18Z**
+
+Verified split and monolithic water state for intervals 1, 2, 3, and 6, including partial-phase retry and receipt recovery. Page remaps and chunk replacement are rejected while owners are held. The level scheduler and staged save integration continue under ctowt-7388.
