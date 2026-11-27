@@ -8,8 +8,11 @@ layout(set=0,binding=3,std430) readonly buffer Occupancy {uint occupancy[];};
 layout(set=0,binding=9,std430) buffer Heads {uint heads[];};
 layout(set=0,binding=11,std430) buffer RawHeads {uint raw_heads[];};
 layout(push_constant) uniform Params {uint width,height,phase,unused0,unused1,unused2,unused3,unused4;} params;
-const uint FULL=65536u,CAP=64u*FULL,LANES=128u;
-shared uvec3 transforms[128];
+const uint FULL=65536u,CAP=64u*FULL;
+const uint COLUMNS = DC_HYDRO_HEAD_COLUMNS;
+const uint SEGMENTS = gl_WorkGroupSize.x / COLUMNS;
+const uint ROWS_PER_SEGMENT = 8u;
+shared uvec3 transforms[gl_WorkGroupSize.x];
 #ifdef DC_HYDRO_HEAD_PROFILE
 layout(set=0,binding=31,std430) buffer Profile {uint evaluations;};
 #endif
@@ -59,18 +62,15 @@ uvec3 cell_transform(ivec2 p) {
     uint water=cells[atlas].y;return uvec3(water,water,0u);
 }
 void main() {
-    const uint columns = DC_HYDRO_HEAD_COLUMNS;
-    const uint teams = LANES / columns;
-    const uint rows = 8u;
     uint lane = gl_LocalInvocationIndex;
-    uint column = lane % columns;
-    uint team = lane / columns;
-    uint x = gl_WorkGroupID.x * columns + column;
-    uint head = 0u;
-    for (uint base = 0u; base < params.height; base += teams * rows) {
-        uint begin = base + team * rows;
-        uvec3 cached[rows], own = uvec3(0);
-        for (uint i = 0u; i < rows; ++i) {
+    uint column = lane % COLUMNS;
+    uint segment = lane / COLUMNS;
+    uint x = gl_WorkGroupID.x * COLUMNS + column;
+    uint tile_entry = 0u;
+    for (uint base = 0u; base < params.height; base += SEGMENTS * ROWS_PER_SEGMENT) {
+        uint begin = base + segment * ROWS_PER_SEGMENT;
+        uvec3 cached[ROWS_PER_SEGMENT], own = uvec3(0);
+        for (uint i = 0u; i < ROWS_PER_SEGMENT; ++i) {
             cached[i] = x < params.width && begin + i < params.height
                 ? cell_transform(ivec2(x, begin + i)) : uvec3(0);
             own = compose(own, cached[i]);
@@ -78,18 +78,19 @@ void main() {
 
         transforms[lane] = own;
         barrier();
-        for (uint stride = 1u; stride < teams; stride *= 2u) {
-            uvec3 previous = team >= stride ? transforms[lane - stride * columns] : uvec3(0);
+        // Scan preceding segments in the same column. Padded lanes carry the identity.
+        for (uint stride = 1u; stride < SEGMENTS; stride *= 2u) {
+            uvec3 previous = segment >= stride ? transforms[lane - stride * COLUMNS] : uvec3(0);
             uvec3 current = transforms[lane];
             barrier();
-            if (team >= stride) transforms[lane] = compose(previous, current);
+            if (segment >= stride) transforms[lane] = compose(previous, current);
             barrier();
         }
 
-        uint entry = team == 0u ? head : apply_head(transforms[lane - columns], head);
-        head = apply_head(transforms[(teams - 1u) * columns + column], head);
+        uint entry = segment == 0u ? tile_entry : apply_head(transforms[lane - COLUMNS], tile_entry);
+        tile_entry = apply_head(transforms[(SEGMENTS - 1u) * COLUMNS + column], tile_entry);
         barrier();
-        for (uint i = 0u; i < rows && begin + i < params.height && x < params.width; ++i) {
+        for (uint i = 0u; i < ROWS_PER_SEGMENT && begin + i < params.height && x < params.width; ++i) {
             entry = apply_head(cached[i], entry);
             uint index = (begin + i) * params.width + x;
             if (params.phase == 0u) raw_heads[index] = entry;
