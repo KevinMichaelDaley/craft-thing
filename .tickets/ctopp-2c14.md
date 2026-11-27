@@ -1,6 +1,6 @@
 ---
 id: ctopp-2c14
-status: in_progress
+status: closed
 deps: [ctopp-fkir, ctowt-iyyp, ctowt-7388]
 links: []
 created: 2026-11-27T06:02:05Z
@@ -30,3 +30,7 @@ fluid_transport.comp computes requests across multiple recipients before debitin
 **2026-11-27T06:30:47Z**
 
 The paired scratch result includes intra-owner transport and crossings in the same sweep. A production commit must own that sweep at a common interval start. Applying only cross-face deltas after independent sweeps or applying overlapping pair results to a common tile would change the native result.
+
+**2026-11-27T13:12:12Z**
+
+Both horizontal and vertical RTX fixtures compare signed crossings, individual donor and receiver stock, and per-lane pressure work against monolithic GPU readbacks. Both signs and multi-cell travel, a quarter-open face, a blocked face, full receiver backpressure and rejected batches are exercised. The recorded final native run exited zero. Camera cadence and durable ownership completion are verified by the closed ctowt-7388 dependency.
