@@ -38,3 +38,7 @@ The sealed two-tile water cycle now begins with native rigid displacement using 
 **2026-11-27T08:12:55Z**
 
 One scratch domain now covers the connected mapped tiles of the resident context and a shared-device workspace. One retained receipt confirms all supplied tiles, including a tile that touches multiple seams. Live scheduling of the partial native water phases and durable camera admission remain open. ctowc-ccrm tracks the shared phase cadence.
+
+**2026-11-27T10:04:23Z**
+
+The workspace now defers independent ticks and preserves its lease, mappings, and clock through partial water cycles. A native two-context regression verifies that admission, cancellation and snapshot publication resume after the final phase. The level still needs to schedule both owners from a common interval start, run pre-water and post-water physics, and confirm both timestamps across camera admission.
