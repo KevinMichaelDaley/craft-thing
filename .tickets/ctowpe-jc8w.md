@@ -27,3 +27,7 @@ Profiled 60 frames per band on 4bbe76ec. Near: 30 idle vs 30 with 32 owner-steps
 **2026-11-27T19:56:38Z**
 
 Regular near steady-state RED failed at the measured shared-submit count. GREEN used one round on each of two consecutive frames, all 16 owners reached the native intermediate and final timestamps, and a 0.125 s foreground increment retained two catch-up rounds. All 17 returned with their original individual water stock and world time. Refactored test compared real fluid cells, face velocities and markers to a serial native reference, passing on :93. The new setup uses the same 120 s allowance already used by the 17-room return; an earlier 25 s setup timed out with synchronization validation. Existing middle cadence and saturation tests passed with validation.
+
+**2026-11-27T19:59:24Z**
+
+The serial-state comparison passes on :93 without validation. With synchronization validation, the 17-room near setup still timed out at the 120 s visibility wait, before the frame assertions. Middle cadence, saturated return and level tick tests passed separately. Investigating setup residency diagnostics instead of increasing the timeout again.

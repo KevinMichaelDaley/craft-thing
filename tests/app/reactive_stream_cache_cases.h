@@ -332,6 +332,28 @@ static bool step_watched_camera_frame(dc_level_view_t *view, dc_offscreen_t *con
     return okay;
 }
 
+static bool admit_saturated_camera_rooms(dc_level_view_t *view, dc_chunk_t *chunk,
+        dc_chunk_coord_t *rooms, unsigned room_count, unsigned screens,
+        dc_offscreen_t **owners, char *err, uint32_t cap) {
+    if (!seed_saturated_rooms(view, chunk, rooms, room_count, err, cap) ||
+        !dc_level_view_wait_visible(view, 120000u, err, cap) ||
+        !dc_level_view_pan_pixels(view, (int32_t)screens * VIEW_WIDTH, 0) ||
+        !dc_level_view_wait_visible(view, 120000u, err, cap)) return false;
+    const uint64_t deadline = SDL_GetTicks64() + 120000u;
+    do {
+        if (!dc_level_view_tick(view, err, cap)) return false;
+        unsigned count = 0;
+        for (dc_level_offscreen_handoff_t *h = view->offscreen_handoffs; h; h = h->next) {
+            if (!h->admitted) continue;
+            if (count == DC_CAMERA_WORKSPACE_LIMIT || !h->workspace->time.known) return false;
+            owners[count++] = h->workspace;
+        }
+        if (count == DC_CAMERA_WORKSPACE_LIMIT) return true;
+        SDL_Delay(1);
+    } while (SDL_GetTicks64() < deadline);
+    return false;
+}
+
 static void test_saturated_near_rooms_share_replay_across_regular_frames(void) {
     enum { ROOM_COUNT = DC_CAMERA_WORKSPACE_LIMIT + 1u };
     char directory[] = "build/camera_replay_frames_XXXXXX", err[256] = {0};
@@ -339,24 +361,9 @@ static void test_saturated_near_rooms_share_replay_across_regular_frames(void) {
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     dc_chunk_coord_t rooms[ROOM_COUNT];
-    ASSERT_TRUE(view && chunk && seed_saturated_rooms(view, chunk, rooms, ROOM_COUNT, err, sizeof(err)));
-    ASSERT_TRUE(dc_level_view_wait_visible(view, 120000u, err, sizeof(err)) &&
-        dc_level_view_pan_pixels(view, VIEW_WIDTH, 0) &&
-        dc_level_view_wait_visible(view, 120000u, err, sizeof(err)));
-
     dc_offscreen_t *owners[DC_CAMERA_WORKSPACE_LIMIT];
-    unsigned active = 0;
-    const uint64_t deadline = SDL_GetTicks64() + 120000u;
-    while (active < DC_CAMERA_WORKSPACE_LIMIT && SDL_GetTicks64() < deadline) {
-        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
-        active = 0;
-        for (dc_level_offscreen_handoff_t *h = view->offscreen_handoffs; h; h = h->next) {
-            if (!h->admitted) continue;
-            ASSERT_TRUE(active < DC_CAMERA_WORKSPACE_LIMIT && h->workspace->time.known);
-            owners[active++] = h->workspace;
-        }
-    }
-    ASSERT_EQ(active, DC_CAMERA_WORKSPACE_LIMIT);
+    ASSERT_TRUE(view && chunk && admit_saturated_camera_rooms(view, chunk, rooms, ROOM_COUNT,
+                                                              1, owners, err, sizeof(err)));
     dc_level_offscreen_handoff_t *probe = view->offscreen_handoffs;
     while (probe && probe->workspace != owners[0]) probe = probe->next;
     ASSERT_TRUE(probe);
@@ -373,12 +380,12 @@ static void test_saturated_near_rooms_share_replay_across_regular_frames(void) {
         ASSERT_TRUE(step_watched_camera_frame(view, owners, 2, tick, err, sizeof(err)));
         ASSERT_EQ(shared_owner_submissions, frame >= 2 ? 1u : 0u);
         const double expected = frame < 2 ? start : frame == 2 ? start + first_step : end;
-        for (unsigned i = 0; i < active; ++i) ASSERT_EQ(owners[i]->time.seconds, expected);
+        for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT; ++i) ASSERT_EQ(owners[i]->time.seconds, expected);
     }
     ASSERT_EQ(view->world_seconds, start + 8. * tick);
     ASSERT_TRUE(step_watched_camera_frame(view, owners, 1, .125f, err, sizeof(err)));
     ASSERT_EQ(shared_owner_submissions, 2u);
-    for (unsigned i = 0; i < active; ++i) ASSERT_EQ(owners[i]->time.seconds, start + 8. * tick);
+    for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT; ++i) ASSERT_EQ(owners[i]->time.seconds, start + 8. * tick);
     dc_stream_result_t actual = {0}, expected = {0};
     ASSERT_TRUE(dc_offscreen_advance(reference, end, 2, err, sizeof(err)) &&
         dc_offscreen_advance(reference, start + 8. * tick, 2, err, sizeof(err)) &&
@@ -401,6 +408,50 @@ static void test_saturated_near_rooms_share_replay_across_regular_frames(void) {
         ASSERT_EQ(camera_stock(chunk, NULL, false), 14000u + i);
     }
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    free(chunk);
+    PASS();
+}
+
+static void test_paced_middle_rooms_preserve_fractional_steps_across_irregular_frames(void) {
+    enum { ROOM_COUNT = DC_CAMERA_WORKSPACE_LIMIT + 1u };
+    char directory[] = "build/camera_mixed_replay_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    dc_chunk_coord_t rooms[ROOM_COUNT];
+    dc_offscreen_t *owners[DC_CAMERA_WORKSPACE_LIMIT];
+    ASSERT_TRUE(view && chunk && admit_saturated_camera_rooms(view, chunk, rooms, ROOM_COUNT,
+                                                              2, owners, err, sizeof(err)));
+    dc_level_offscreen_handoff_t *probe = view->offscreen_handoffs;
+    while (probe && probe->workspace != owners[0]) probe = probe->next;
+    ASSERT_TRUE(probe);
+    dc_stream_result_t initial = {0};
+    ASSERT_TRUE(dc_offscreen_snapshot(owners[0], probe->coord, probe->generation, &initial, err, sizeof(err)));
+    dc_offscreen_t *reference = dc_offscreen_create(view->gpu, owners[0]->origin, err, sizeof(err));
+    ASSERT_TRUE(reference && dc_offscreen_admit(reference, &initial, probe->generation, err, sizeof(err)));
+    dc_stream_result_release(&initial);
+
+    const float durations[] = {.125f, .125f, 1.f/60.f, .125f, 1.f/60.f, .125f, 1.f/60.f};
+    double target = view->world_seconds;
+    for (unsigned frame = 0; frame < sizeof(durations)/sizeof(*durations); ++frame) {
+        if (view->world_seconds - reference->time.seconds >= 12. / 60.) target = view->world_seconds;
+        ASSERT_TRUE(dc_offscreen_advance(reference, target, 2, err, sizeof(err)));
+        unsigned steps = durations[frame] == .125f ? 1u : 2u;
+        ASSERT_TRUE(step_watched_camera_frame(view, owners, steps, durations[frame], err, sizeof(err)));
+    }
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    for (unsigned i = 0; i < DC_CAMERA_WORKSPACE_LIMIT; ++i)
+        ASSERT_EQ(owners[i]->time.seconds, reference->time.seconds);
+    dc_stream_result_t actual = {0}, expected = {0};
+    ASSERT_TRUE(dc_offscreen_snapshot(reference, probe->coord, probe->generation, &expected, err, sizeof(err)) &&
+        dc_offscreen_snapshot(owners[0], probe->coord, probe->generation, &actual, err, sizeof(err)));
+    ASSERT_EQ(memcmp(actual.chunk->cells, expected.chunk->cells, sizeof(chunk->cells)), 0);
+    ASSERT_EQ(memcmp(actual.chunk->face_velocity, expected.chunk->face_velocity, sizeof(chunk->face_velocity)), 0);
+    ASSERT_TRUE(camera_markers_match(actual.chunk, expected.chunk));
+    dc_stream_result_release(&actual);
+    dc_stream_result_release(&expected);
+    dc_offscreen_destroy(reference);
+    dc_level_view_discard(view);
     free(chunk);
     PASS();
 }

@@ -394,6 +394,10 @@ int main(int argc, char **argv) {
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--camera-replay-irregular") == 0) {
+        RUN(test_paced_middle_rooms_preserve_fractional_steps_across_irregular_frames);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera-replay-frames") == 0) {
         RUN(test_saturated_near_rooms_share_replay_across_regular_frames);
         return g_fail != 0;
@@ -526,6 +530,7 @@ int main(int argc, char **argv) {
     RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
     RUN(test_two_evicted_sealed_rooms_return_at_the_world_clock);
     RUN(test_distant_rooms_sleep_and_prefetch_before_camera_return);
+    RUN(test_paced_middle_rooms_preserve_fractional_steps_across_irregular_frames);
     RUN(test_saturated_near_rooms_share_replay_across_regular_frames);
     RUN(test_saturated_sleeping_rooms_all_return_at_the_world_clock);
     RUN(test_middle_band_finishes_its_due_interval);
