@@ -1,6 +1,6 @@
 ---
 id: ctowpe-04hz
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T18:49:17Z
@@ -31,3 +31,7 @@ The complete six-case Vulkan pressure suite passed, including changes between pr
 **2026-11-27T19:16:55Z**
 
 Half-native measured on persistent hidden Xephyr :93 at 782cb32c. Near/middle/far mean and p95 ms: 24.397/36.938, 24.113/43.107, 24.362/43.807. All three p95 exceed 33.333 ms. Native run underway.
+
+**2026-11-27T19:20:39Z**
+
+Native near/middle/far at 782cb32c reported 27.792/44.182, 27.067/43.728 and 26.897/44.132 ms mean/p95. Each band had 16 owners and advanced 2.000000104 seconds. Native 720 dry/dense/exact concave p95 were 4.420/11.883/20.552 ms. Both resolution comparisons are complete; the overall 33.333 ms camera gate remains open under ctowpe-vtlh.

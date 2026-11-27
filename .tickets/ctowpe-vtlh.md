@@ -51,3 +51,7 @@ Instrumented the same production 1280x720 exact concave workload at 8f26f761 on 
 **2026-11-27T19:06:07Z**
 
 At 8abb9206 the saturated 16-owner camera passed every mean with half-native 24.263/24.554/24.440 ms near/middle/far and native 27.627/27.503/27.594. The six p95 values remain above 33.333 ms (half-native 38.107/44.956/44.747, native 41.350/47.327/46.321). The separate 720 dry, dense and exact concave gates passed with p95 4.361, 13.947 and 21.450 ms. Mapped water dispatch and uninterrupted pressure preparation now have separate pending production comparisons under hidden Xephyr.
+
+**2026-11-27T19:20:39Z**
+
+At 782cb32c, with page-indexed projection and mass launches bounded by mapped slot, half-native camera p95 near/middle/far = 36.938/43.107/43.807 ms; native = 44.182/43.728/44.132 ms. All six means and all three separate 720 mean/p95 gates passed. The six saturated camera p95 gates remain open.
