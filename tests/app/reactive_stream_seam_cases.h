@@ -1,13 +1,22 @@
 #ifndef DC_REACTIVE_STREAM_SEAM_CASES_H
 #define DC_REACTIVE_STREAM_SEAM_CASES_H
 
-static bool lose_seam_receipt;
+static bool lose_seam_receipt, lose_seam_recovery, reject_next_queue_wait;
+
+VkResult __real_vkQueueWaitIdle(VkQueue queue);
+VkResult __wrap_vkQueueWaitIdle(VkQueue queue) {
+    if (!reject_next_queue_wait) return __real_vkQueueWaitIdle(queue);
+    reject_next_queue_wait = false;
+    return VK_ERROR_DEVICE_LOST;
+}
 
 bool __real_fr_renderer_submit(dc_gpu_t *gpu);
 bool __wrap_fr_renderer_submit(dc_gpu_t *gpu) {
     bool completed = __real_fr_renderer_submit(gpu);
     if (!lose_seam_receipt) return completed;
     lose_seam_receipt = false;
+    reject_next_queue_wait = lose_seam_recovery;
+    lose_seam_recovery = false;
     return false;
 }
 
@@ -28,6 +37,34 @@ static void seam_pocket(dc_chunk_t *chunk, dc_chunk_coord_t coord, uint32_t cell
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
         chunk->cells[i] = (dc_cell_t){.material = DC_MATERIAL_STONE, .flags = DC_CELL_LOADED_TERRAIN};
     chunk->cells[cell] = (dc_cell_t){.fluid_mass = water};
+}
+
+static bool save_seam_pockets(const char *directory, const dc_level_liquid_exchange_t *exchange,
+    uint32_t lane, char *err, uint32_t cap) {
+    dc_level_view_t *view = seam_test_view(directory, err, cap);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    bool okay = view && chunk;
+    if (okay) view->world_seconds = exchange->begin_seconds;
+    for (uint32_t i = 0; okay && i < 2u; ++i) {
+        seam_pocket(chunk, i ? exchange->offscreen : exchange->resident,
+            i ? lane * DC_CHUNK_SIDE : (lane + 1u) * DC_CHUNK_SIDE - 1u, i ? 6000u : 16000u);
+        uint32_t slot;
+        uint64_t generation;
+        okay = dc_chunk_table_begin_load(&view->table, chunk->coord, &slot, &generation) &&
+            dc_gpu_upload_chunk(view->gpu, slot, chunk, err, cap) &&
+            dc_chunk_table_finish_load(&view->table, slot, generation);
+        if (okay) view->table.slots[slot].time = (dc_chunk_time_t){exchange->begin_seconds, true};
+    }
+    if (okay) okay = save_level_structure(view, err, cap);
+    dc_level_view_discard(view);
+    free(chunk);
+    return okay;
+}
+
+static bool step_seam_resident(dc_level_view_t *view, float seconds, char *err, uint32_t cap) {
+    if (!dc_gpu_set_tick_seconds(view->gpu, seconds) || !dc_gpu_tick_step(view->gpu, err, cap)) return false;
+    advance_resident_chunks(view, seconds);
+    return true;
 }
 
 static bool admit_seam_owners(dc_level_view_t *view, dc_level_liquid_exchange_t *exchange,
@@ -70,34 +107,17 @@ static bool seam_water_matches(dc_level_view_t *view, uint32_t resident_slot,
 static void test_level_seam_orders_owner_clocks_receipts_and_cold_publication(void) {
     char directory[] = "build/paired_liquid_XXXXXX", err[256] = {0}, obstruction[256];
     ASSERT_TRUE(mkdtemp(directory));
-    dc_level_view_t *view = seam_test_view(directory, err, sizeof(err));
-    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
-    ASSERT_TRUE(view && chunk);
     const uint32_t lane = 24u;
     dc_level_liquid_exchange_t exchange = {.resident = {5, -4}, .offscreen = {6, -4},
         .begin_seconds = 2., .end_seconds = 2.03125};
     exchange.flux[lane].water = 5000;
-    view->world_seconds = exchange.begin_seconds;
-    for (uint32_t i = 0; i < 2u; ++i) {
-        seam_pocket(chunk, i ? exchange.offscreen : exchange.resident,
-            i ? lane * DC_CHUNK_SIDE : (lane + 1u) * DC_CHUNK_SIDE - 1u, i ? 6000u : 16000u);
-        uint32_t slot;
-        uint64_t generation;
-        ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, chunk->coord, &slot, &generation));
-        ASSERT_TRUE(dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)));
-        ASSERT_TRUE(dc_chunk_table_finish_load(&view->table, slot, generation));
-        view->table.slots[slot].time = (dc_chunk_time_t){2., true};
-    }
-    ASSERT_TRUE(save_level_structure(view, err, sizeof(err)));
-    dc_level_view_discard(view);
+    ASSERT_TRUE(save_seam_pockets(directory, &exchange, lane, err, sizeof(err)));
 
-    view = seam_test_view(directory, err, sizeof(err));
+    dc_level_view_t *view = seam_test_view(directory, err, sizeof(err));
     dc_offscreen_t *workspace = NULL;
     uint32_t slot;
     ASSERT_TRUE(view && admit_seam_owners(view, &exchange, &slot, &workspace, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_tick_seconds(view->gpu, .03125f));
-    ASSERT_TRUE(dc_gpu_tick_step(view->gpu, err, sizeof(err)));
-    advance_resident_chunks(view, .03125);
+    ASSERT_TRUE(step_seam_resident(view, .03125f, err, sizeof(err)));
     ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &exchange, err, sizeof(err)), DC_LIQUID_SEAM_REJECTED);
     ASSERT_TRUE(dc_offscreen_advance(workspace, exchange.end_seconds, 1u, err, sizeof(err)));
     ASSERT_TRUE(seam_water_matches(view, slot, &exchange, workspace, lane, 16000u, 6000u, err, sizeof(err)));
@@ -111,7 +131,10 @@ static void test_level_seam_orders_owner_clocks_receipts_and_cold_publication(vo
     stale = exchange;
     ++stale.offscreen.x;
     ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &stale, err, sizeof(err)), DC_LIQUID_SEAM_REJECTED);
+    ASSERT_TRUE(dc_gpu_set_body_origin(view->gpu, (dc_chunk_coord_t){4, -4}, err, sizeof(err)));
+    ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &exchange, err, sizeof(err)), DC_LIQUID_SEAM_REJECTED);
     ASSERT_TRUE(!dc_world_save_directory(view->save, true));
+    ASSERT_TRUE(dc_gpu_set_body_origin(view->gpu, exchange.resident, err, sizeof(err)));
 
     lose_seam_receipt = true;
     ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &exchange, err, sizeof(err)), DC_LIQUID_SEAM_COMMITTED);
@@ -151,7 +174,41 @@ static void test_level_seam_orders_owner_clocks_receipts_and_cold_publication(vo
     ASSERT_EQ(dc_gpu_validation_errors(view->gpu), 0u);
     dc_level_view_discard(view);
     dc_offscreen_destroy(workspace);
-    free(chunk);
+    PASS();
+}
+
+static void test_unreadable_seam_receipt_preserves_both_canonical_owners(void) {
+    char directory[] = "build/unconfirmed_liquid_pair_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    const uint32_t lane = 20u;
+    dc_level_liquid_exchange_t exchange = {.resident = {7, -6}, .offscreen = {8, -6},
+        .begin_seconds = 2., .end_seconds = 2.03125};
+    exchange.flux[lane].water = 5000;
+    ASSERT_TRUE(save_seam_pockets(directory, &exchange, lane, err, sizeof(err)));
+    dc_level_view_t *view = seam_test_view(directory, err, sizeof(err));
+    dc_offscreen_t *workspace = NULL;
+    uint32_t slot;
+    ASSERT_TRUE(view && admit_seam_owners(view, &exchange, &slot, &workspace, err, sizeof(err)));
+    ASSERT_TRUE(step_seam_resident(view, .03125f, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_advance(workspace, exchange.end_seconds, 1u, err, sizeof(err)));
+    lose_seam_receipt = lose_seam_recovery = true;
+    ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &exchange, err, sizeof(err)), DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_TRUE(!lose_seam_receipt && !lose_seam_recovery && !reject_next_queue_wait);
+    ASSERT_TRUE(!dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(!schedule_saves(view, err, sizeof(err)));
+    ASSERT_TRUE(!dc_level_offscreen_publish(view, exchange.offscreen, exchange.offscreen_generation, err, sizeof(err)));
+    ASSERT_EQ(dc_gpu_validation_errors(view->gpu), 0u);
+    ASSERT_TRUE(!dc_level_view_destroy(view, err, sizeof(err)));
+    dc_offscreen_destroy(workspace);
+
+    view = seam_test_view(directory, err, sizeof(err));
+    workspace = NULL;
+    ASSERT_TRUE(view && admit_seam_owners(view, &exchange, &slot, &workspace, err, sizeof(err)));
+    ASSERT_EQ(view->world_seconds, 2.);
+    ASSERT_TRUE(seam_water_matches(view, slot, &exchange, workspace, lane, 16000u, 6000u, err, sizeof(err)));
+    ASSERT_EQ(dc_gpu_validation_errors(view->gpu), 0u);
+    dc_level_view_discard(view);
+    dc_offscreen_destroy(workspace);
     PASS();
 }
 

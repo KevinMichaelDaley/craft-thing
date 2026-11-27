@@ -187,6 +187,24 @@ static void test_world_clock_preserves_canonical_time_across_discard_and_reopen(
     PASS();
 }
 
+static void test_aborted_draft_allows_restage_on_the_same_world_writer(void) {
+    char directory[] = "build/world_restage_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_world_save_t *save = dc_world_save_open(directory, err, sizeof(err));
+    ASSERT_TRUE(save && dc_world_save_store_clock(save, 2., err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_store_clock(save, 3., err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_abort(save));
+    ASSERT_TRUE(!dc_world_save_directory(save, true));
+    ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
+    ASSERT_TRUE(dc_world_save_store_clock(save, 4., err, sizeof(err)));
+    double canonical;
+    ASSERT_TRUE(dc_world_save_load_clock(save, &canonical, err, sizeof(err)));
+    ASSERT_EQ(canonical, 2.);
+    dc_world_save_close(save);
+    PASS();
+}
+
 int main(void) {
     RUN(test_commit_replaces_world_and_owned_material_together);
     RUN(test_failed_commit_keeps_previous_world_and_excludes_other_writers);
@@ -194,6 +212,7 @@ int main(void) {
     RUN(test_legacy_and_invalid_player_records_preserve_expected_balances);
     RUN(test_committed_recovery_publishes_the_clock_with_physical_records);
     RUN(test_world_clock_preserves_canonical_time_across_discard_and_reopen);
+    RUN(test_aborted_draft_allows_restage_on_the_same_world_writer);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

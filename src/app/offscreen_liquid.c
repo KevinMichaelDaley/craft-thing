@@ -71,7 +71,8 @@ dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *vie
     bool resident_first;
     if (!view || !view->gpu || !exchange || view->closing || view->liquid_seam_failed ||
         !shared_face(exchange->resident, exchange->offscreen, &axis, &resident_first) ||
-        !dc_chunk_table_find(&view->table, exchange->resident, &resident_slot)) {
+        !dc_chunk_table_find(&view->table, exchange->resident, &resident_slot) ||
+        resident_slot >= dc_gpu_slot_capacity(view->gpu)) {
         error(err, cap, "Liquid seam has no adjacent resident owner");
         return DC_LIQUID_SEAM_REJECTED;
     }
@@ -88,12 +89,11 @@ dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *vie
     dc_offscreen_t *workspace = handoff->workspace;
     const uint32_t face = (uint32_t)axis * 2u + (resident_first ? 0u : 1u);
     const uint32_t resident_page = view->gpu->slot_page[resident_slot];
-    if (resident_page == UINT32_MAX || !aligned_interval(view, resident, handoff, exchange, face)) {
+    if (resident_page == UINT32_MAX || !view->gpu->page_width ||
+        !aligned_interval(view, resident, handoff, exchange, face)) {
         error(err, cap, "Liquid seam interval is stale or its owners have different times");
         return DC_LIQUID_SEAM_REJECTED;
     }
-    if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LIQUID_SEAM_REJECTED;
-
     const dc_liquid_seam_endpoint_t local = {.gpu = view->gpu, .coord = exchange->resident,
         .tile_x = resident_page % view->gpu->page_width, .tile_y = resident_page / view->gpu->page_width,
         .slot = resident_slot};
@@ -102,6 +102,11 @@ dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *vie
         .slot = offscreen_slot};
     const dc_liquid_seam_endpoint_t first = resident_first ? local : remote;
     const dc_liquid_seam_endpoint_t second = resident_first ? remote : local;
+    if (!dc_gpu_liquid_seam_mapped(first, second, axis)) {
+        error(err, cap, "Liquid seam endpoints no longer share their mapped face");
+        return DC_LIQUID_SEAM_REJECTED;
+    }
+    if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LIQUID_SEAM_REJECTED;
     resident->pinned = true;
     ++workspace->held_writes;
     dc_liquid_seam_result_t result = dc_gpu_commit_liquid_seam(first, second, axis, exchange->flux, err, cap);

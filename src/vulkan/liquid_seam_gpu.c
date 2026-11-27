@@ -55,7 +55,7 @@ static bool mapped_endpoint(dc_liquid_seam_endpoint_t endpoint) {
         endpoint.coord.y == gpu->body_origin.y + endpoint.tile_y;
 }
 
-static bool adjacent_endpoints(dc_liquid_seam_endpoint_t first, dc_liquid_seam_endpoint_t second,
+bool dc_gpu_liquid_seam_mapped(dc_liquid_seam_endpoint_t first, dc_liquid_seam_endpoint_t second,
                                dc_liquid_seam_axis_t axis) {
     if (!mapped_endpoint(first) || !mapped_endpoint(second) || first.gpu == second.gpu ||
         !first.gpu->device_lifetime || first.gpu->device_lifetime != second.gpu->device_lifetime ||
@@ -161,7 +161,7 @@ dc_liquid_seam_result_t dc_gpu_resolve_liquid_seam(dc_gpu_t *first, dc_gpu_t *se
 dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis,
     const dc_liquid_seam_flux_t flux[DC_CHUNK_SIDE], char *err, uint32_t cap) {
-    if (!flux || !adjacent_endpoints(first, second, axis))
+    if (!flux || !dc_gpu_liquid_seam_mapped(first, second, axis))
         return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam endpoints do not share a mapped face");
     dc_gpu_t *gpu = first.gpu;
     if (gpu->liquid_seam && gpu->liquid_seam->pending_peer)

@@ -22,6 +22,10 @@ typedef enum {
     DC_LIQUID_SEAM_UNCONFIRMED
 } dc_liquid_seam_result_t;
 
+/** Verify the two mapped endpoints of the positive world-axis face. */
+bool dc_gpu_liquid_seam_mapped(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.
