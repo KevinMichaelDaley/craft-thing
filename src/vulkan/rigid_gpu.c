@@ -197,11 +197,8 @@ void dc_gpu_rigid_destroy(dc_gpu_t *gpu) {
     dc_gpu_runtime_bodies_destroy(gpu);
     free(gpu->body_ids);gpu->body_ids=NULL;
     if (gpu->body_mapped) vkUnmapMemory(gpu->device, gpu->body_memory);
-    if (gpu->occupancy_mapped) vkUnmapMemory(gpu->device, gpu->occupancy_memory);
     if (gpu->body_buffer) vkDestroyBuffer(gpu->device, gpu->body_buffer, NULL);
-    if (gpu->occupancy_buffer) vkDestroyBuffer(gpu->device, gpu->occupancy_buffer, NULL);
     if (gpu->body_memory) vkFreeMemory(gpu->device, gpu->body_memory, NULL);
-    if (gpu->occupancy_memory) vkFreeMemory(gpu->device, gpu->occupancy_memory, NULL);
 }
 
 bool dc_gpu_spawn_body(dc_gpu_t *gpu, dc_gpu_body_t body,

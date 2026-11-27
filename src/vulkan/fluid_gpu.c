@@ -224,19 +224,16 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     if (gpu->hydro_head_pipeline) vkDestroyPipeline(gpu->device, gpu->hydro_head_pipeline, NULL);
     if (gpu->velocity_shift_pipeline)
         vkDestroyPipeline(gpu->device, gpu->velocity_shift_pipeline, NULL);
-    if (gpu->velocity_mapped) vkUnmapMemory(gpu->device, gpu->velocity_memory);
     if (gpu->aperture_prefix_buffer) vkDestroyBuffer(gpu->device, gpu->aperture_prefix_buffer, NULL);
     if (gpu->aperture_tree_buffer) vkDestroyBuffer(gpu->device, gpu->aperture_tree_buffer, NULL);
     if (gpu->aperture_prefix_memory) vkFreeMemory(gpu->device, gpu->aperture_prefix_memory, NULL);
     if (gpu->aperture_tree_memory) vkFreeMemory(gpu->device, gpu->aperture_tree_memory, NULL);
     if (gpu->fluid_a_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_a_buffer, NULL);
     if (gpu->fluid_b_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_b_buffer, NULL);
-    if (gpu->velocity_buffer) vkDestroyBuffer(gpu->device, gpu->velocity_buffer, NULL);
     if (gpu->pressure_a_buffer) vkDestroyBuffer(gpu->device, gpu->pressure_a_buffer, NULL);
     if (gpu->fluid_previous_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_previous_buffer, NULL);
     if (gpu->fluid_a_memory) vkFreeMemory(gpu->device, gpu->fluid_a_memory, NULL);
     if (gpu->fluid_b_memory) vkFreeMemory(gpu->device, gpu->fluid_b_memory, NULL);
-    if (gpu->velocity_memory) vkFreeMemory(gpu->device, gpu->velocity_memory, NULL);
     if (gpu->pressure_a_memory) vkFreeMemory(gpu->device, gpu->pressure_a_memory, NULL);
     if (gpu->fluid_previous_memory) vkFreeMemory(gpu->device, gpu->fluid_previous_memory, NULL);
 }

@@ -19,6 +19,12 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     if (buf && cap) snprintf(buf, cap, "%s", message);
     return false;
 }
+static void destroy_grid_buffer(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, void *mapped) {
+    if (mapped) vkUnmapMemory(device, memory);
+    if (buffer) vkDestroyBuffer(device, buffer, NULL);
+    if (memory) vkFreeMemory(device, memory, NULL);
+}
+
 void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (!gpu) return;
     if (gpu->next_body_owner) {
@@ -54,7 +60,6 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->reticle_memory) vkFreeMemory(gpu->device, gpu->reticle_memory, NULL);
     if (gpu->swapchain) vkDestroySwapchainKHR(gpu->device, gpu->swapchain, NULL);
     free(gpu->swap_images);
-    if (gpu->mapped) vkUnmapMemory(gpu->device, gpu->memory);
     if (gpu->device) dc_gpu_rigid_destroy(gpu);
     if (gpu->device) dc_gpu_chunks_destroy(gpu);
     if (gpu->command_pool) vkDestroyCommandPool(gpu->device, gpu->command_pool, NULL);
@@ -64,8 +69,9 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (gpu->pipeline_layout) vkDestroyPipelineLayout(gpu->device, gpu->pipeline_layout, NULL);
     if (gpu->descriptor_pool) vkDestroyDescriptorPool(gpu->device, gpu->descriptor_pool, NULL);
     if (gpu->set_layout) vkDestroyDescriptorSetLayout(gpu->device, gpu->set_layout, NULL);
-    if (gpu->cells) vkDestroyBuffer(gpu->device, gpu->cells, NULL);
-    if (gpu->memory) vkFreeMemory(gpu->device, gpu->memory, NULL);
+    destroy_grid_buffer(gpu->device, gpu->cells, gpu->memory, gpu->mapped);
+    destroy_grid_buffer(gpu->device, gpu->velocity_buffer, gpu->velocity_memory, gpu->velocity_mapped);
+    destroy_grid_buffer(gpu->device, gpu->occupancy_buffer, gpu->occupancy_memory, gpu->occupancy_mapped);
     if (gpu->surface) vkDestroySurfaceKHR(gpu->instance, gpu->surface, NULL);
     dc_gpu_release_device(gpu);
     if (gpu->window) { SDL_DestroyWindow(gpu->window); SDL_QuitSubSystem(SDL_INIT_VIDEO); }
