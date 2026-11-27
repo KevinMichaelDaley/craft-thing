@@ -90,9 +90,10 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         .bindingCount = DC_GPU_DESCRIPTOR_BINDINGS, .pBindings = bindings };
     if (vkCreateDescriptorSetLayout(gpu->device, &layout_info, NULL, &gpu->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor layout");
-    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, DC_GPU_DESCRIPTOR_BINDINGS*2 };
+    enum { MAIN_SETS = 3 };
+    VkDescriptorPoolSize size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, DC_GPU_DESCRIPTOR_BINDINGS * MAIN_SETS };
     VkDescriptorPoolCreateInfo pool_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 2, .poolSizeCount = 1, .pPoolSizes = &size };
+        .maxSets = MAIN_SETS, .poolSizeCount = 1, .pPoolSizes = &size };
     if (vkCreateDescriptorPool(gpu->device, &pool_info, NULL, &gpu->descriptor_pool) != VK_SUCCESS)
         return error(err, cap, "Cannot create descriptor pool");
     VkDescriptorSetAllocateInfo set_info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -102,6 +103,8 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         return error(err, cap, "Cannot allocate descriptor set");
     if(vkAllocateDescriptorSets(gpu->device,&set_info,&gpu->mpm_swapped_descriptor)!=VK_SUCCESS)
         return error(err,cap,"Cannot allocate alternating particle descriptors");
+    if (vkAllocateDescriptorSets(gpu->device, &set_info, &gpu->fluid_transport_descriptor) != VK_SUCCESS)
+        return error(err, cap, "Cannot allocate water transport descriptors");
     VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(gpu),bank_colors=dc_gpu_color_bank_bytes(gpu);
     VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS] = {
         { gpu->cells, 0, bytes },
@@ -153,6 +156,17 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         writes[i].pBufferInfo = &buffers[i];
     }
     vkUpdateDescriptorSets(gpu->device, DC_GPU_DESCRIPTOR_BINDINGS, writes, 0, NULL);
+    /* Native transport uses immutable owner fields and its own aperture cache. */
+    const uint32_t transport_bindings[] = {1, 2, 3, 8, 10, 28, 29, 31, 32, 36, 37};
+    enum { TRANSPORT_BINDINGS = sizeof(transport_bindings) / sizeof(transport_bindings[0]) };
+    buffers[28] = (VkDescriptorBufferInfo){gpu->aperture_prefix_buffer, 0, VK_WHOLE_SIZE};
+    buffers[29] = (VkDescriptorBufferInfo){gpu->aperture_tree_buffer, 0, VK_WHOLE_SIZE};
+    VkWriteDescriptorSet transport_writes[TRANSPORT_BINDINGS];
+    for (uint32_t i = 0; i < TRANSPORT_BINDINGS; ++i) {
+        transport_writes[i] = writes[transport_bindings[i]];
+        transport_writes[i].dstSet = gpu->fluid_transport_descriptor;
+    }
+    vkUpdateDescriptorSets(gpu->device, TRANSPORT_BINDINGS, transport_writes, 0, NULL);
     gpu->descriptor_revision++;
     VkPushConstantRange range = { .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
         .size = DC_GPU_PUSH_CONSTANT_BYTES };

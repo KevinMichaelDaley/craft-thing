@@ -48,9 +48,6 @@ static void set_buffer_sizes(struct dc_gpu_seam_projection *scratch, uint32_t wi
     const VkDeviceSize grid = (VkDeviceSize)width * height;
     const VkDeviceSize pages = grid / DC_CHUNK_CELLS;
     const VkDeviceSize atlas = (VkDeviceSize)tiles * DC_CHUNK_CELLS;
-    const VkDeviceSize horizontal = (VkDeviceSize)height * dc_gpu_fluid_aperture_leaves(width);
-    const VkDeviceSize vertical = (VkDeviceSize)width * dc_gpu_fluid_aperture_leaves(height);
-    const VkDeviceSize tree_leaves = horizontal > vertical ? horizontal : vertical;
     const VkDeviceSize sizes[BUFFER_COUNT] = {
         [CELLS] = atlas * sizeof(dc_cell_t),
         [PAGES] = pages * sizeof(uint32_t),
@@ -69,7 +66,7 @@ static void set_buffer_sizes(struct dc_gpu_seam_projection *scratch, uint32_t wi
         [PRESSURE_WORK] = sizeof(uint32_t),
         [PRESSURE_STENCIL] = sizeof(uint32_t),
         [APERTURE_PREFIX] = 2u * grid * sizeof(uint32_t),
-        [APERTURE_TREE] = (DC_FLUID_APERTURE_TREE_BASE + 2u * tree_leaves) * sizeof(uint32_t),
+        [APERTURE_TREE] = dc_gpu_fluid_aperture_tree_bytes(width, height),
         [CROSSINGS] = atlas * sizeof(seam_crossing_t),
         [PREVIOUS_STOCK] = grid * sizeof(uint32_t),
         [WATER_COLOR] = atlas * sizeof(seam_color_t),

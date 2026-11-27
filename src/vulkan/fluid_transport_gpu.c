@@ -30,6 +30,13 @@ uint32_t dc_gpu_fluid_aperture_leaves(uint32_t length) {
     return leaves;
 }
 
+VkDeviceSize dc_gpu_fluid_aperture_tree_bytes(uint32_t width, uint32_t height) {
+    VkDeviceSize horizontal = (VkDeviceSize)height * dc_gpu_fluid_aperture_leaves(width);
+    VkDeviceSize vertical = (VkDeviceSize)width * dc_gpu_fluid_aperture_leaves(height);
+    VkDeviceSize leaves = horizontal > vertical ? horizontal : vertical;
+    return (DC_FLUID_APERTURE_TREE_BASE + 2u * leaves) * sizeof(uint32_t);
+}
+
 static void aperture_dispatch(dc_gpu_t *gpu, uint32_t groups) {
     vkCmdDispatch(gpu->command, groups < 65535u ? groups : 65535u,
                    (groups + 65534u) / 65535u, 1);

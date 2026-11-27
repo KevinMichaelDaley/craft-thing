@@ -271,6 +271,9 @@ struct dc_gpu {
     bool pressure_work_enabled;
     VkPipeline hydro_head_pipeline;
     VkPipeline fluid_aperture_pipeline;
+    VkDescriptorSet fluid_transport_descriptor;
+    VkBuffer aperture_prefix_buffer, aperture_tree_buffer;
+    VkDeviceMemory aperture_prefix_memory, aperture_tree_memory;
     VkPipeline fluid_transport_pipelines[4];
     VkPipeline bulk_phase_pipeline;
     VkPipeline bulk_phase_retained_pipeline;
@@ -612,6 +615,8 @@ void dc_gpu_record_water_seam_correction(dc_gpu_t *gpu, VkDescriptorSet descript
     VkPipeline pipeline, uint32_t width, uint32_t height, uint32_t slots, float step_scale, uint32_t axis,
     uint32_t tick, uint32_t source_ping);
 uint32_t dc_gpu_fluid_aperture_leaves(uint32_t length);
+/** Storage for all horizontal or vertical aperture trees, including their reserved prefix. */
+VkDeviceSize dc_gpu_fluid_aperture_tree_bytes(uint32_t width, uint32_t height);
 void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);

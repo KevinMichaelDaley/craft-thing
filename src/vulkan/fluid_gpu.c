@@ -51,7 +51,11 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         &gpu->thermal_control_memory,&gpu->thermal_control_mapped,err,cap)) return false;
     memset(gpu->thermal_control_mapped,0,DC_HYDRO_CONTROL_BYTES);
     if(!dc_gpu_colors_init(gpu,err,cap)) return false;
-    return dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
+    return dc_gpu_make_device_buffer(gpu, 2u * bytes, &gpu->aperture_prefix_buffer,
+               &gpu->aperture_prefix_memory, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, dc_gpu_fluid_aperture_tree_bytes(gpu->width, gpu->height),
+               &gpu->aperture_tree_buffer, &gpu->aperture_tree_memory, err, cap) &&
+           dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_a_buffer,
                &gpu->fluid_a_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_b_buffer,
                &gpu->fluid_b_memory, err, cap) &&
@@ -223,6 +227,10 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu) {
     if (gpu->velocity_shift_pipeline)
         vkDestroyPipeline(gpu->device, gpu->velocity_shift_pipeline, NULL);
     if (gpu->velocity_mapped) vkUnmapMemory(gpu->device, gpu->velocity_memory);
+    if (gpu->aperture_prefix_buffer) vkDestroyBuffer(gpu->device, gpu->aperture_prefix_buffer, NULL);
+    if (gpu->aperture_tree_buffer) vkDestroyBuffer(gpu->device, gpu->aperture_tree_buffer, NULL);
+    if (gpu->aperture_prefix_memory) vkFreeMemory(gpu->device, gpu->aperture_prefix_memory, NULL);
+    if (gpu->aperture_tree_memory) vkFreeMemory(gpu->device, gpu->aperture_tree_memory, NULL);
     if (gpu->fluid_a_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_a_buffer, NULL);
     if (gpu->fluid_b_buffer) vkDestroyBuffer(gpu->device, gpu->fluid_b_buffer, NULL);
     if (gpu->velocity_buffer) vkDestroyBuffer(gpu->device, gpu->velocity_buffer, NULL);
@@ -316,7 +324,7 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
     for (uint32_t mode = first; mode < stop; ++mode) {
         push[2] = mode;
         if (mode < 4u) {
-            dc_gpu_record_transport_sweep(gpu, gpu->descriptor, gpu->fluid_transport_pipelines[mode],
+            dc_gpu_record_transport_sweep(gpu, gpu->fluid_transport_descriptor, gpu->fluid_transport_pipelines[mode],
                                    push, sizeof(push), gpu->rigid_occupancy_present);
         } else {
             bind_fluid_mode(gpu, mode);
