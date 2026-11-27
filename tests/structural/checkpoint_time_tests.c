@@ -141,12 +141,29 @@ static void test_fluid_channel_rejects_truncation_and_bulk_bound_to_wrong_water(
     PASS();
 }
 
+static void test_structure_archive_carries_separate_durable_owners(void) {
+    /* The clock is absent here. The owner table follows one empty fluid record. */
+    const uint8_t packet[65] = {[32] = 1, [40] = 16, [48] = 1, [49] = 9, [57] = 3};
+    FILE *file = tmpfile();
+    ASSERT_TRUE(file && fwrite(packet, sizeof(packet), 1, file) == 1);
+    rewind(file);
+    dc_checkpoint_channels_t channels = {0};
+    bool read = dc_checkpoint_channels_read(file, 12u, &channels);
+    fclose(file);
+    ASSERT_TRUE(read);
+    ASSERT_TRUE(dc_checkpoint_channels_decode_times(&channels, 1));
+    ASSERT_TRUE(!channels.chunk_times);
+    free(channels.fluid_bytes);
+    PASS();
+}
+
 int main(void) {
     RUN(test_reads_timed_checkpoint_channel);
     RUN(test_round_trips_and_hashes_a_mixed_clock_table);
     RUN(test_old_layouts_stay_untimed_and_invalid_clocks_are_rejected);
     RUN(test_fluid_channel_can_record_empty_stock_without_a_clock);
     RUN(test_fluid_channel_rejects_truncation_and_bulk_bound_to_wrong_water);
+    RUN(test_structure_archive_carries_separate_durable_owners);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
