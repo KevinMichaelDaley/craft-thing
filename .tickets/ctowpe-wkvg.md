@@ -1,6 +1,6 @@
 ---
 id: ctowpe-wkvg
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T11:48:57Z
@@ -33,3 +33,7 @@ The 6fa25fe8 full-run log reached the final stream tests and contains zero repor
 **2026-11-27T14:13:48Z**
 
 The supervised 274d015c full run exited 2 at the unrelated 70-second forest warmth check before reaching smoke. The newer 1fe0df09 supervised full run is in progress; prior focused smoke and shutdown checks remain green.
+
+**2026-11-27T16:55:15Z**
+
+The supervised full make test at 1fe0df09 finished successfully on persistent hidden Xephyr :93. The smoke enclosure group passed all eight cases, including slow acknowledged saves and genuinely stalled saves. The suite reached the final stream tests and the service exited successfully.
