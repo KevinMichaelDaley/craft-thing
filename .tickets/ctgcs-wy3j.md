@@ -21,3 +21,9 @@ Pin a focused CPU and Vulkan reproducer at the equal-carrier boundary and trace 
 ## Acceptance Criteria
 
 The three colored transport cases reach their existing physics checks and pass under Vulkan validation. Include a tight invalid-carrier case with unchanged admitted state after rejection.
+
+## Notes
+
+**2026-11-27T02:08:47Z**
+
+The CPU source trace identifies the representation mismatch before any Vulkan write. Seed packing rounds pigment to one float but retains an exhaust residual. With equal double inputs of 0.1, the revalidated packet decodes pigment 0.10000000149011612 and carrier 0.099999999999999978. The strict admissible upper bound is 0.10000000000000034. Keep strict validation on the original input and on the published packet when choosing the representable pigment.
