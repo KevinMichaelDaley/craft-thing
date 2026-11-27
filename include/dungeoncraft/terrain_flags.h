@@ -10,6 +10,7 @@
 /** Gas-only screen-space bypass for a burning solid; collision remains solid. */
 #define DC_CELL_BURNING_SMOKE_VOID 0.125
 #define DC_CELL_SMOKE_PASS_WOOD(m) ((m)==7u||(m)==8u||(m)==12u)
+#define DC_CELL_WATER_PROJECTABLE(m) ((m)==0u||(m)==2u||(m)==4u||(m)==5u||(m)==6u||(m)==10u)
 #define DC_CELL_LIQUID_PERMEABLE(m) ((m)==0u||(m)==2u||(m)==4u||(m)==5u||(m)==6u||(m)==10u||(m)==13u)
 #define DC_CELL_DIAGONAL_BOND_MASK 0x000fu
 #define DC_CELL_DIAGONAL_BONDS_READY 0x0010u

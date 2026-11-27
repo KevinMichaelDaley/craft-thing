@@ -103,7 +103,9 @@ GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_addr
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
-GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o
+GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o
+build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h src/vulkan/renderer_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/liquid_seam_layout.h src/vulkan/gas_gpu_internal.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
@@ -605,11 +607,11 @@ $(MARKER_SHADER): shaders/sim/marker.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-build/shaders/projection.comp.spv: shaders/sim/projection.comp shaders/sim/pressure_stencil_pack.glsl
+build/shaders/projection.comp.spv: shaders/sim/projection.comp shaders/sim/pressure_stencil_pack.glsl include/dungeoncraft/terrain_flags.h
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-build/shaders/pressure_stencil.comp.spv: shaders/sim/projection.comp shaders/sim/pressure_stencil_pack.glsl
+build/shaders/pressure_stencil.comp.spv: shaders/sim/projection.comp shaders/sim/pressure_stencil_pack.glsl include/dungeoncraft/terrain_flags.h
 	@mkdir -p build/shaders
 	$(GLSLANG) -DDC_CACHE_PRESSURE_STENCIL=1 -V --target-env vulkan1.3 -S comp -o $@ $<
 

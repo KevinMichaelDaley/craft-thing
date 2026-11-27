@@ -28,6 +28,7 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     free(gpu->checkpoint_owners);
     if (gpu->device) vkDeviceWaitIdle(gpu->device);
     dc_gpu_liquid_seam_destroy(gpu);
+    dc_gpu_seam_projection_destroy(gpu);
     dc_gpu_solver_commands_destroy(gpu);
     if (gpu->device) fr_thermal_gpu_destroy(gpu);
     if (gpu->device) fr_gas_gpu_destroy(gpu);

@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/terrain_flags.h"
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 1, std430) readonly buffer ChunkCells { uvec2 cells[]; };
@@ -43,8 +45,7 @@ bool open_cell(ivec2 p) {
     uint atlas = atlas_of(p);
     if (atlas == 0xffffffffu) return false;
     uint material = cells[atlas].x & 0xffffu;
-    return (material == 0u || material == 2u || material == 4u ||
-            material == 5u || material == 6u || material == 10u) &&
+    return DC_CELL_WATER_PROJECTABLE(material) &&
             occupancy[2u*params.width*params.height+index_of(p)] < 65536u;
 }
 

@@ -69,6 +69,7 @@ struct dc_gpu {
     struct fr_thermal_gpu *thermal;
     struct fr_gas_gpu *gas;
     struct dc_gpu_liquid_seam *liquid_seam;
+    struct dc_gpu_seam_projection *seam_projection;
     struct dc_gpu_authored_stage *authored_stage;
     VkInstance instance;
     struct dc_gpu_device_lifetime *device_lifetime;
@@ -578,6 +579,8 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
 #define DC_PRESSURE_PASS_COUNT (2u * DC_PRESSURE_SWEEPS + 2u)
 
 void dc_gpu_record_projection_begin(dc_gpu_t *gpu);
+void dc_gpu_record_dense_projection(dc_gpu_t *gpu, const VkDescriptorSet sets[2],
+                                     uint32_t width, uint32_t height, float step_scale);
 void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
@@ -589,6 +592,7 @@ void dc_gpu_record_tick_step(dc_gpu_t *gpu);
 void dc_gpu_record_bulk_phase(dc_gpu_t *gpu, float seconds);
 bool dc_gpu_ensure_bulk_phase_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_liquid_seam_destroy(dc_gpu_t *gpu);
+void dc_gpu_seam_projection_destroy(dc_gpu_t *gpu);
 bool dc_gpu_marker_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 bool dc_gpu_marker_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_marker_destroy(dc_gpu_t *gpu);
