@@ -12,6 +12,9 @@ static dc_gpu_t *expected_mpm;
 static VkPipeline bound;
 static const VkPipeline page_pressure = (VkPipeline)(uintptr_t)501;
 static const VkPipeline page_mass = (VkPipeline)(uintptr_t)502;
+static const VkPipeline pressure_tiles = (VkPipeline)(uintptr_t)503;
+static const VkPipeline pressure_stencil = (VkPipeline)(uintptr_t)504;
+static unsigned tile_scans, stencil_builds;
 static uint32_t pressure_depth, mass_depth, expected_depth, bad_depths;
 static uint32_t pushed_mode,mpm_modes,bad_mpm_bindings,generic_mpm_binds;
 static const uint64_t HASH_SEED=1469598103934665603ull;
@@ -33,6 +36,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout
     for(unsigned i=0;i<n;i++) hash_word(((const uint8_t *)v)[i]);
 }
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;hash_word(3);hash_word(x);hash_word(y);hash_word(z);dispatches++;
+    tile_scans += bound == pressure_tiles;
     if (bound == page_pressure || bound == page_mass) {
         if (bound == page_pressure) pressure_depth = z;
         else mass_depth = z;
@@ -40,6 +44,7 @@ VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y
     }
 }
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatchIndirect(VkCommandBuffer c,VkBuffer b,VkDeviceSize o) {(void)c;hash_word(4);hash_word((uintptr_t)b);hash_word(o);dispatches++;
+    stencil_builds += bound == pressure_stencil;
     if(expected_mpm&&pushed_mode<8u&&(bound==expected_mpm->mpm_pipeline||((uintptr_t)bound>=0x200u&&(uintptr_t)bound<0x208u))) {
         mpm_modes|=1u<<pushed_mode;bad_mpm_bindings+=bound!=expected_mpm->mpm_phase_pipelines[pushed_mode];
     }
@@ -202,7 +207,25 @@ static void test_cached_water_dispatch_tracks_sparse_page_extent(void) {
     dc_gpu_solver_commands_destroy(&g);
     PASS();
 }
+static void test_uninterrupted_water_cycle_prepares_pressure_once(void) {
+    dc_gpu_t g = fake_gpu();
+    g.pressure_work_enabled = true;
+    g.pressure_work_pipelines[1] = pressure_tiles;
+    g.projection_phase_pipelines[6] = pressure_stencil;
+    tile_scans = stencil_builds = 0;
+    dc_gpu_record_fluid(&g);
+    printf("Uninterrupted cycle recorded %u tile scans and %u stencil builds\n", tile_scans, stencil_builds);
+    ASSERT_INT_EQ(tile_scans, 1);
+    ASSERT_INT_EQ(stencil_builds, 1);
+    tile_scans = stencil_builds = 0;
+    dc_gpu_record_fluid_phase(&g, 1);
+    dc_gpu_record_fluid_phase(&g, 2);
+    ASSERT_INT_EQ(tile_scans, 2);
+    ASSERT_INT_EQ(stencil_builds, 2);
+    PASS();
+}
 int main(void) {
+    RUN(test_uninterrupted_water_cycle_prepares_pressure_once);
     RUN(test_cached_water_dispatch_tracks_sparse_page_extent);
     RUN(test_graph_authoring_invalidates_cached_empty_graph_commands);
     RUN(test_reuses_the_exact_solver_program_without_recording_again);

@@ -57,7 +57,7 @@ static bool phase(dc_gpu_t *g,uint32_t mode) {
     VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&memory};
     vkCmdPipelineBarrier2(g->command,&dep);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,g->pipeline_layout,0,1,&g->descriptor,0,NULL);
-    g->fluid_step_scale=1.f;
+    g->fluid_step_scale=g->timed_fluid?(float)g->fluid_interval:1.f;
     dc_gpu_record_fluid_phase(g,mode);
     memory.srcStageMask=VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
     memory.srcAccessMask=VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
@@ -184,6 +184,15 @@ static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terra
 }
 static dc_gpu_t *traced_workspace;
 static VkPipeline traced_pipeline;
+static const dc_gpu_t *traced_pressure;
+static unsigned tile_scans, stencil_builds;
+
+void __real_vkCmdDispatchIndirect(VkCommandBuffer, VkBuffer, VkDeviceSize);
+void __wrap_vkCmdDispatchIndirect(VkCommandBuffer command, VkBuffer buffer, VkDeviceSize offset) {
+    if (traced_pressure && traced_pipeline == traced_pressure->projection_phase_pipelines[6])
+        ++stencil_builds;
+    __real_vkCmdDispatchIndirect(command, buffer, offset);
+}
 static uint32_t expected_slots, pressure_dispatches, mass_dispatches, wrong_dispatches;
 
 void __real_vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline);
@@ -194,6 +203,8 @@ void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point
 
 void __real_vkCmdDispatch(VkCommandBuffer, uint32_t, uint32_t, uint32_t);
 void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint32_t z) {
+    if (traced_pressure && traced_pipeline == traced_pressure->pressure_work_pipelines[1])
+        ++tile_scans;
     if (traced_workspace) {
         dc_gpu_t *g = traced_workspace;
         bool pressure = traced_pipeline == g->projection_pipeline;
@@ -276,9 +287,85 @@ static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
     PASS();
 }
 
+static void test_scheduled_pressure_runs_match_independent_phases(void) {
+    enum { PIXELS = 2 * DC_CHUNK_CELLS };
+    char err[256] = {0};
+    dc_chunk_t *chunks = calloc(2, sizeof(*chunks));
+    float *pressure = calloc(2 * PIXELS, sizeof(*pressure));
+    ASSERT_TRUE(chunks && pressure);
+    chunks[0].cells[16 * DC_CHUNK_SIDE + 12].fluid_mass = DC_FLUID_FULL;
+    chunks[0].face_velocity[16 * DC_CHUNK_SIDE + 12].x = .75f;
+    chunks[1].coord.x = 1;
+    dc_gpu_t *run = make_grid(chunks, chunks + 1, err, sizeof(err));
+    dc_gpu_t *ref = make_grid(chunks, chunks + 1, err, sizeof(err));
+    ASSERT_TRUE(run && ref);
+    ASSERT_TRUE(dc_gpu_set_fluid_interval(run, 6) && dc_gpu_set_fluid_interval(ref, 6));
+    ASSERT_TRUE(run->pressure_work_enabled);
+    const unsigned lengths[] = {2, 2, 2, 6, 6};
+    const unsigned expected[] = {1, 1, 0, 1, 1};
+    bool counts_match = true;
+    unsigned next = 0;
+    for (unsigned tick = 0; tick < sizeof(lengths) / sizeof(*lengths); ++tick) {
+        if (tick == 1) {
+            ASSERT_TRUE(pressure[16 * run->width + 12] != 0.f);
+            /* Leave residual pressure at the drained cell and introduce a new wet tile. */
+            memset(chunks, 0, sizeof(*chunks));
+            dc_gpu_t *owners[] = {run, ref};
+            for (unsigned i = 0; i < 2; ++i) {
+                ASSERT_TRUE(dc_gpu_upload_chunk(owners[i], 0, chunks, err, sizeof(err)));
+                ASSERT_TRUE(dc_gpu_set_page(owners[i], 1, 0, UINT32_MAX, err, sizeof(err)));
+                ASSERT_TRUE(dc_gpu_upload_chunk(owners[i], 2, chunks + 1, err, sizeof(err)));
+                ASSERT_TRUE(dc_gpu_set_page(owners[i], 1, 0, 2, err, sizeof(err)));
+                ASSERT_TRUE(dc_gpu_paint_material(owners[i], 90, 28, 1, DC_MATERIAL_WATER, err, sizeof(err)));
+            }
+        }
+        float seconds = lengths[tick] / 60.f;
+        ASSERT_TRUE(dc_gpu_set_tick_seconds(run, seconds) && dc_gpu_set_tick_seconds(ref, seconds));
+        run->solver_cache_disabled = tick < 3;
+        tile_scans = stencil_builds = 0;
+        traced_pressure = run;
+        ASSERT_TRUE(dc_gpu_tick_step(run, err, sizeof(err)));
+        traced_pressure = NULL;
+        if (tick < 3) counts_match &= tile_scans == expected[tick] && stencil_builds == expected[tick];
+        for (unsigned i = 0; i < lengths[tick]; ++i) {
+            ASSERT_TRUE(phase(ref, next));
+            next = (next + 1) % 6;
+        }
+        ASSERT_EQ(run->fluid_tick, ref->fluid_tick);
+        ASSERT_TRUE(pressure_snapshot(run, pressure, err, sizeof(err)));
+        ASSERT_TRUE(pressure_snapshot(ref, pressure + PIXELS, err, sizeof(err)));
+        ASSERT_EQ(memcmp(pressure, pressure + PIXELS, PIXELS * sizeof(*pressure)), 0);
+        for (unsigned page = 0; page < 2; ++page) {
+            unsigned slot = page && tick ? 2 : page;
+            ASSERT_TRUE(dc_gpu_download_chunk(run, slot, chunks, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_download_chunk(ref, slot, chunks + 1, err, sizeof(err)));
+            ASSERT_EQ(memcmp(chunks[0].cells, chunks[1].cells, sizeof(chunks[0].cells)), 0);
+            ASSERT_EQ(memcmp(chunks[0].face_velocity, chunks[1].face_velocity, sizeof(chunks[0].face_velocity)), 0);
+            ASSERT_EQ(chunks[0].marker_count, chunks[1].marker_count);
+            for (unsigned i = 0; i < 2; ++i)
+                qsort(chunks[i].markers, chunks[i].marker_count, sizeof(dc_marker_t), marker_compare);
+            ASSERT_EQ(memcmp(chunks[0].markers, chunks[1].markers,
+                             chunks[0].marker_count * sizeof(dc_marker_t)), 0);
+        }
+    }
+    ASSERT_EQ(dc_gpu_validation_errors(run), 0u);
+    ASSERT_EQ(dc_gpu_validation_errors(ref), 0u);
+    dc_gpu_destroy(run);
+    dc_gpu_destroy(ref);
+    free(chunks);
+    free(pressure);
+    ASSERT_TRUE(counts_match);
+    PASS();
+}
+
 int main(int argc, char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "--runs")) {
+        RUN(test_scheduled_pressure_runs_match_independent_phases);
+        return g_fail != 0;
+    }
     RUN(test_sparse_workspace_pages_match_full_slot_dispatch);
     if (argc == 2 && !strcmp(argv[1], "--workspace")) return g_fail != 0;
+    RUN(test_scheduled_pressure_runs_match_independent_phases);
     RUN(test_pressure_batches_have_exact_stencil_cache_storage);
     RUN(test_pressure_stencil_does_not_increase_mapped_memory);
     RUN(test_pressure_work_is_empty_then_wakes_for_local_water);
