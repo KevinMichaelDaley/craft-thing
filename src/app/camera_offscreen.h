@@ -36,5 +36,7 @@ void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *
 bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap);
 /** Release the camera-owned workspace after the level has disposed of its leases. */
 void dc_camera_offscreen_discard(dc_level_view_t *view);
+/** Retain the durable election for retry after releasing a failed water workspace load. */
+void dc_camera_offscreen_retry(dc_camera_offscreen_t *camera);
 
 #endif

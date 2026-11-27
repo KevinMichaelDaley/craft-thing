@@ -147,6 +147,12 @@ void dc_camera_offscreen_discard(dc_level_view_t *view) {
     view->camera_offscreen = (dc_camera_offscreen_t){0};
 }
 
+void dc_camera_offscreen_retry(dc_camera_offscreen_t *camera) {
+    dc_offscreen_destroy(camera->workspace);
+    camera->workspace = NULL;
+    camera->phase = DC_CAMERA_OFFSCREEN_STORED;
+}
+
 static bool camera_needs_chunk(const dc_level_view_t *view, dc_chunk_coord_t coord) {
     return dc_level_chunk_visible(view, coord) ||
         (view->transfer_pending && same_coord(view->transfer_to, coord));
@@ -166,9 +172,13 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
             dc_camera_offscreen_discard(view);
             return true;
         }
-        camera->workspace = dc_offscreen_create(view->gpu, camera->coord, NULL, 0);
+        camera->workspace = dc_offscreen_create(view->gpu, camera->coord, coupled ? err : NULL, coupled ? cap : 0u);
         if (!camera->workspace || !dc_level_offscreen_begin_disk(view, camera->workspace,
-            camera->coord, camera->owner, camera->time, &camera->generation, NULL, 0)) {
+            camera->coord, camera->owner, camera->time, &camera->generation, coupled ? err : NULL, coupled ? cap : 0u)) {
+            if (coupled) {
+                dc_camera_offscreen_retry(camera);
+                return false;
+            }
             dc_camera_offscreen_discard(view);
             return true;
         }
