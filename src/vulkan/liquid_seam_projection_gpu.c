@@ -242,3 +242,12 @@ bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
     read_face(scratch, axis, width, samples);
     return true;
 }
+
+bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
+    const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
+    char *err, uint32_t cap) {
+    (void)first; (void)second; (void)axis; (void)seconds;
+    (void)previous_normal; (void)plan; (void)err; (void)cap;
+    return false;
+}

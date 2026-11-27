@@ -1,7 +1,7 @@
 ---
 id: ctopp-2c14
-status: open
-deps: [ctopp-fkir]
+status: in_progress
+deps: [ctopp-fkir, ctowt-iyyp]
 links: []
 created: 2026-11-27T06:02:05Z
 type: task

@@ -583,6 +583,7 @@ void dc_gpu_record_projection_fields(dc_gpu_t *gpu);
 void dc_gpu_record_dense_projection(dc_gpu_t *gpu, const VkDescriptorSet sets[2],
                                      uint32_t width, uint32_t height, float step_scale);
 void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
+void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase);

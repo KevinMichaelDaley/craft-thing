@@ -46,6 +46,30 @@ bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
     const float previous_normal[DC_CHUNK_SIDE],
     dc_liquid_seam_sample_t samples[DC_CHUNK_SIDE], char *err, uint32_t cap);
 
+/** Water stock and gross crossing volumes for one original owner cell, in Q16. */
+typedef struct {
+    uint32_t initial_fp, final_fp;
+    uint32_t crossing_out_fp, crossing_in_fp;
+} dc_water_seam_cell_t;
+
+/** The scratch water sweep's write set, in original owner chunk order. */
+typedef struct {
+    dc_liquid_seam_sample_t projection[DC_CHUNK_SIDE];
+    int32_t crossing_fp[DC_CHUNK_SIDE];
+    float pressure_work[DC_CHUNK_SIDE];
+    dc_water_seam_cell_t cells[2][DC_CHUNK_CELLS];
+} dc_water_seam_plan_t;
+
+/** Plan water transport at a common owner interval on the projected two-tile domain.
+ * Signed flow is positive from first to second. Pressure work is the native
+ * pressure difference times net volume in cells. Input owners remain live and
+ * read-only. The plan is published on success.
+ */
+bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
+    const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
+    char *err, uint32_t cap);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.

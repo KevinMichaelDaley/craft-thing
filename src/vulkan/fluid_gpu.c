@@ -308,7 +308,7 @@ static void record_aperture_cache(dc_gpu_t *gpu, bool vertical, uint32_t leaves)
     }
 }
 
-static void record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
+void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
                                    uint32_t stop) {
     uint32_t push[7] = { gpu->width, gpu->height, 0,
                           gpu->fluid_tick & 1u, 0, 0, 0 };
@@ -430,8 +430,8 @@ void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase) {
         pressure_stop < 40u ? pressure_stop : 40u);
     else if (phase == 3u) {
         dc_gpu_record_pressure_passes(gpu, 40u, pressure_stop);
-        record_fluid_transport(gpu, 0u, 3u);
-    } else if (phase == 4u) record_fluid_transport(gpu, 3u, 5u);
+        dc_gpu_record_fluid_transport(gpu, 0u, 3u);
+    } else if (phase == 4u) dc_gpu_record_fluid_transport(gpu, 3u, 5u);
     else if (phase == 5u) record_fluid_correction(gpu);
 }
 
