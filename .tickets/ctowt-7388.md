@@ -50,3 +50,7 @@ New workspaces inherit the resident cadence and marker correction setting. Level
 **2026-11-27T10:32:09Z**
 
 The level tick path now binds adjacent admitted structure-workspace tiles to the same elapsed interval as all mapped resident tiles. Both owners run source and rigid work before shared water and bulk, particles, thermal and gas afterward. The displayed Vulkan fixture checks two full cycles against a monolithic basin, verifies color and stock after reopen, rejects stale generations before consuming the queued tick, and restores the durable pair when a receipt cannot be recovered. Camera disk election still selects isolated islands. Open-basin camera election and return during a partial interval remain unverified.
+
+**2026-11-27T10:44:34Z**
+
+Two camera evictions and returns now match an independent monolithic simulation for per-cell water mass, face velocity and pigment. The test pans back during a partial phase with an elapsed tick queued. A dry returning tile is eligible when its connected resident neighbor holds water. Camera admission with a failed workspace load and an eviction initiated midway through an ordinary resident cycle still need coverage.
