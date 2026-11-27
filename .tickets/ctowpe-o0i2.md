@@ -23,3 +23,7 @@ Identify the dominant presentation cost with a repeatable measurement and verify
 **2026-11-27T16:08:40Z**
 
 Created an independent hidden persistent Xephyr :94 with glamor enabled for an isolated comparison against :93. Both servers advertise Present, MIT-SHM and GLX, and neither advertises DRI3. All acceptance benchmarks remain on the original hidden :93. The comparison uses an identically sized, fully presented 1920x1080 swapchain, with no skip-present option, followed by syscall timing on :93.
+
+**2026-11-27T16:28:32Z**
+
+All static 1920x1080 WSI controls used the RTX A2000, 12 warmups and 60 measured frames. Default FIFO measured 58.270 ms mean/83.653 p95; forced immediate 58.661/74.332; repeated FIFO 58.191/74.151; truthful one-pixel incremental hint on the fixed image 56.329/69.898. The submitting thread consumed 52.3–53.4 ms of CPU time per vkQueuePresentKHR in all four runs. Hidden glamor :94 measured 65.823/76.586, versus 54.498/67.542 in the adjacent ordinary :93 repeat. No mode reached the budget. Keep the original acceptance display and settings. Instruction and I/O sampling is queued to identify what consumes the CPU time.
