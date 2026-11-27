@@ -14,7 +14,7 @@ static bool camera_has_live_bond(dc_gpu_t *gpu, uint32_t first, uint32_t second)
     return false;
 }
 
-enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF, BOND_RETRY, BOND_CONTACT };
+enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF, BOND_RETRY, BOND_CONTACT, BOND_SEPARATE_MEMBER };
 
 static bool read_bond_contacts(dc_gpu_t *gpu, uint32_t first, dc_gpu_contact_t *out, uint32_t *count,
     char *err, uint32_t cap) {
@@ -60,6 +60,17 @@ static void check_camera_bonded_assembly(enum bond_check check) {
         graph.members[i] = (fr_structural_gpu_member_t){.id = i + 1u, .generation = 3u,
             .a = i + 1u, .b = i + 2u, .material = i ? FR_STRUCTURAL_STONE : FR_STRUCTURAL_WOOD,
             .depth_fp = 2u * DC_FLUID_FULL};
+    if (check == BOND_SEPARATE_MEMBER) {
+        graph.node_count += 2u;
+        graph.member_count++;
+        for (unsigned i = 0; i < 2; ++i) {
+            graph.nodes[3u + i] = (fr_structural_gpu_node_t){.id = 4u + i, .generation = 5,
+                .chunk = {origin.x + 3, origin.y}, .x_fp = (12 + (int)i * 8) * DC_FLUID_FULL,
+                .y_fp = 18 * DC_FLUID_FULL};
+        }
+        graph.members[2] = (fr_structural_gpu_member_t){.id = 3u, .generation = 5u, .a = 4u, .b = 5u,
+            .material = FR_STRUCTURAL_WOOD, .depth_fp = DC_FLUID_FULL};
+    }
     ASSERT_TRUE(fr_gpu_place_structure(view->gpu, &graph, err, sizeof(err)));
     for (unsigned i = 0; i < 90; ++i) ASSERT_TRUE(dc_gpu_rigid_step(view->gpu, err, sizeof(err)));
     const uint32_t first = FR_STRUCTURAL_BODY_ID_BASE + 1u;
@@ -187,6 +198,16 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     dc_gpu_t *remote = view->camera_offscreen.workspace->gpu;
     ASSERT_TRUE(camera_has_live_bond(remote, first, first + 1u));
     ASSERT_TRUE(!camera_has_live_bond(view->gpu, first, first + 1u));
+    if (check == BOND_SEPARATE_MEMBER) {
+        fr_structural_gpu_member_state_t state;
+        ASSERT_TRUE(fr_gpu_read_structure_member(view->gpu, 3u, &state));
+        ASSERT_EQ(state.generation, 5u);
+        ASSERT_TRUE(!fr_gpu_read_structure_member(remote, 3u, &state));
+        ASSERT_TRUE(dc_gpu_read_body_motion(view->gpu, first + 2u, &motion, err, sizeof(err)));
+        ASSERT_TRUE(!dc_gpu_read_body_motion(remote, first + 2u, &motion, NULL, 0));
+        ASSERT_TRUE(!fr_gpu_read_structure_member(view->gpu, 1u, &state));
+        ASSERT_TRUE(fr_gpu_read_structure_member(remote, 1u, &state));
+    }
     if (check == BOND_CONTACT) {
         ASSERT_TRUE(read_bond_contacts(view->gpu, first, next, &next_count, err, sizeof(err)));
         ASSERT_EQ(next_count, 0u);
@@ -269,6 +290,14 @@ static void check_camera_bonded_assembly(enum bond_check check) {
         ASSERT_EQ(memcmp(&restored, &confirmed[i], sizeof(restored)), 0);
     }
     ASSERT_EQ(view->world_seconds, handoff_seconds + .03125);
+    if (check == BOND_SEPARATE_MEMBER) {
+        for (unsigned i = 0; i < 3; ++i) {
+            fr_structural_gpu_member_state_t state;
+            ASSERT_TRUE(fr_gpu_read_structure_member(view->gpu, i + 1u, &state));
+            ASSERT_EQ(state.generation, graph.members[i].generation);
+        }
+        ASSERT_TRUE(dc_gpu_read_body_motion(view->gpu, first + 2u, &motion, err, sizeof(err)));
+    }
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     PASS();
 }
@@ -288,5 +317,8 @@ static void test_close_retries_failed_bond_page_and_reopens_the_whole_group(void
 }
 static void test_camera_preserves_completed_terrain_contacts_of_bonded_members(void) {
     check_camera_bonded_assembly(BOND_CONTACT);
+}
+static void test_camera_keeps_other_authored_components_with_their_owner(void) {
+    check_camera_bonded_assembly(BOND_SEPARATE_MEMBER);
 }
 #endif
