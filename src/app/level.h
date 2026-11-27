@@ -69,6 +69,8 @@ bool dc_level_view_smoke_audit(dc_level_view_t *view,fr_gas_gpu_audit_t *out,cha
 bool dc_level_view_place_structure(dc_level_view_t *view,
                                    const fr_structural_gpu_graph_t *graph,
                                    char *err, uint32_t err_cap);
+/** Queue one simulation step of up to 0.25 seconds for the next level frame.
+ * A loading frame presents without advancing or accumulating catch-up work. */
 bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
                               char *err, uint32_t err_cap);
 bool dc_level_view_spawn_body(dc_level_view_t *view, uint32_t x, uint32_t y,

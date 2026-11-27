@@ -214,13 +214,46 @@ bool dc_level_view_place_structure(dc_level_view_t *view,
     return fr_gpu_save_structure(view->gpu, view->body_path, err, cap);
 }
 
+static dc_level_step_run_t *pending_runs(dc_level_view_t *view) {
+    return view->step_runs ? view->step_runs : &view->inline_step;
+}
+
+static bool queue_level_step(dc_level_view_t *view, float seconds,
+                             char *err, uint32_t cap) {
+    dc_level_step_run_t *runs = pending_runs(view);
+    if (view->end_run > view->first_run && runs[view->end_run - 1u].seconds == seconds) {
+        ++runs[view->end_run - 1u].count;
+        return true;
+    }
+    size_t capacity = view->step_runs ? view->run_capacity : 1u;
+    if (view->end_run == capacity && view->first_run) {
+        view->end_run -= view->first_run;
+        memmove(runs, runs + view->first_run, view->end_run * sizeof(*runs));
+        view->first_run = 0;
+    }
+    if (view->end_run == capacity) {
+        if (capacity > SIZE_MAX / sizeof(*runs) / 2u)
+            return error(err, cap, "Too many distinct level step intervals");
+        size_t new_capacity = capacity * 2u;
+        runs = realloc(view->step_runs, new_capacity * sizeof(*runs));
+        if (!runs) return error(err, cap, "Cannot queue level step interval");
+        if (!view->step_runs) runs[0] = view->inline_step;
+        view->step_runs = runs;
+        view->run_capacity = new_capacity;
+    }
+    runs[view->end_run++] = (dc_level_step_run_t){seconds, 1u};
+    return true;
+}
+
 bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
                               char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
+    if (!(seconds > 0.0f && seconds <= 0.25f))
+        return error(err, cap, "Invalid elapsed simulation time");
     if (view->pending_steps == UINT32_MAX)
         return error(err, cap, "Too many pending level steps");
+    if (!queue_level_step(view, seconds, err, cap)) return false;
     ++view->pending_steps;
-    view->pending_seconds += seconds;
     for (uint32_t i = 0; i < view->table.capacity; ++i)
         if (view->table.slots[i].state == DC_SLOT_ACTIVE)
             dc_chunk_table_mark_dirty(&view->table, i);
@@ -533,6 +566,7 @@ void dc_level_view_discard(dc_level_view_t *view) {
     dc_stream_destroy(view->stream);
     dc_world_save_close(view->save);
     free(view->save_colors);
+    free(view->step_runs);
     dc_gpu_destroy(view->gpu);
     dc_chunk_table_destroy(&view->table);
     free(view);
@@ -548,6 +582,23 @@ bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t 
         return error(err, cap, "Cannot stage player world saves");
     memcpy(view->body_path, body_path, (size_t)length + 1);
     view->player_save_staged = true;
+    return true;
+}
+
+static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) {
+    dc_level_step_run_t *runs = pending_runs(view);
+    while (view->first_run < view->end_run) {
+        dc_level_step_run_t *run = &runs[view->first_run];
+        if (!dc_gpu_set_tick_seconds(view->gpu, run->seconds))
+            return error(err, cap, "Invalid elapsed simulation time");
+        while (run->count) {
+            if (view->players && !dc_players_step(view, run->seconds, err, cap)) return false;
+            if (!dc_gpu_tick_step(view->gpu, err, cap)) return false;
+            --run->count;
+            --view->pending_steps;
+        }
+        ++view->first_run;
+    }
     return true;
 }
 
@@ -612,20 +663,18 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
     uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
-    if (ready_steps && !dc_gpu_set_tick_seconds(view->gpu,
-            view->pending_seconds / (float)ready_steps))
+    if (ready_steps && (view->players || view->end_run - view->first_run > 1u)) {
+        if (view->players && !dc_players_present(view, err, cap)) return false;
+        if (!execute_level_steps(view, err, cap)) return false;
+        ready_steps = 0;
+    } else if (ready_steps && !dc_gpu_set_tick_seconds(view->gpu,
+                    pending_runs(view)[view->first_run].seconds)) {
         return error(err, cap, "Invalid elapsed simulation time");
-    if(view->players&&ready_steps) {
-        if (!dc_players_present(view,err,cap)) return false;
-        float seconds=view->pending_seconds/(float)ready_steps;
-        for(uint32_t step=0;step<ready_steps;step++)
-            if(!dc_players_step(view,seconds,err,cap)||!dc_gpu_tick_step(view->gpu,err,cap)) return false;
-        ready_steps=0;
     }
     if (view->players && !dc_players_present(view,err,cap)) return false;
     if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
     view->pending_steps = 0;
-    view->pending_seconds = 0.0f;
+    view->first_run = view->end_run = 0;
     return true;
 }
 
@@ -1008,6 +1057,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (okay && staged) okay = dc_world_save_commit(view->save, err, cap);
     dc_world_save_close(view->save);
     free(view->save_colors);
+    free(view->step_runs);
     if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save flushed%llums\n",
         (unsigned long long)(SDL_GetTicks64()-save_start));
     dc_gpu_destroy(view->gpu);

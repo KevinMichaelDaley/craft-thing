@@ -4,6 +4,12 @@
 #include "dungeoncraft/world_save.h"
 #include "level.h"
 #include "player_inventory_save.h"
+
+typedef struct {
+    float seconds;
+    uint32_t count;
+} dc_level_step_run_t;
+
 struct dc_level_view {
     struct dc_player_session *players;
     dc_gpu_t *gpu;
@@ -15,8 +21,10 @@ struct dc_level_view {
     uint32_t camera_offset_x,camera_offset_y;
     int32_t pending_chunk_dx,pending_chunk_dy;
     uint32_t pending_steps;
+    dc_level_step_run_t inline_step;
+    dc_level_step_run_t *step_runs;
+    size_t first_run, end_run, run_capacity;
     char body_path[1024];
-    float pending_seconds;
     bool marker_overlay,lighting_initialized;
     fr_renderer_mode_t renderer_mode;
     bool spring_enabled,restored;
