@@ -509,7 +509,9 @@ static void check_bulk_crossing(bool vertical) {
     const float elapsed[] = {1.f/240.f, 1.f/60.f, 1.f/60.f};
     for (unsigned tick = 0; tick < sizeof(elapsed)/sizeof(*elapsed); ++tick) {
         ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, elapsed[tick]) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
+        g_lose_ack = tick == 1u;
         ASSERT_EQ(dc_gpu_tick_water_cohort(endpoints, 2, elapsed[tick], g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+        ASSERT_TRUE(!g_lose_ack);
         for (unsigned i = 0; i < 2; ++i) {
             ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(mono, i, expected, g_err, sizeof(g_err)) &&
                         fr_bulk_phase_gpu_export_chunk(owners[i], 0, phase, g_err, sizeof(g_err)));
@@ -526,8 +528,20 @@ static void check_bulk_crossing(bool vertical) {
         slime += expected->slime_fp[i];
     }
     ASSERT_TRUE(oil && slime);
+    fr_bulk_phase_chunk_t *bad = owners[1]->bulk_phase_mapped;
+    bad->oil_excess[0] = 1.f;
+    ASSERT_TRUE(!bad->oil_fp[0]);
+    ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(owners[0], 0, phase, g_err, sizeof(g_err)) &&
+                fr_bulk_phase_gpu_export_chunk(owners[1], 0, expected, g_err, sizeof(g_err)));
+    uint32_t phase_before = owners[0]->fluid_phase;
+    ASSERT_EQ(dc_gpu_tick_water_cohort(endpoints, 2, elapsed[1], g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_EQ(owners[0]->fluid_phase, phase_before);
+    ASSERT_EQ(owners[1]->fluid_phase, phase_before);
+    ASSERT_EQ(memcmp(phase, owners[0]->bulk_phase_mapped, sizeof(*phase)), 0);
+    ASSERT_EQ(memcmp(expected, owners[1]->bulk_phase_mapped, sizeof(*expected)), 0);
     PASS();
 cleanup:
+    g_lose_ack = false;
     dc_gpu_destroy(mono);
     dc_gpu_destroy(owners[1]);
     dc_gpu_destroy(owners[0]);
