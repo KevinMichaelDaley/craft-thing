@@ -10,6 +10,43 @@ static bool rewrite_parked_source(dc_streamer_t *writer, const dc_stream_result_
     return okay;
 }
 
+static void test_reversal_replays_a_sleeping_slot_before_residency(void) {
+    char directory[] = "build/camera_sleeping_reversal_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(view && chunk);
+    dc_chunk_coord_t coord = {view->origin.x - HALO_CHUNKS - 1, view->origin.y};
+    dc_chunk_owner_t owner = {13u,7u};
+    dc_chunk_time_t time = {view->world_seconds - .0625, true};
+    camera_seal_room(chunk, coord);
+    unsigned center = 32u * DC_CHUNK_SIDE + 32u;
+    chunk->cells[center].fluid_mass = 14000u;
+    dc_stream_result_t source = {.kind=DC_STREAM_LOADED,.coord=coord,.chunk=chunk,
+        .generation=1u,.time=time};
+    ASSERT_TRUE(rewrite_parked_source(view->stream, &source, owner));
+    uint32_t slot;
+    uint64_t generation;
+    ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, coord, &slot, &generation) &&
+        dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
+        dc_chunk_table_finish_load(&view->table, slot, generation) &&
+        dc_chunk_table_set_active(&view->table, slot, false));
+    view->table.slots[slot].time = time;
+    view->table.slots[slot].checkpoint_owner = owner;
+    view->camera_offscreen = (dc_camera_offscreen_t){.coord=coord,.owner=owner,
+        .phase=DC_CAMERA_OFFSCREEN_STORED,.time=time};
+    ASSERT_TRUE(dc_level_view_move(view,-1,0) &&
+        dc_level_view_wait_visible(view,30000u,err,sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, &slot));
+    ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
+    ASSERT_TRUE(dc_gpu_download_chunk(view->gpu,slot,chunk,err,sizeof(err)));
+    ASSERT_EQ(camera_stock(chunk,NULL,false),14000u);
+    ASSERT_TRUE(chunk->cells[center].fluid_mass < 14000u);
+    dc_level_view_discard(view);
+    free(chunk);
+    PASS();
+}
+
 static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch, bool check_cadence, bool reopen) {
     char directory[] = "build/camera_two_rooms_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
