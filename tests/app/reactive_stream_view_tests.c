@@ -384,10 +384,12 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && strcmp(argv[1], "--camera-restart") == 0) {
         RUN(test_camera_reopens_its_confirmed_partial_cycle);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
     if (argc == 2 && strcmp(argv[1], "--partial-restart") == 0) {
         RUN(test_quit_resumes_confirmed_partial_water_cycle);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
     if (argc == 2 && strcmp(argv[1], "--paired-seam") == 0) {
