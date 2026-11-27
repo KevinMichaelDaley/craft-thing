@@ -1,10 +1,12 @@
 #include <math.h>
 
 #include "ferrum/fire/gas.h"
+#include "dungeoncraft/terrain_flags.h"
 #include "../vulkan/gpu_internal.h"
 #include "camera_offscreen.h"
 #include "level_internal.h"
 #include "level_offscreen.h"
+#include "offscreen_internal.h"
 
 enum { CAMERA_WORKSPACE_STEPS_PER_TICK = 2u };
 
@@ -54,14 +56,78 @@ bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_r
     return true;
 }
 
+enum { WEST = 1, EAST = 2, NORTH = 4, SOUTH = 8 };
+
+static bool face_neighbor(dc_chunk_coord_t coord, unsigned face, dc_chunk_coord_t *neighbor) {
+    if (face == WEST && coord.x > INT64_MIN) --coord.x;
+    else if (face == EAST && coord.x < INT64_MAX) ++coord.x;
+    else if (face == NORTH && coord.y > INT64_MIN) --coord.y;
+    else if (face == SOUTH && coord.y < INT64_MAX) ++coord.y;
+    else return false;
+    *neighbor = coord;
+    return true;
+}
+
+static bool face_in_view(const dc_level_view_t *view, dc_chunk_coord_t coord, unsigned face) {
+    dc_chunk_coord_t neighbor;
+    return face_neighbor(coord, face, &neighbor) && dc_level_chunk_visible(view, neighbor);
+}
+
+static bool neighbor_has_water(dc_level_view_t *view, dc_chunk_coord_t coord, unsigned face) {
+    dc_chunk_coord_t neighbor;
+    uint32_t slot;
+    if (!face_neighbor(coord, face, &neighbor) || !dc_chunk_table_find(&view->table, neighbor, &slot) ||
+        view->table.slots[slot].state != DC_SLOT_ACTIVE ||
+        !dc_gpu_copy_chunk_state(view->gpu, slot, false, false, NULL, 0)) return false;
+    const dc_cell_t *cells = (const dc_cell_t *)view->gpu->chunk_mapped + (size_t)slot * DC_CHUNK_CELLS;
+    for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i)
+        if (cells[i].fluid_mass) return true;
+    return false;
+}
+
+unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_stream_result_t *snapshot) {
+    if (!snapshot->chunk || !snapshot->time.known || !isfinite(snapshot->time.seconds) ||
+        snapshot->time.seconds < 0. || snapshot->gas || view->gpu->gas || snapshot->chunk->particle_count)
+        return 0;
+    unsigned faces = 0;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        const dc_cell_t *cell = &snapshot->chunk->cells[i];
+        if (snapshot->bulk && (snapshot->bulk->oil_fp[i] || snapshot->bulk->slime_fp[i])) return 0;
+        const uint32_t x = i % DC_CHUNK_SIDE, y = i / DC_CHUNK_SIDE;
+        unsigned edge = (x == 0 ? WEST : 0) | (x == DC_CHUNK_SIDE - 1u ? EAST : 0) |
+                        (y == 0 ? NORTH : 0) | (y == DC_CHUNK_SIDE - 1u ? SOUTH : 0);
+        if (!edge || closed_edge_cell(snapshot, i)) continue;
+        if (!DC_CELL_LIQUID_PERMEABLE(cell->material)) return 0;
+        faces |= edge;
+    }
+    return !(faces & (faces - 1u)) ? faces : 0;
+}
+
+bool dc_camera_offscreen_water_ready(dc_level_view_t *view) {
+    dc_camera_offscreen_t *camera = &view->camera_offscreen;
+    if (!camera->water_face) return true;
+    dc_chunk_time_t time;
+    bool writing;
+    return camera->phase == DC_CAMERA_OFFSCREEN_LEASED &&
+        dc_level_offscreen_progress(view, camera->coord, camera->generation, &time, &writing) &&
+        time.known && !writing;
+}
+
 void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *snapshot,
     dc_chunk_owner_t owner, uint64_t write_generation) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
-    if (camera->phase != DC_CAMERA_OFFSCREEN_IDLE || view->closing ||
-        dc_level_chunk_visible(view, snapshot->coord) || !dc_chunk_owner_valid(owner) ||
-        !dc_camera_offscreen_isolated(view, snapshot) || !has_transport_stock(snapshot)) return;
+    if (camera->phase != DC_CAMERA_OFFSCREEN_IDLE || view->closing || !snapshot->chunk ||
+        dc_level_chunk_visible(view, snapshot->coord) || !dc_chunk_owner_valid(owner)) return;
+    unsigned face = 0;
+    if (!dc_camera_offscreen_isolated(view, snapshot)) {
+        face = dc_camera_offscreen_water_face(view, snapshot);
+        if (!face || !face_in_view(view, snapshot->coord, face) || view->gpu->fluid_phase ||
+            snapshot->time.seconds != view->world_seconds) return;
+    }
+    if (!has_transport_stock(snapshot) && (!face || !neighbor_has_water(view, snapshot->coord, face))) return;
     *camera = (dc_camera_offscreen_t){.coord = snapshot->coord, .owner = owner,
-        .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING};
+        .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING,
+        .water_face = face};
 }
 
 void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *result) {
@@ -92,8 +158,10 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
         return true;
     bool needed = camera_needs_chunk(view, camera->coord);
     bool independent = dc_gpu_chunk_physics_isolated(view->gpu);
+    bool coupled = camera->water_face != 0u;
+    bool attached = coupled && face_in_view(view, camera->coord, camera->water_face);
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
-        if (closing || !independent || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
+        if (closing || (coupled ? !attached : !independent) || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
             (needed && camera->time.seconds >= view->world_seconds)) {
             dc_camera_offscreen_discard(view);
             return true;
@@ -105,6 +173,10 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
             return true;
         }
         camera->phase = DC_CAMERA_OFFSCREEN_LEASED;
+        if (coupled) {
+            camera->workspace->gpu->fluid_tick = view->gpu->fluid_tick;
+            camera->workspace->gpu->fluid_phase_budget = view->gpu->fluid_phase_budget;
+        }
     }
 
     dc_chunk_time_t time;
@@ -114,6 +186,11 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
         return true;
     }
     if (!time.known || writing) return true;
+    if (coupled) {
+        if (closing || needed || !attached)
+            return dc_level_offscreen_publish(view, camera->coord, camera->generation, err, cap);
+        return true;
+    }
     if (!closing && independent && !dc_offscreen_advance(camera->workspace,
         view->world_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
         if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))

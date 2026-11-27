@@ -17,11 +17,16 @@ typedef struct {
     dc_chunk_owner_t owner;
     dc_chunk_time_t time;
     uint64_t generation;
+    unsigned water_face;
     dc_camera_offscreen_phase_t phase;
 } dc_camera_offscreen_t;
 
 /** Verify that the current physics can treat the saved tile as an isolated island. */
 bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_result_t *snapshot);
+/** Identify the single open water face of an otherwise closed camera eviction. */
+unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_stream_result_t *snapshot);
+/** Whether the elected water owner can participate in this frame's simulation. */
+bool dc_camera_offscreen_water_ready(dc_level_view_t *view);
 /** Elect one eligible camera eviction after its worker request has been accepted. */
 void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *snapshot,
     dc_chunk_owner_t owner, uint64_t write_generation);

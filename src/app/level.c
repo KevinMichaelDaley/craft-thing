@@ -670,7 +670,7 @@ static void consume_level_steps(dc_level_view_t *view, uint32_t count) {
     if (!run->count) ++view->first_run;
 }
 
-static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) {
+static bool execute_steps(dc_level_view_t *view, bool stop_at_water_boundary, char *err, uint32_t cap) {
     dc_level_step_run_t *runs = pending_runs(view);
     while (view->first_run < view->end_run) {
         dc_level_step_run_t *run = &runs[view->first_run];
@@ -682,14 +682,23 @@ static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) 
             if (paired == DC_LEVEL_OFFSCREEN_FAILED ||
                 (paired == DC_LEVEL_OFFSCREEN_UNMATCHED && !dc_gpu_tick_step(view->gpu, err, cap))) return false;
             consume_level_steps(view, 1u);
+            if (stop_at_water_boundary && !dc_gpu_liquid_owner_held(view->gpu)) return true;
         }
     }
     return true;
 }
 
+static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) {
+    return execute_steps(view, false, err, cap);
+}
+
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
     if (view->liquid_seam_failed) return error(err, cap, "World requires recovery from an unconfirmed liquid seam");
+    if ((view->pending_chunk_dx || view->pending_chunk_dy) && dc_gpu_liquid_owner_held(view->gpu)) {
+        if (!execute_steps(view, true, err, cap)) return false;
+        if (dc_gpu_liquid_owner_held(view->gpu)) return true;
+    }
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);
     if (!process_results(view, err, cap)) return false;
@@ -747,7 +756,8 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
                      4u * WORLD_SCALE;
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
-    uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
+    bool water_ready = dc_camera_offscreen_water_ready(view);
+    uint32_t ready_steps = all_resident && water_ready ? view->pending_steps : 0u;
     if (ready_steps && (view->players || view->offscreen_handoffs || view->end_run - view->first_run > 1u)) {
         /* A mixed frame publishes each completed step before trying to present. */
         if (view->players && !dc_players_present(view, err, cap)) return false;
@@ -763,6 +773,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
                                                           &completed, err, cap);
     consume_level_steps(view, completed);
     if (!presented) return false;
+    if (!water_ready) return true;
     view->pending_steps = 0;
     view->first_run = view->end_run = 0;
     return true;
@@ -784,7 +795,8 @@ bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
                     view->table.slots[index].state != DC_SLOT_ACTIVE) ready = false;
             }
         }
-        if (ready) return true;
+        if (ready && !view->pending_chunk_dx && !view->pending_chunk_dy &&
+            dc_camera_offscreen_water_ready(view)) return true;
         SDL_Delay(1);
     } while (SDL_GetTicks64() < deadline);
     return error(err, cap, "Timed out waiting for visible chunks");

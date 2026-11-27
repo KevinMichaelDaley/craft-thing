@@ -339,9 +339,13 @@ static bool accept_source(dc_level_view_t *view, dc_level_offscreen_handoff_t *h
     const dc_stream_result_t *result, char *err, uint32_t cap) {
     if (result->kind == DC_STREAM_FAILED) return error(err, cap, "Offscreen source load failed");
     if (handoff->disk_source) {
+        const dc_camera_offscreen_t *camera = &view->camera_offscreen;
+        bool coupled = camera->water_face && camera->workspace == handoff->workspace;
         if (!dc_chunk_owner_equal(result->replaces_owner, handoff->owner) || !result->time.known ||
             result->time.seconds < handoff->source_time.seconds ||
-            !dc_camera_offscreen_isolated(view, result))
+            (coupled ? result->time.seconds != view->world_seconds ||
+                dc_camera_offscreen_water_face(view, result) != camera->water_face :
+                !dc_camera_offscreen_isolated(view, result)))
             return error(err, cap, "Offscreen eviction source changed");
         if (!dc_offscreen_admit(handoff->workspace, result, handoff->generation, err, cap)) return false;
         handoff->source_time = result->time;

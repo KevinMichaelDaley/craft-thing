@@ -103,7 +103,8 @@ dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, 
     for (dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
         if (p->workspace->water_coupled &&
             (!p->workspace->time.known || p->workspace->time.seconds != view->world_seconds)) goto stale;
-        if (p->disk_source || !p->admitted || !p->workspace->time.known ||
+        bool camera_water = view->camera_offscreen.water_face && view->camera_offscreen.workspace == p->workspace;
+        if ((p->disk_source && !camera_water) || !p->admitted || !p->workspace->time.known ||
             p->workspace->time.seconds != view->world_seconds || !touches_resident(view, p->coord)) continue;
         if (workspace && workspace != p->workspace) {
             error(err, cap, "A water basin spans multiple offscreen workspaces");
