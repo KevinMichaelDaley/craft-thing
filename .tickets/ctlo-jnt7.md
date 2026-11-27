@@ -59,3 +59,7 @@ GREEN on native Vulkan: a full tile uses its lowest packed pixel, so the 512-pix
 **2026-11-27T00:13:08Z**
 
 The pinned 3c94b591 integrated full run exited 2 at the large-body brush timing gate. The brush retained the exact 36051 pixels and passed its mass assertion but took 138.608 ms against 30 ms. The warm zero-hit check measured 1.419 ms and one submission. Other GPU work was present. The separate stale-root correctness fix is now on the integration stack, and isolated timing remains an open gate.
+
+**2026-11-27T00:20:13Z**
+
+Native integrated RED at 239a46da measured 1,861 union edges. Refactor at 159e8284 measured one union edge for the same intact 512-pixel diagonal seam and preserved exact 255/256 fragments on the cut. Both the stale-root and tile probes passed ordinary and synchronization-validation NVIDIA runs. The side comparison on 8daff75e reduced the exact 36,051-pixel colored fixture from 143,026 to 34,216 merges with exact mass, colors and rotated miss behavior. Its concurrent native body suite passed all 11 functional checks and failed the unchanged two elapsed-time gates at 161.417 ms and 3.417 ms. Current integrated body suite and isolated timing remain open.

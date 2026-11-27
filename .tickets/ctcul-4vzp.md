@@ -1,6 +1,6 @@
 ---
 id: ctcul-4vzp
-status: in_progress
+status: closed
 deps: []
 links: [ctlo-jnt7]
 created: 2026-11-26T21:53:29Z
@@ -31,3 +31,7 @@ The compare-and-swap change on 9d712cd0 preserves parent 2 and returns roots 0/0
 **2026-11-27T00:13:08Z**
 
 The production shader repro was replayed on the current integration stack. Native RED observed parent 2, then retained parent 1 and roots 0/1/0. The ported compare-and-swap retains parent 2 and produces roots 0/0/0. Both ordinary and validation-enabled NVIDIA runs passed. The current-stack body-geometry, color and admission checks are queued.
+
+**2026-11-27T00:20:13Z**
+
+Exact 9d712cd0 passed 12/12 native body-carve tests, 2/2 colored work fixtures, 2/2 body-color tests, and 17/17 component-admission cases. The current integration port 0b22f28e also passed the native stale-root probe with validation, both colored work and body-color cases, and all 17 admission cases. The isolated 30 ms latency gate remains tracked in ctlo-jnt7.
