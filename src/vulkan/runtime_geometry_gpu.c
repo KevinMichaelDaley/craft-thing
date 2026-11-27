@@ -37,7 +37,7 @@ static bool storage_reserve(dc_gpu_t *g,uint32_t required,uint32_t pairs,uint32_
     VkDeviceSize new_solver=body_prefix+dc_gpu_solver_word_offset(&layout)*4u;
     VkDeviceSize old_structure=body_prefix+dc_gpu_structural_word_offset(g)*4u;
     VkDeviceSize new_structure=body_prefix+dc_gpu_structural_word_offset(&layout)*4u;
-    VkDeviceSize terrain=dc_gpu_color_terrain_bytes(),old_bank=(VkDeviceSize)old*128u,new_bank=(VkDeviceSize)next*128u;
+    VkDeviceSize terrain=dc_gpu_color_terrain_bytes(g),old_bank=(VkDeviceSize)old*128u,new_bank=(VkDeviceSize)next*128u;
     dc_gpu_address_buffer_t metadata={0},colors={0};
     if(!dc_gpu_address_buffer_create(g,prefix+(VkDeviceSize)next*8u+dc_gpu_contact_work_bytes(&layout),true,&metadata,err,cap)||
        !dc_gpu_address_buffer_create(g,terrain+new_bank*2u,true,&colors,err,cap)) {

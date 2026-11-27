@@ -41,7 +41,7 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
     uint64_t carve_ids=words;words+=slots;
     if(fragment_cells<slots) fragment_cells=slots;
     uint64_t fragments=words;words+=12u*(uint64_t)fragment_cells;
-    uint64_t anchors=words;words+=(uint64_t)DC_GPU_CHUNK_SLOTS*128u;
+    uint64_t anchors=words;words+=(uint64_t)dc_gpu_slot_capacity(g)*128u;
     if(words>UINT32_MAX||!dc_gpu_address_buffer_create(g,words*4u,true,out,err,cap))
         return error(err,cap,"Cannot allocate dynamic body work resources");
     uint32_t header[16]={slots,(uint32_t)bits,force_groups,(uint32_t)wet,
@@ -49,8 +49,8 @@ static bool work_create(dc_gpu_t *g,uint32_t slots,uint32_t force_groups,uint32_
         (uint32_t)scan_a,(uint32_t)scan_b,(uint32_t)carve_ids,(uint32_t)fragments,fragment_cells,slots*2u};
     memcpy(out->mapped,header,sizeof(header));
     uint32_t *h=out->mapped;h[29]=dc_gpu_pixel_pool_capacity(g);
-    dc_body_address_t a=address(g->shape_color_address+dc_gpu_color_terrain_bytes());
-    dc_body_address_t b=address(g->shape_color_address+dc_gpu_color_terrain_bytes()+dc_gpu_color_bank_bytes(g));
+    dc_body_address_t a=address(g->shape_color_address+dc_gpu_color_terrain_bytes(g));
+    dc_body_address_t b=address(g->shape_color_address+dc_gpu_color_terrain_bytes(g)+dc_gpu_color_bank_bytes(g));
     h[32]=a.low;h[33]=a.high;h[34]=b.low;h[35]=b.high;
     h[36]=g->runtime_pair_capacity?g->runtime_pair_capacity:DC_GPU_BROADPHASE_PAIR_CAPACITY;
     h[37]=g->runtime_contact_capacity?g->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY;
@@ -83,7 +83,7 @@ bool dc_gpu_runtime_bodies_init(dc_gpu_t *g,char *err,uint32_t cap) {
        !dc_gpu_address_buffer_create(g,sizeof(dc_body_storage_page_t),true,&r->store.directory,err,cap)||
        !dc_gpu_address_buffer_create(g,DC_BODY_SLAB_RECORDS*(256u+32u+512u),true,&r->initial_auxiliary,err,cap)||
        !dc_gpu_address_buffer_create(g,64u,true,&r->mailbox,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*4u,true,&r->component_cache,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS*4u,true,&r->component_cache,err,cap)||
        !work_create(g,DC_BODY_SLAB_RECORDS,r->force_groups,r->fragment_cells,&r->work,err,cap)) return false;
     VkDeviceAddress data=r->metadata.address+DC_BODY_SLAB_RECORDS*sizeof(dc_gpu_body_record_t);
     dc_body_storage_page_t page={.records=address(r->metadata.address),
@@ -236,7 +236,7 @@ void dc_gpu_runtime_record_legacy_state(dc_gpu_t *g) {
     if(!g||!g->runtime_body_consumers) return;
     struct dc_runtime_bodies *r=g->runtime_bodies;
     uint32_t push[4]={2u,dc_gpu_solver_word_offset(g)+DC_GPU_SOLVER_HEADER_WORDS,
-        dc_gpu_structural_word_offset(g)+dc_gpu_structural_graph_offset(),0};
+        dc_gpu_structural_word_offset(g)+dc_gpu_structural_graph_offset(g),0};
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,r->index.pipeline);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,r->index.pipeline_layout,0,1,&r->index.descriptor,0,NULL);
     vkCmdPushConstants(g->command,r->index.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);

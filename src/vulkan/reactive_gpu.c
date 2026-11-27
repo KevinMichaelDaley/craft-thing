@@ -49,7 +49,7 @@ bool fr_gpu_reactive_storage_create(dc_gpu_t *g,uint32_t shapes,struct fr_reacti
     struct fr_reactive_gpu *r=calloc(1,sizeof(*r));
     if(!r) return error(err,cap,"Cannot allocate reactive resource owner");
     if(!fr_reactive_arena_create(g,64u,&r->arena,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*8u,true,&r->cells,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*8u,true,&r->cells,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)shapes*8u*8u*2u,true,&r->shapes,err,cap)) {
         fr_gpu_reactive_storage_destroy(g,r);return false;
     }
@@ -65,7 +65,7 @@ bool fr_gpu_reactive_initialize(dc_gpu_t *g,char *err,uint32_t cap) {
 }
 bool fr_gpu_reactive_storage_particles(dc_gpu_t *g,struct fr_reactive_gpu *r,char *err,uint32_t cap) {
     if(r->particles.buffer) return true;
-    VkDeviceSize bank=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*8u;
+    VkDeviceSize bank=(VkDeviceSize)dc_gpu_slot_capacity(g)*DC_MPM_PARTICLES_PER_CHUNK*8u;
     if(!dc_gpu_address_buffer_create(g,bank*2u,true,&r->particles,err,cap)) return false;
     uint32_t *h=r->arena.root.mapped;put_address(h+14,r->particles.address);put_address(h+16,r->particles.address+bank);
     g->descriptor_revision++;return true;
@@ -126,7 +126,7 @@ static bool admit(dc_gpu_t *g,uint32_t *handle,const fr_reactive_owner_t *owner,
 }
 bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
-    if(!g||!g->runtime_bodies||!g->runtime_body_consumers||slot>=DC_GPU_CHUNK_SLOTS||local>=4096||
+    if(!g||!g->runtime_bodies||!g->runtime_body_consumers||slot>=dc_gpu_slot_capacity(g)||local>=4096||
        !state||state->material>=DC_MATERIAL_COUNT||!fr_reactive_state_valid(state,err,cap))
         return error(err,cap,"Invalid reactive cell import");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive import wait failed");
@@ -153,7 +153,7 @@ bool fr_gpu_reactive_seed_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
 }
 bool fr_gpu_reactive_read_cell(dc_gpu_t *g,uint32_t slot,uint32_t local,
     fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
-    if(!g||slot>=DC_GPU_CHUNK_SLOTS||local>=4096||!out||!found)
+    if(!g||slot>=dc_gpu_slot_capacity(g)||local>=4096||!out||!found)
         return error(err,cap,"Invalid reactive cell diagnostic");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Reactive diagnostic wait failed");
     uint32_t *e=g->reactive?entry(g,(uint32_t *)g->reactive->cells.mapped+((size_t)slot*4096u+local)*2u):NULL;
@@ -262,7 +262,7 @@ bool fr_gpu_reactive_seed_body(dc_gpu_t *g,uint32_t id,uint32_t x,uint32_t y,
 }
 bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
     const fr_reactive_state_t *state,char *err,uint32_t cap) {
-    if(!g||!g->runtime_body_consumers||particle>=DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK||
+    if(!g||!g->runtime_body_consumers||particle>=dc_gpu_slot_capacity(g)*DC_MPM_PARTICLES_PER_CHUNK||
        !state||state->material>=DC_MATERIAL_COUNT||
        !fr_reactive_state_valid(state,err,cap)) return error(err,cap,"Invalid reactive particle import");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!fr_renderer_begin(g)) return error(err,cap,"Particle import wait failed");
@@ -286,7 +286,7 @@ bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
 }
 bool fr_gpu_reactive_read_particle(dc_gpu_t *g,uint32_t particle,
     fr_reactive_record_t *out,bool *found,char *err,uint32_t cap) {
-    if(!g||particle>=DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK||!out||!found)
+    if(!g||particle>=dc_gpu_slot_capacity(g)*DC_MPM_PARTICLES_PER_CHUNK||!out||!found)
         return error(err,cap,"Invalid reactive particle diagnostic");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Particle diagnostic wait failed");
     uint32_t *e=g->reactive&&g->reactive->particles.buffer?

@@ -331,7 +331,7 @@ static void test_air_carves_an_anchored_structural_member(void) {
     ASSERT_TRUE(fr_gpu_place_structure(g,&graph,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_spawn_world_body(g,fixture_body(19,40,40),err,sizeof(err)));
     dc_gpu_body_record_t *records=g->body_mapped;
-    uint32_t *bond=dc_gpu_structural_data(g)+dc_gpu_structural_graph_offset()+30000u;
+    uint32_t *bond=dc_gpu_structural_data(g)+dc_gpu_structural_graph_offset(g)+30000u;
     bond[0]=1;bond[1]=0;bond[2]=1;bond[3]=records[0].body.id;bond[4]=19;
     ASSERT_TRUE(dc_gpu_paint_material(g,26,40,1,DC_MATERIAL_AIR,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(g,(dc_chunk_coord_t){0,0},err,sizeof(err)));

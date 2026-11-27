@@ -157,7 +157,7 @@ test_wood_floats_and_stone_sinks_visibly_from_material_density(void) {
            memory.mapped_local_bytes/1048576.,memory.device_only_bytes/1048576.);
     /* Preserve the pre-channel physics allowance and account for required
        authored-color planes and addressed body/terrain bookkeeping separately. */
-    VkDeviceSize appearance=2u*dc_gpu_color_terrain_bytes()+2u*dc_gpu_color_bank_bytes(gpu);
+    VkDeviceSize appearance=2u*dc_gpu_color_terrain_bytes(gpu)+2u*dc_gpu_color_bank_bytes(gpu);
     VkDeviceSize dynamic=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*sizeof(uint32_t)+
         dc_gpu_contact_work_bytes(gpu)+(VkDeviceSize)dc_gpu_body_capacity(gpu)*(256u+32u+512u)+256u*1024u;
     ASSERT_TRUE(memory.mapped_local_bytes+memory.mapped_system_bytes < 72u*1048576u+appearance+dynamic);

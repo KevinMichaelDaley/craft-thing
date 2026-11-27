@@ -209,7 +209,7 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     dc_gpu_structural_data(gpu)[17] = (gpu->height + 15u) / 16u;
     dc_gpu_structural_data(gpu)[18] = 1u;
     float *packed = (float *)(dc_gpu_structural_data(gpu) +
-                              dc_gpu_structural_graph_offset() + 29000u);
+                              dc_gpu_structural_graph_offset(gpu) + 29000u);
     for (unsigned m = 0; m < FR_STRUCTURAL_MATERIAL_COUNT; m++) {
         const fr_structural_profile_t *p = fr_structural_profile(m);
         const double values[] = {
@@ -376,7 +376,7 @@ static bool spawn_member(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
             r->reserved[1] = index + 1;
             fr_structural_gpu_graph_t *staged =
                 (void *)(dc_gpu_structural_data(gpu) +
-                         dc_gpu_structural_graph_offset() +
+                         dc_gpu_structural_graph_offset(gpu) +
                          DC_STRUCTURAL_GRAPH_WORDS);
             staged->members[index].reserved = i;
             return true;
@@ -393,7 +393,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
         return error(err, cap, "Cannot reach structural authoring boundary");
     dc_gpu_refresh_body_registry(gpu);
     const uint32_t *outputs = dc_gpu_structural_data(gpu) +
-                              dc_gpu_structural_graph_offset() + 36000u;
+                              dc_gpu_structural_graph_offset(gpu) + 36000u;
     for (unsigned m = 0; m < g->member_count; m++)
         for (unsigned i = 0; i < dc_gpu_body_capacity(gpu); i++)
             if (gpu->body_ids[i] &&
@@ -402,7 +402,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
                 return error(err, cap, "A live descendant retains this root generation");
     const fr_structural_gpu_graph_t *old =
         (void *)(dc_gpu_structural_data(gpu) +
-                 dc_gpu_structural_graph_offset());
+                 dc_gpu_structural_graph_offset(gpu));
     if (!immutable_identity(old, g))
         return error(err, cap,
                      "Changed rest geometry requires a new generation");
@@ -429,7 +429,7 @@ bool fr_gpu_place_structure(dc_gpu_t *gpu, const fr_structural_gpu_graph_t *g,
     memcpy(ids,gpu->body_ids,(size_t)slots*sizeof(*ids));
 
     uint32_t *data = dc_gpu_structural_data(gpu);
-    memcpy(data + dc_gpu_structural_graph_offset() + DC_STRUCTURAL_GRAPH_WORDS,
+    memcpy(data + dc_gpu_structural_graph_offset(gpu) + DC_STRUCTURAL_GRAPH_WORDS,
            g, sizeof(*g));
     for (unsigned i = 0; i < slots; i++)
         if (backup[i].reserved[0] == DC_GPU_STRUCTURAL_TAG) {
@@ -467,7 +467,7 @@ bool fr_gpu_read_structure_node(dc_gpu_t *gpu, uint32_t id,
     if (!gpu || !id || !out)
         return false;
     uint32_t *data = dc_gpu_structural_data(gpu),
-             off = dc_gpu_structural_graph_offset();
+             off = dc_gpu_structural_graph_offset(gpu);
     const fr_structural_gpu_graph_t *g = (void *)(data + off);
     int index = node_index(g, id);
     if (index < 0)
@@ -483,7 +483,7 @@ bool fr_gpu_read_structure_member(dc_gpu_t *gpu, uint32_t id,
     if (!gpu || !id || !state)
         return false;
     uint32_t *data =
-        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
     const fr_structural_gpu_graph_t *graph = (void *)data;
     for (uint32_t m = 0; m < graph->member_count; m++)
         if (graph->members[m].id == id) {
@@ -497,7 +497,7 @@ bool fr_gpu_read_structure_component(
     if (!gpu || !id || !state)
         return false;
     uint32_t *data =
-        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+        dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
     const fr_structural_gpu_graph_t *graph = (void *)data;
     int node = node_index(graph, id);
     if (node < 0)

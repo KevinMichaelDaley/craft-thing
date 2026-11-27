@@ -16,7 +16,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
 }
 static void address(uint32_t *out,VkDeviceAddress value) {out[0]=(uint32_t)value;out[1]=(uint32_t)(value>>32);}
 static bool resident(dc_gpu_t *g,uint32_t slot,const dc_chunk_t *chunk,char *err,uint32_t cap) {
-    if(!g||!chunk||!g->runtime_body_consumers||slot>=DC_GPU_CHUNK_SLOTS||vkQueueWaitIdle(g->queue)!=VK_SUCCESS)
+    if(!g||!chunk||!g->runtime_body_consumers||slot>=dc_gpu_slot_capacity(g)||vkQueueWaitIdle(g->queue)!=VK_SUCCESS)
         return error(err,cap,"Invalid reactive chunk boundary");
     const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
     return (registry[5]&&memcmp(registry,&chunk->coord,sizeof(chunk->coord))==0)||
@@ -76,7 +76,7 @@ static bool dispatch(dc_gpu_t *g,uint32_t slot,uint32_t count,uint32_t first,uin
     return fr_renderer_submit(g)||error(err,cap,"Reactive chunk boundary submission failed");
 }
 bool fr_gpu_reactive_clear_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t cap) {
-    if(!g||slot>=DC_GPU_CHUNK_SLOTS) return error(err,cap,"Invalid reactive chunk retirement");
+    if(!g||slot>=dc_gpu_slot_capacity(g)) return error(err,cap,"Invalid reactive chunk retirement");
     if(!g->reactive) return true;
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS||!resources(g,err,cap)) return false;
     return dispatch(g,slot,0,3,3,err,cap);
@@ -131,7 +131,7 @@ static int parcel_order(const void *a,const void *b) {
 }
 bool fr_gpu_reactive_bind_prepared_chunk(dc_gpu_t *g,uint32_t slot,
     const fr_reactive_chunk_t *channel,const uint32_t *handles,char *err,uint32_t cap) {
-    if(!g||!g->reactive||!channel||slot>=DC_GPU_CHUNK_SLOTS||channel->count>ROWS||
+    if(!g||!g->reactive||!channel||slot>=dc_gpu_slot_capacity(g)||channel->count>ROWS||
        (channel->count&&!handles)||!g->reactive->stream_compute.pipeline)
         return error(err,cap,"Invalid prepared checkpoint chunk binding");
     struct fr_reactive_gpu *r=g->reactive;

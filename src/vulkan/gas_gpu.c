@@ -282,7 +282,7 @@ static bool shader_ok(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
             (unsigned long long)t->clock.physical_steps,t->clock.advanced_seconds,words[FR_GAS_REJECT_STAGE_WORD],index,negative,excess);
         if(index<g->width*g->height) {
             uint32_t x=index%g->width,y=index/g->width,page=((const uint32_t *)g->page_mapped)[(y/64u)*g->page_width+x/64u];
-            if(page&&page<=DC_GPU_CHUNK_SLOTS) for(uint32_t bank=0;bank<3u;bank++) {
+            if(page&&page<=dc_gpu_slot_capacity(g)) for(uint32_t bank=0;bank<3u;bank++) {
                 const gas_packet_t *packets=NULL;char snapshot_error[128];
                 if(!fr_gas_gpu_checkpoint_packets(g,bank,page-1u,&packets,snapshot_error,sizeof(snapshot_error))) continue;
                 const gas_packet_t *packet=packets+(y%64u)*64u+x%64u;
@@ -301,9 +301,9 @@ static float rate(struct fr_gas_gpu *t) {
     memcpy(&value,words+FR_GAS_RATE_WORD,4);return value;
 }
 static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
-    uint32_t count=g->width*g->height;VkDeviceSize states=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*sizeof(gas_packet_t);
+    uint32_t count=g->width*g->height;VkDeviceSize states=(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*sizeof(gas_packet_t);
     VkPhysicalDeviceProperties properties;vkGetPhysicalDeviceProperties(g->physical,&properties);
-    uint32_t scan=count>DC_GPU_CHUNK_SLOTS*4096u?count:DC_GPU_CHUNK_SLOTS*4096u;
+    uint32_t scan=count>dc_gpu_slot_capacity(g)*4096u?count:dc_gpu_slot_capacity(g)*4096u;
     uint32_t groups=(scan-1u)/64u+1u;t->groups_x=groups<properties.limits.maxComputeWorkGroupCount[0]?groups:properties.limits.maxComputeWorkGroupCount[0];
     t->groups_y=(groups-1u)/t->groups_x+1u;
     if(states>properties.limits.maxStorageBufferRange||(VkDeviceSize)count*32u>properties.limits.maxStorageBufferRange||
@@ -319,8 +319,8 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     VkDeviceSize tiles=(VkDeviceSize)((g->width+7u)/8u)*((g->height+7u)/8u);
     if(!dc_gpu_address_buffer_create(g,tiles*8u,mapped_work,&t->owner_tiles,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)count*8u,mapped_work,&t->conduction_faces,err,cap)) return false;
-    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->gates,err,cap)) return false;
-    if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+DC_GPU_CHUNK_SLOTS)*4u,true,&t->parameters,err,cap)||
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*4u,true,&t->gates,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,(FR_GAS_MODEL_WORDS+dc_gpu_slot_capacity(g))*4u,true,&t->parameters,err,cap)||
        !dc_gpu_address_buffer_create(g,64,true,&t->stats,err,cap)) return false;
     for(uint32_t i=0;i<2;i++)
         if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*8u,false,t->smoke_coordinates+i,err,cap)) return false;
@@ -335,7 +335,7 @@ static bool create(dc_gpu_t *g,struct fr_gas_gpu *t,char *err,uint32_t cap) {
     parameters[10]=(float)t->model.kinetic_scale;parameters[11]=t->density;parameters[12]=t->temperature;
     parameters[13]=.21f;parameters[14]=0;
     parameters[FR_GAS_OPACITY_WORD]=FR_GAS_SMOKE_DISPLAY_OPACITY;
-    ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=DC_GPU_CHUNK_SLOTS;
+    ((uint32_t *)t->parameters.mapped)[FR_GAS_SLOT_COUNT_WORD]=dc_gpu_slot_capacity(g);
     ((uint32_t *)t->parameters.mapped)[FR_GAS_CELL_OWNER_WORD]=0u;
     VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS+4u];
     for(uint32_t i=12u;i<28u;i++) buffers[i]=(VkDescriptorBufferInfo){t->parameters.buffer,0,t->parameters.bytes};
@@ -509,7 +509,7 @@ bool fr_gas_gpu_clock(const dc_gpu_t *g,fr_gas_gpu_clock_t *out) {
     *out=g->gas->clock;return true;
 }
 bool fr_gas_gpu_queue_ambient_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS) return error(err,cap,"Invalid new gas chunk admission");
+    if(!g||!g->gas||slot>=dc_gpu_slot_capacity(g)) return error(err,cap,"Invalid new gas chunk admission");
     ((uint32_t *)g->gas->parameters.mapped)[FR_GAS_MODEL_WORDS+slot]=1u;
     g->gas->initialization_pending=true;return true;
 }
@@ -519,7 +519,7 @@ bool fr_gas_gpu_initialize_queued(dc_gpu_t *g,char *err,uint32_t cap) {
     if(!fr_renderer_begin(g)) return error(err,cap,"Cannot begin new gas chunk admission");
     dispatch(g,t,&t->initialize,0,0x80000000u);
     if(!submit(g,err,cap)) return false;
-    memset((uint32_t *)t->parameters.mapped+FR_GAS_MODEL_WORDS,0,DC_GPU_CHUNK_SLOTS*sizeof(uint32_t));
+    memset((uint32_t *)t->parameters.mapped+FR_GAS_MODEL_WORDS,0,dc_gpu_slot_capacity(g)*sizeof(uint32_t));
     t->initialization_pending=false;
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;return true;
 }

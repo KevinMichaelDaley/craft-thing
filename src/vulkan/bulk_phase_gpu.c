@@ -28,7 +28,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
 static bool ensure_pipeline(dc_gpu_t *gpu,char *err,uint32_t cap);
 bool fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu,uint32_t slot,
     const dc_chunk_t *chunk,const fr_bulk_phase_chunk_t *phase,char *err,uint32_t cap) {
-    if(!gpu||!gpu->bulk_phase_mapped||slot>=DC_GPU_CHUNK_SLOTS||!chunk||!phase)
+    if(!gpu||!gpu->bulk_phase_mapped||slot>=dc_gpu_slot_capacity(gpu)||!chunk||!phase)
         return error(err,cap,"Invalid bulk phase chunk import");
     for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
         if((uint64_t)chunk->cells[i].fluid_mass+phase->oil_fp[i]+phase->slime_fp[i]>
@@ -53,7 +53,7 @@ bool fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu,uint32_t slot,
 }
 bool fr_bulk_phase_gpu_export_chunk(dc_gpu_t *gpu,uint32_t slot,
     fr_bulk_phase_chunk_t *out,char *err,uint32_t cap) {
-    if(!gpu||!gpu->bulk_phase_mapped||slot>=DC_GPU_CHUNK_SLOTS||!out)
+    if(!gpu||!gpu->bulk_phase_mapped||slot>=dc_gpu_slot_capacity(gpu)||!out)
         return error(err,cap,"Invalid bulk phase chunk export");
     if(vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS)
         return error(err,cap,"Cannot complete bulk phase chunk export");

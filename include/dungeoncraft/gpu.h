@@ -128,6 +128,7 @@ bool dc_gpu_create(dc_gpu_t **out, uint32_t width, uint32_t height,
                    const char *shader_path, char *err_buf, uint32_t err_cap);
 
 /** Create an independent headless simulation context on an existing Vulkan device.
+ * Its atlas holds one slot per rounded grid page up to DC_GPU_CHUNK_SLOTS.
  * Either context can be destroyed first. Serialize access to their shared queue.
  */
 bool dc_gpu_create_shared(dc_gpu_t **out, const dc_gpu_t *parent,

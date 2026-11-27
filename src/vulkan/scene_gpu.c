@@ -50,7 +50,7 @@ void fr_renderer_bind_fire_ray(dc_gpu_t *g,const VkDescriptorBufferInfo *buffer)
 
 void fr_renderer_rebind_colors(dc_gpu_t *g) {
   if(!g||!g->renderer) return;
-  VkDescriptorBufferInfo b[3]={{g->shape_color_buffer,0,dc_gpu_color_terrain_bytes()},
+  VkDescriptorBufferInfo b[3]={{g->shape_color_buffer,0,dc_gpu_color_terrain_bytes(g)},
     {g->shape_color_buffer,0,16},{g->shape_color_buffer,0,16}};
   VkWriteDescriptorSet w[3]={0};
   for(uint32_t i=0;i<3;i++) w[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -127,7 +127,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
   s->light_revision = 1;
   s->source_origin = s->last_origin = g->body_origin;
   uint32_t grid = g->width * g->height,
-           atlas = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
+           atlas = dc_gpu_slot_capacity(g) * DC_CHUNK_CELLS;
   VkDeviceSize sizes[SCENE_BUFFERS] = {
       (VkDeviceSize)atlas * 32, (VkDeviceSize)atlas * 8,
       (VkDeviceSize)grid * FR_RENDERER_SURFACE_BYTES, SCENE_WORK_WORDS * 4, 64};
@@ -149,7 +149,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
       {g->occupancy_buffer, 0, (VkDeviceSize)grid * 20},
       dc_gpu_runtime_bodies_binding(g),
       {g->particle_buffer, 0,
-       (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK *
+       (VkDeviceSize)dc_gpu_slot_capacity(g) * DC_MPM_PARTICLES_PER_CHUNK *
            sizeof(dc_mpm_particle_t)},
       {s->buffers[0], 0, sizes[0]},
       {s->buffers[1], 0, sizes[1]},
@@ -165,7 +165,7 @@ bool fr_renderer_enable(dc_gpu_t *g, char *err, uint32_t cap) {
   for(uint32_t i=16;i<33;i++) buffers[i]=(VkDescriptorBufferInfo){g->cells,0,(VkDeviceSize)grid*4};
   buffers[16]=(VkDescriptorBufferInfo){s->buffers[4],0,64};
   buffers[17]=(VkDescriptorBufferInfo){s->buffers[4],0,64};
-  VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(g);
+  VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(g),bank_colors=dc_gpu_color_bank_bytes(g);
   buffers[33]=(VkDescriptorBufferInfo){g->shape_color_buffer,0,terrain_colors};
   buffers[34]=(VkDescriptorBufferInfo){g->shape_color_buffer,g->runtime_body_consumers?0:terrain_colors,g->runtime_body_consumers?16:bank_colors};
   buffers[35]=(VkDescriptorBufferInfo){g->shape_color_buffer,g->runtime_body_consumers?0:terrain_colors+bank_colors,g->runtime_body_consumers?16:bank_colors};
@@ -189,7 +189,7 @@ bool fr_renderer_set_mode(dc_gpu_t *g, fr_renderer_mode_t mode) {
 bool fr_renderer_authored_bindings(dc_gpu_t *g, VkDescriptorBufferInfo buffers[3]) {
   if (!g || !g->renderer || !buffers) return false;
   struct fr_scene_gpu *s = g->renderer;
-  VkDeviceSize atlas = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
+  VkDeviceSize atlas = (VkDeviceSize)dc_gpu_slot_capacity(g) * DC_CHUNK_CELLS;
   buffers[0] = (VkDescriptorBufferInfo){s->buffers[0], 0, atlas * 32};
   buffers[1] = (VkDescriptorBufferInfo){s->buffers[1], 0, atlas * 8};
   buffers[2] = (VkDescriptorBufferInfo){s->buffers[4], 0, 64};
@@ -293,7 +293,7 @@ void fr_renderer_record(dc_gpu_t *g) {
     } else scene_dispatch(g,9,g->view_width*g->view_height,push);
     return;
   }
-  scene_dispatch(g, 2, DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS, push);
+  scene_dispatch(g, 2, dc_gpu_slot_capacity(g) * DC_CHUNK_CELLS, push);
   scene_dispatch(g, 3, g->width * g->height, push);
   scene_dispatch(g, 4, 32, push);
   if (s->mode == FR_RENDERER_LIT) {

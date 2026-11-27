@@ -134,7 +134,7 @@ static void test_empty_runtime_reserves_bounded_appearance_storage_and_can_grow(
     printf("Empty appearance bank: %llu bytes\n",(unsigned long long)initial);
     printf("Actual appearance allocation: %llu bytes\n",(unsigned long long)g->shape_color_allocation_bytes);
     ASSERT_TRUE(initial<=1048576u);
-    ASSERT_TRUE(g->shape_color_allocation_bytes<=dc_gpu_color_terrain_bytes()+2u*1048576u);
+    ASSERT_TRUE(g->shape_color_allocation_bytes<=dc_gpu_color_terrain_bytes(g)+2u*1048576u);
     ASSERT_TRUE(dc_gpu_runtime_geometry_reserve(g,words*4u,err,sizeof(err)));
     ASSERT_EQ(dc_gpu_pixel_pool_capacity(g),words*4u);
     ASSERT_TRUE(g->runtime_bodies->metadata.bytes>=dc_gpu_body_storage_bytes(g));

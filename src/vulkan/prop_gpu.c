@@ -30,18 +30,18 @@ static bool terrain_prop_operation(dc_gpu_t *g, const fr_prop_asset_t *asset,
     if (!okay) goto done;
     memset(mapped,0,32);
     memcpy((uint8_t*)mapped+32,validated.bytes+validated.data_offset+(size_t)frame*count*72,(size_t)count*72);
-    VkDeviceSize atlas=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS;
+    VkDeviceSize atlas=(VkDeviceSize)dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS;
     VkDescriptorBufferInfo bindings[13]={
         {buffer,0,bytes}, {g->chunk_buffer,0,atlas*sizeof(dc_cell_t)},
         {g->page_buffer,0,(VkDeviceSize)g->page_width*g->page_height*4},
         {g->particle_buffer,0,atlas*2*sizeof(dc_mpm_particle_t)},
-        {g->particle_count_buffer,0,DC_GPU_CHUNK_SLOTS*4},
-        {g->slot_seed_buffer,0,DC_GPU_CHUNK_SLOTS*4},
+        {g->particle_count_buffer,0,dc_gpu_slot_capacity(g)*4},
+        {g->slot_seed_buffer,0,dc_gpu_slot_capacity(g)*4},
         {VK_NULL_HANDLE,0,0},{VK_NULL_HANDLE,0,0},{VK_NULL_HANDLE,0,0},
         {g->body_buffer,0,dc_gpu_body_storage_bytes(g)},
         {g->occupancy_buffer,0,(VkDeviceSize)g->width*g->height*20},
         {g->water_color_buffer,0,atlas*16},
-        {g->shape_color_buffer,0,dc_gpu_color_terrain_bytes()}};
+        {g->shape_color_buffer,0,dc_gpu_color_terrain_bytes(g)}};
     okay=fr_renderer_authored_bindings(g,bindings+6) &&
         fr_renderer_compute_init(g,&compute,bindings,13,32,
                                  "build/shaders/prop_place.comp.spv",err,cap) && fr_renderer_begin(g);

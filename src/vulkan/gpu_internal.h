@@ -297,6 +297,7 @@ struct dc_gpu {
     bool tick_water_source;
     uint32_t tick_water_x, tick_water_y;
     uint32_t width, height;
+    uint32_t workspace_slots;
     uint32_t view_x, view_y, view_width, view_height;
     uint32_t display_zoom;
     dc_presentation_focus_t presentation_focus;
@@ -328,6 +329,11 @@ enum {
     DC_GPU_CONTACT_DISPATCH_WORD = 6
 };
 
+/** Return the workspace size or the configured foreground slot count. */
+static inline uint32_t dc_gpu_slot_capacity(const dc_gpu_t *gpu) {
+    return gpu->workspace_slots ? gpu->workspace_slots : DC_GPU_CHUNK_SLOTS;
+}
+
 static inline uint32_t dc_gpu_broadphase_buckets(const dc_gpu_t *gpu) {
     return (gpu->page_width + 2u) * (gpu->page_height + 2u);
 }
@@ -352,19 +358,19 @@ static inline VkDeviceSize dc_gpu_legacy_body_storage_bytes(const dc_gpu_t *gpu)
         (VkDeviceSize)(gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY) * sizeof(dc_gpu_contact_t) +
         (DC_GPU_SOLVER_HEADER_WORDS + DC_GPU_BODY_CAPACITY * DC_GPU_SOLVER_BODY_WORDS +
          (gpu->runtime_contact_capacity?gpu->runtime_contact_capacity:DC_GPU_CONTACT_CAPACITY) * DC_GPU_SOLVER_CONTACT_WORDS) * sizeof(uint32_t) +
-        (DC_STRUCTURAL_HEADER_WORDS + DC_GPU_CHUNK_SLOTS*8u + DC_STRUCTURAL_RESERVE_WORDS)*sizeof(uint32_t);
+        (DC_STRUCTURAL_HEADER_WORDS + dc_gpu_slot_capacity(gpu)*8u + DC_STRUCTURAL_RESERVE_WORDS)*sizeof(uint32_t);
 }
 
 /** Terrain scratch covers resident cells independently of growing body geometry. */
 static inline VkDeviceSize dc_gpu_component_storage_bytes(const dc_gpu_t *gpu) {
     VkDeviceSize visible=(VkDeviceSize)gpu->width*gpu->height;
-    VkDeviceSize resident=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS;
+    VkDeviceSize resident=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_CHUNK_CELLS;
     return (2u*(visible>resident?visible:resident)+DC_CHUNK_CELLS)*sizeof(uint32_t);
 }
 static inline uint32_t dc_gpu_pixel_pool_capacity(const dc_gpu_t *gpu) {
     if(gpu->pixel_pool_words) return gpu->pixel_pool_words;
     uint32_t cells = gpu->width * gpu->height;
-    uint32_t resident = DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS;
+    uint32_t resident = dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS;
     return 2u * (((cells > resident ? cells : resident) + 7u) / 8u) +
            8u * DC_GPU_BODY_CAPACITY;
 }
@@ -411,8 +417,8 @@ static inline uint32_t dc_gpu_structural_word_offset(const dc_gpu_t *gpu) {
 static inline uint32_t *dc_gpu_structural_data(const dc_gpu_t *gpu) {
     return dc_gpu_broadphase_data(gpu)+dc_gpu_structural_word_offset(gpu);
 }
-static inline uint32_t dc_gpu_structural_graph_offset(void) {
-    return DC_STRUCTURAL_HEADER_WORDS+DC_GPU_CHUNK_SLOTS*8u;
+static inline uint32_t dc_gpu_structural_graph_offset(const dc_gpu_t *gpu) {
+    return DC_STRUCTURAL_HEADER_WORDS+dc_gpu_slot_capacity(gpu)*8u;
 }
 bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_authored_destroy(dc_gpu_t *gpu);
@@ -577,7 +583,7 @@ void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu);
 bool dc_gpu_colors_init(dc_gpu_t *gpu,char *err,uint32_t cap);
 void dc_gpu_colors_destroy(dc_gpu_t *gpu);
-VkDeviceSize dc_gpu_color_terrain_bytes(void);
+VkDeviceSize dc_gpu_color_terrain_bytes(const dc_gpu_t *g);
 VkDeviceSize dc_gpu_color_bank_bytes(const dc_gpu_t *gpu);
 float *dc_gpu_shape_colors(dc_gpu_t *gpu,uint32_t absolute_word);
 void dc_gpu_read_chunk_colors(dc_gpu_t *gpu,uint32_t slot,dc_chunk_colors_t *colors);

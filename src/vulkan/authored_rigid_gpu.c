@@ -23,7 +23,7 @@ static bool validate_objects(dc_gpu_t *g,const dc_gpu_address_buffer_t *channel,
     vkCmdPushConstants(g->command,g->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    vkCmdDispatch(g->command,(DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS+127u)/128u,1,1);
+    vkCmdDispatch(g->command,(dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS+127u)/128u,1,1);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(!fr_renderer_submit(g)) return error(err,cap,"Cannot validate rigid-object ownership");
@@ -42,7 +42,7 @@ static bool detach_objects(dc_gpu_t *g,char *err,uint32_t cap) {
 bool fr_gpu_admit_rigid_objects(dc_gpu_t *g,uint64_t transaction,
     const uint32_t *objects,uint32_t object_cells,char *err,uint32_t cap) {
     if(!g||!g->runtime_bodies||!g->runtime_body_consumers||!transaction||!objects||
-       object_cells!=DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS||g->authored_objects_address)
+       object_cells!=dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS||g->authored_objects_address)
         return error(err,cap,"Invalid immutable rigid-object submission");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot reach rigid-object admission boundary");
     if(!dc_gpu_component_objects_prepare(g,err,cap)) return false;

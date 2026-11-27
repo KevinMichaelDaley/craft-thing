@@ -135,13 +135,13 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
         if(gpu->runtime_body_consumers) memcpy(payload->states[i].persistent,
             dc_gpu_body_solver_state(gpu,i)+52u,sizeof(payload->states[i].persistent));
         else if(i<64u) {
-            const uint32_t *g=data+dc_gpu_structural_graph_offset();
+            const uint32_t *g=data+dc_gpu_structural_graph_offset(gpu);
             memcpy(payload->states[i].persistent,g+38000u+i*4u,16);
             memcpy(payload->states[i].persistent+4,g+38500u+i*4u,16);
             memcpy(payload->states[i].persistent+8,g+36000u+i*4u,16);
         }
     }
-    memcpy(payload->graph, data + dc_gpu_structural_graph_offset(),
+    memcpy(payload->graph, data + dc_gpu_structural_graph_offset(gpu),
            sizeof(payload->graph));
     clear_transients(payload->graph);
     dc_structural_store_header_t header = {
@@ -183,11 +183,11 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
     okay = okay && dc_gpu_structure_payload_valid(gpu, payload, pixels,
                                                   header.reserved[1]);
     dc_chunk_t *chunks = calloc(
-        DC_GPU_CHUNK_SLOTS + gpu->checkpoint_chunk_count, sizeof(*chunks));
-    dc_chunk_colors_t *colors=calloc(DC_GPU_CHUNK_SLOTS+gpu->checkpoint_chunk_count,sizeof(*colors));
+        dc_gpu_slot_capacity(gpu) + gpu->checkpoint_chunk_count, sizeof(*chunks));
+    dc_chunk_colors_t *colors=calloc(dc_gpu_slot_capacity(gpu)+gpu->checkpoint_chunk_count,sizeof(*colors));
     bool collect_times = resident || gpu->checkpoint_times;
     dc_chunk_time_t *times = collect_times ?
-        calloc(DC_GPU_CHUNK_SLOTS + gpu->checkpoint_chunk_count, sizeof(*times)) : NULL;
+        calloc(dc_gpu_slot_capacity(gpu) + gpu->checkpoint_chunk_count, sizeof(*times)) : NULL;
     okay = okay && chunks != NULL && colors != NULL && (!collect_times || times);
     if (okay && gpu->checkpoint_chunk_count) {
         memcpy(chunks, gpu->checkpoint_chunks,
@@ -198,7 +198,7 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
         if (gpu->checkpoint_times) memcpy(times,gpu->checkpoint_times,
             (size_t)gpu->checkpoint_chunk_count*sizeof(*times));
     }
-    for (unsigned slot = 0; okay && slot < DC_GPU_CHUNK_SLOTS; slot++) {
+    for (unsigned slot = 0; okay && slot < dc_gpu_slot_capacity(gpu); slot++) {
         const uint32_t *record = data + DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
         if (!record[5])
             continue;
@@ -317,7 +317,7 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
         else if ((b->piece_count & DC_GPU_PIXEL_BODY_FLAG)||(b->motion_flags&DC_BODY_MOTION_THERMAL_GRID))
             b->compound_reserved += offset + DC_GPU_PIXEL_POOL_HEADER_WORDS;
     }
-    memcpy(data + dc_gpu_structural_graph_offset(), payload->graph,
+    memcpy(data + dc_gpu_structural_graph_offset(gpu), payload->graph,
            sizeof(payload->graph));
     data[0] = payload->control[0];
     data[3] = payload->control[1] + 1u;
@@ -329,7 +329,7 @@ static void install(dc_gpu_t *gpu, const dc_structural_store_header_t *header,
     data[11] = 1;
     for (unsigned i = 0; i < 192; i++)
         data[9] |=
-            (data[dc_gpu_structural_graph_offset() + 30000u + i * 20u] != 0);
+            (data[dc_gpu_structural_graph_offset(gpu) + 30000u + i * 20u] != 0);
     data[15] = (header->flags & 2u) != 0;
     data[19] = (header->flags & 4u) != 0;
     data[DC_STRUCTURAL_COMPONENT_DIRTY_WORD] = data[19];
@@ -464,14 +464,14 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     dc_chunk_coord_t origin = gpu->body_origin;
     gpu->reactive_checkpoint_installing=true;
     install(gpu, &header, payload, pixels);
-    memset(gpu->shape_color_mapped,0,(size_t)(dc_gpu_color_terrain_bytes()+2*dc_gpu_color_bank_bytes(gpu)));
-    if(header.version>=6) memcpy((uint8_t*)gpu->shape_color_mapped+dc_gpu_color_terrain_bytes(),
+    memset(gpu->shape_color_mapped,0,(size_t)(dc_gpu_color_terrain_bytes(gpu)+2*dc_gpu_color_bank_bytes(gpu)));
+    if(header.version>=6) memcpy((uint8_t*)gpu->shape_color_mapped+dc_gpu_color_terrain_bytes(gpu),
         body_colors,(size_t)header.reserved[1]*128);
     free(body_colors);
     payload_destroy(payload);
     free(pixels);
     dc_checkpoint_channels_publish(gpu,&channels,chunks,colors,header.reserved[0]);
-    for (unsigned slot = 0; okay && slot < DC_GPU_CHUNK_SLOTS; slot++) {
+    for (unsigned slot = 0; okay && slot < dc_gpu_slot_capacity(gpu); slot++) {
         const uint32_t *record = dc_gpu_structural_data(gpu) +
                                  DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
         if (!record[5])

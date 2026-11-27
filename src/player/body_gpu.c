@@ -42,14 +42,14 @@ bool fr_beaver_body_admit_prepared(dc_gpu_t *g,uint64_t identity,uint64_t transa
     char *err,uint32_t cap) {
     if(world_consistent) *world_consistent=true;
     const int32_t chunk_extent=DC_CHUNK_SIDE*DC_FLUID_FULL;
-    if(!g||!identity||!transaction||slot>=DC_GPU_CHUNK_SLOTS||!out||
+    if(!g||!identity||!transaction||slot>=dc_gpu_slot_capacity(g)||!out||
        x<0||y<0||x>=chunk_extent||y>=chunk_extent)
         return beaver_body_error(err,cap,"Invalid cold player admission");
     for(uint32_t s=0;s<dc_gpu_body_capacity(g);s++)
         if(beaver_body_created_by(dc_gpu_body_owner(g,s),transaction))
             return beaver_body_error(err,cap,"Player admission transaction already exists");
     dc_chunk_t *chunk=malloc(2u*sizeof(*chunk));
-    uint32_t *objects=calloc(DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS,sizeof(*objects));
+    uint32_t *objects=calloc(dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS,sizeof(*objects));
     fr_reactive_record_t *records=calloc(FR_BEAVER_PIXELS,sizeof(*records));
     if(!chunk||!objects||!records) {
         free(chunk);free(objects);free(records);
@@ -88,7 +88,7 @@ bool fr_beaver_body_admit_prepared(dc_gpu_t *g,uint64_t identity,uint64_t transa
     if(okay) {
         staged=true;
         okay=dc_gpu_upload_chunk(g,slot,stage,err,cap)&&
-            fr_gpu_admit_rigid_objects(g,transaction,objects,DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS,err,cap);
+            fr_gpu_admit_rigid_objects(g,transaction,objects,dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS,err,cap);
     }
     fr_beaver_body_t result={.binding={.identity=identity},.rest_origin_x=min_x,.rest_origin_y=min_y,
         .width=max_x-min_x+1,.height=max_y-min_y+1};

@@ -29,7 +29,7 @@ bool fr_combustion_gpu_enable(dc_gpu_t *g,char *err,uint32_t cap) {
     struct fr_thermal_gpu *t=g->thermal;
     if(t->combustion.pipeline) return true;
     if(!fr_gpu_reactive_particle_storage(g,err,cap)) return false;
-    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*16u,false,&t->emission,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*16u,false,&t->emission,err,cap)) return false;
     if(!dc_gpu_address_buffer_create(g,192u*4u,true,&t->hud,err,cap)) {dc_gpu_address_buffer_destroy(g,&t->emission);return false;}
     if(!dc_gpu_address_buffer_create(g,(VkDeviceSize)g->width*g->height*4u,false,&t->radiation_scratch,err,cap)) {
         dc_gpu_address_buffer_destroy(g,&t->emission);dc_gpu_address_buffer_destroy(g,&t->hud);return false;}
@@ -78,7 +78,7 @@ bool fr_combustion_gpu_hud(dc_gpu_t *g,bool enabled,bool wet,bool paused,uint32_
 }
 bool fr_combustion_gpu_read_emission_chunk(dc_gpu_t *g,uint32_t slot,
     fr_combustion_emission_t *out,uint32_t capacity,char *err,uint32_t cap) {
-    if(!g||!g->thermal||!g->thermal->emission.buffer||slot>=DC_GPU_CHUNK_SLOTS||!out||capacity<4096u) return false;
+    if(!g||!g->thermal||!g->thermal->emission.buffer||slot>=dc_gpu_slot_capacity(g)||!out||capacity<4096u) return false;
     struct fr_thermal_gpu *t=g->thermal;VkDeviceSize bytes=4096u*sizeof(*out);
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return false;
     if(!t->emission_snapshot.buffer&&!dc_gpu_address_buffer_create(g,bytes,true,&t->emission_snapshot,err,cap)) return false;
@@ -98,7 +98,7 @@ bool fr_combustion_gpu_read_emission_chunk(dc_gpu_t *g,uint32_t slot,
 }
 bool fr_combustion_clear_emission_chunk(dc_gpu_t *g,uint32_t slot,char *err,uint32_t cap) {
     if(!g||!g->thermal||!g->thermal->emission.buffer) return true;
-    if(slot>=DC_GPU_CHUNK_SLOTS||!fr_renderer_begin(g)) {
+    if(slot>=dc_gpu_slot_capacity(g)||!fr_renderer_begin(g)) {
         if(err&&cap) snprintf(err,cap,"Cannot clear cold emission slot");
         return false;
     }
@@ -246,7 +246,7 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)t->profile_count*sizeof(fr_reactive_profile_t),true,&t->profiles,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->samples,err,cap)||
        !dc_gpu_address_buffer_create(g,(VkDeviceSize)count*32u,true,&t->fluxes,err,cap)||
-       !dc_gpu_address_buffer_create(g,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*4096u*4u,true,&t->water,err,cap)||
+       !dc_gpu_address_buffer_create(g,(VkDeviceSize)dc_gpu_slot_capacity(g)*4096u*4u,true,&t->water,err,cap)||
        !dc_gpu_address_buffer_create(g,16,true,&t->probe,err,cap)) {destroy(g,t);return false;}
     ((float *)t->probe.mapped)[0]=FR_THERMAL_PROBE_CAPACITY*(FR_THERMAL_PROBE_K-FR_THERMAL_AMBIENT_K);
     ((float *)t->probe.mapped)[1]=FR_THERMAL_PROBE_CAPACITY;t->overlay=1;
@@ -269,7 +269,7 @@ static void bind_control(dc_gpu_t *g,const struct fr_thermal_gpu *t) {
     uint32_t *control=g->thermal_control_mapped;memset(control,0,128);
     if(!t) return;
     control[2]=(uint32_t)t->water.address;control[3]=(uint32_t)(t->water.address>>32);
-    control[4]=DC_GPU_CHUNK_SLOTS*4096u;control[0]=DC_THERMAL_WATER_MAGIC;
+    control[4]=dc_gpu_slot_capacity(g)*4096u;control[0]=DC_THERMAL_WATER_MAGIC;
     control[DC_THERMAL_PROFILE_ADDRESS_WORD]=(uint32_t)t->profiles.address;
     control[DC_THERMAL_PROFILE_ADDRESS_WORD+1u]=(uint32_t)(t->profiles.address>>32);
 }
@@ -419,7 +419,7 @@ bool fr_thermal_prepare_paint(dc_gpu_t *g,uint32_t x,uint32_t y,uint32_t radius,
     return true;
 }
 bool fr_thermal_gpu_seed_water(dc_gpu_t *g,uint32_t slot,uint32_t cell,float energy,char *err,uint32_t cap) {
-    if(!g||!g->thermal||slot>=DC_GPU_CHUNK_SLOTS||cell>=4096u||!isfinite(energy))
+    if(!g||!g->thermal||slot>=dc_gpu_slot_capacity(g)||cell>=4096u||!isfinite(energy))
         return error(err,cap,"Invalid liquid heat fixture");
     dc_chunk_t *chunk=malloc(sizeof(*chunk));
     if(!chunk) return error(err,cap,"Cannot validate liquid heat fixture");
@@ -431,19 +431,19 @@ bool fr_thermal_gpu_seed_water(dc_gpu_t *g,uint32_t slot,uint32_t cell,float ene
     ((float *)g->thermal->water.mapped)[slot*4096u+cell]=energy;return true;
 }
 bool fr_thermal_gpu_read_water_chunk(dc_gpu_t *g,uint32_t slot,float *energy,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->thermal||slot>=DC_GPU_CHUNK_SLOTS||!energy||count<4096u)
+    if(!g||!g->thermal||slot>=dc_gpu_slot_capacity(g)||!energy||count<4096u)
         return error(err,cap,"Invalid liquid heat snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete liquid heat snapshot");
     memcpy(energy,(float *)g->thermal->water.mapped+slot*4096u,4096u*sizeof(float));return true;
 }
 void fr_thermal_clear_water_chunk(dc_gpu_t *g,uint32_t slot) {
-    if(g&&g->thermal&&slot<DC_GPU_CHUNK_SLOTS)
+    if(g&&g->thermal&&slot<dc_gpu_slot_capacity(g))
         memset((float *)g->thermal->water.mapped+slot*4096u,0,4096u*sizeof(float));
 }
 bool fr_thermal_gpu_enabled(const dc_gpu_t *g) {return g&&g->thermal;}
 bool fr_thermal_gpu_import_water_chunk(dc_gpu_t *g,uint32_t slot,
     const dc_chunk_t *chunk,const float *energy,char *err,uint32_t cap) {
-    if(!g||!g->thermal||slot>=DC_GPU_CHUNK_SLOTS||!chunk||!energy)
+    if(!g||!g->thermal||slot>=dc_gpu_slot_capacity(g)||!chunk||!energy)
         return error(err,cap,"Liquid import requires its world thermal checkpoint");
     double specific=fr_reactive_profile(DC_MATERIAL_WATER)->heat_capacity*FR_THERMAL_AMBIENT_K/65536.;
     for(uint32_t i=0;i<4096u;i++) {
@@ -466,7 +466,7 @@ bool fr_thermal_gpu_step(dc_gpu_t *g,float seconds,char *err,uint32_t cap) {
     return fr_renderer_submit(g)||error(err,cap,"Cannot complete thermal interval");
 }
 static uint32_t resident_slot(dc_gpu_t *g,dc_chunk_coord_t coord) {
-    for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) {
+    for(uint32_t slot=0;slot<dc_gpu_slot_capacity(g);slot++) {
         const uint32_t *record=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
         if(record[5]&&memcmp(record,&coord,sizeof(coord))==0) return slot;
     }
@@ -523,7 +523,7 @@ bool fr_thermal_checkpoint_preflight_chunk(dc_gpu_t *g,uint32_t index,char *err,
     return (g->thermal->pending_water&&index<g->thermal->pending_count)||error(err,cap,"Pending thermal packet is inconsistent");
 }
 bool fr_thermal_checkpoint_bind_chunk(dc_gpu_t *g,uint32_t slot,uint32_t index,char *err,uint32_t cap) {
-    if(!fr_thermal_checkpoint_preflight_chunk(g,index,err,cap)||slot>=DC_GPU_CHUNK_SLOTS) return false;
+    if(!fr_thermal_checkpoint_preflight_chunk(g,index,err,cap)||slot>=dc_gpu_slot_capacity(g)) return false;
     if(g->thermal&&g->thermal->pending_count) memcpy((float *)g->thermal->water.mapped+(size_t)slot*4096u,
         g->thermal->pending_water+(size_t)index*4096u,4096u*sizeof(float));
     return true;

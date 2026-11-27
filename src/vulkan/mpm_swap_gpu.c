@@ -33,7 +33,7 @@ void dc_gpu_mpm_swap_descriptors(dc_gpu_t *g) {
             .srcSet=g->descriptor,.srcBinding=binding,.dstSet=g->mpm_swapped_descriptor,
             .dstBinding=binding,.descriptorCount=1};
     }
-    VkDeviceSize bytes=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
+    VkDeviceSize bytes=(VkDeviceSize)dc_gpu_slot_capacity(g)*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
     VkDescriptorBufferInfo buffers[]={{g->mpm_output_buffer,0,bytes},{g->particle_buffer,0,bytes}};
     VkWriteDescriptorSet writes[2];
     for(uint32_t i=0;i<2;i++) writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,

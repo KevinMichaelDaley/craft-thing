@@ -31,7 +31,7 @@ bool dc_gpu_enable_impact_fracture(dc_gpu_t *gpu) {
 bool dc_gpu_read_impact_fracture(dc_gpu_t *gpu, uint32_t source_id,
                                 dc_gpu_impact_fracture_state_t *state) {
     if (!gpu || !source_id || !state) return false;
-    uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
 
     for (unsigned slot = 0; slot < dc_gpu_body_capacity(gpu); slot++) {
         uint32_t *pending = gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,slot)+52u:graph+38000u+slot*4u;
@@ -141,7 +141,7 @@ bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_CAPACITY_WORD] = DC_GPU_BROADPHASE_PAIR_CAPACITY;
         dc_gpu_broadphase_data(gpu)[DC_GPU_BROADPHASE_BUCKETS_WORD] = dc_gpu_broadphase_buckets(gpu);
         dc_gpu_contact_data(gpu)[DC_GPU_CONTACT_CAPACITY_WORD] = DC_GPU_CONTACT_CAPACITY;
-        dc_gpu_structural_data(gpu)[1] = DC_GPU_CHUNK_SLOTS;
+        dc_gpu_structural_data(gpu)[1] = dc_gpu_slot_capacity(gpu);
     }
     return okay;
 }
@@ -259,7 +259,7 @@ bool dc_gpu_remove_body(dc_gpu_t *gpu, uint32_t id, char *err, uint32_t cap) {
     if (slot == UINT32_MAX) return error(err, cap, "GPU body ID not found");
     if ((*dc_gpu_body_record(gpu,slot)).reserved[0] == DC_GPU_STRUCTURAL_TAG)
         return error(err, cap, "Structural removal is owned by its graph");
-    uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset();
+    uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
     uint32_t *journal=gpu->runtime_body_consumers?dc_gpu_body_solver_state(gpu,slot)+60u:
         graph+36000u+slot*4u;
     if (journal[3] == 2u)

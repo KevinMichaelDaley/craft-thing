@@ -13,7 +13,7 @@ VkResult __wrap_vkQueueWaitIdle(VkQueue queue) {(void)queue;return VK_SUCCESS;}
 static void diagnostic_case(unsigned kind) {
     dc_gpu_t gpu={.width=64,.height=64,.automatic_components_enabled=true};
     gpu.body_mapped=calloc(1,dc_gpu_body_storage_bytes(&gpu));ASSERT_TRUE(gpu.body_mapped);
-    uint32_t *base=dc_gpu_structural_data(&gpu),*graph=base+dc_gpu_structural_graph_offset();
+    uint32_t *base=dc_gpu_structural_data(&gpu),*graph=base+dc_gpu_structural_graph_offset(&gpu);
     base[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1;graph[36257]=1;
     uint32_t *record=graph+36300,*pool=graph+40000;
     pool[2]=100;record[7]=1;record[10]=41;

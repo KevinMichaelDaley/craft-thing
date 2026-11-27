@@ -65,7 +65,7 @@ bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,
     bool okay=true;
     for(uint32_t i=0;okay&&i<count;i++) {
         bool found=false;
-        for(uint32_t slot=0;!found&&slot<DC_GPU_CHUNK_SLOTS;slot++) {
+        for(uint32_t slot=0;!found&&slot<dc_gpu_slot_capacity(g);slot++) {
             const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
             if(registry[5]&&memcmp(registry,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
                 okay=fr_gpu_reactive_export_chunk(g,slot,chunks+i,archive.chunks+i,err,cap);found=true;
@@ -198,7 +198,7 @@ bool fr_gpu_reactive_checkpoint_prepare(dc_gpu_t *g,const fr_reactive_archive_t 
     for(uint32_t i=0;i<archive->chunk_count;i++) {
         total+=archive->chunks[i].count;
         slots[i]=UINT32_MAX;
-        for(uint32_t slot=0;slot<DC_GPU_CHUNK_SLOTS;slot++) {
+        for(uint32_t slot=0;slot<dc_gpu_slot_capacity(g);slot++) {
             const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
             if(registry[5]&&memcmp(registry,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
                 slots[i]=slot;break;

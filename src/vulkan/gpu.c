@@ -92,46 +92,46 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
         return error(err, cap, "Cannot allocate descriptor set");
     if(vkAllocateDescriptorSets(gpu->device,&set_info,&gpu->mpm_swapped_descriptor)!=VK_SUCCESS)
         return error(err,cap,"Cannot allocate alternating particle descriptors");
-    VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(),bank_colors=dc_gpu_color_bank_bytes(gpu);
+    VkDeviceSize terrain_colors=dc_gpu_color_terrain_bytes(gpu),bank_colors=dc_gpu_color_bank_bytes(gpu);
     VkDescriptorBufferInfo buffers[DC_GPU_DESCRIPTOR_BINDINGS] = {
         { gpu->cells, 0, bytes },
-        { gpu->chunk_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
+        { gpu->chunk_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS * sizeof(dc_cell_t) },
         { gpu->page_buffer, 0, (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t) },
         { gpu->occupancy_buffer, 0, bytes * 5 },
         dc_gpu_runtime_bodies_binding(gpu),
         { gpu->trace_buffer, 0, 3 * sizeof(uint32_t) },
-        { gpu->halo_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
+        { gpu->halo_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_GPU_HALO_CELLS * sizeof(dc_gpu_halo_cell_t) },
         { gpu->transfer_buffer, 0, sizeof(dc_gpu_transfer_t) },
         { gpu->fluid_a_buffer, 0, bytes },
         { gpu->fluid_b_buffer, 0, bytes },
         { gpu->velocity_buffer, 0, bytes * 2 },
         { gpu->pressure_a_buffer, 0, bytes },
-        { gpu->marker_a_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
-        { gpu->marker_b_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
-        { gpu->marker_count_a_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->marker_count_b_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->marker_grid_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(uint32_t) },
-        { gpu->slot_page_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->slot_seed_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->particle_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
-        { gpu->particle_count_buffer, 0, DC_GPU_CHUNK_SLOTS * sizeof(uint32_t) },
-        { gpu->mpm_proposal_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
-        { gpu->mpm_output_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
+        { gpu->marker_a_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
+        { gpu->marker_b_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MARKERS_PER_CHUNK * sizeof(dc_marker_t) },
+        { gpu->marker_count_a_buffer, 0, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t) },
+        { gpu->marker_count_b_buffer, 0, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t) },
+        { gpu->marker_grid_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS * sizeof(uint32_t) },
+        { gpu->slot_page_buffer, 0, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t) },
+        { gpu->slot_seed_buffer, 0, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t) },
+        { gpu->particle_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
+        { gpu->particle_count_buffer, 0, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t) },
+        { gpu->mpm_proposal_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
+        { gpu->mpm_output_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t) },
         { gpu->mpm_grid_buffer, 0, bytes * 4 },
         { gpu->mpm_force_buffer, 0, bytes * 4 },
         { gpu->mpm_velocity_buffer, 0, bytes * 2 },
-        { gpu->mpm_accept_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t) },
+        { gpu->mpm_accept_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t) },
         { gpu->mpm_activity_buffer, 0, (VkDeviceSize)gpu->mpm_scan_layout.words * sizeof(uint32_t) },
         { gpu->mpm_label_a_buffer, 0, dc_gpu_component_storage_bytes(gpu) },
         { gpu->mpm_label_b_buffer, 0, dc_gpu_component_storage_bytes(gpu) },
         { gpu->mpm_component_size_buffer, 0, dc_gpu_component_storage_bytes(gpu) },
         { gpu->fluid_previous_buffer, 0, bytes },
-        { gpu->water_color_buffer, 0, (VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*16 },
+        { gpu->water_color_buffer, 0, (VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_CHUNK_CELLS*16 },
         { gpu->shape_color_buffer,0,terrain_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors,gpu->runtime_body_consumers?16:bank_colors },
         { gpu->shape_color_buffer,gpu->runtime_body_consumers?0:terrain_colors+bank_colors,gpu->runtime_body_consumers?16:bank_colors },
         { gpu->thermal_control_buffer,0,128 },
-        { gpu->bulk_phase_buffer,0,(VkDeviceSize)DC_GPU_CHUNK_SLOTS*sizeof(fr_bulk_phase_chunk_t) }
+        { gpu->bulk_phase_buffer,0,(VkDeviceSize)dc_gpu_slot_capacity(gpu)*sizeof(fr_bulk_phase_chunk_t) }
     };
     VkWriteDescriptorSet writes[DC_GPU_DESCRIPTOR_BINDINGS] = {0};
     for (uint32_t i = 0; i < DC_GPU_DESCRIPTOR_BINDINGS; ++i) {
@@ -183,14 +183,20 @@ static bool create_gpu(dc_gpu_t **out, const dc_gpu_t *parent, uint32_t width, u
     const char *boundary_cache = getenv("DC_CONTACT_BODY_CACHE");
     gpu->contact_boundary_cache_enabled = boundary_cache && strcmp(boundary_cache, "1") == 0;
     gpu->width = width; gpu->height = height;
+    if (parent) {
+        uint32_t columns = (width + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
+        uint32_t rows = (height + DC_CHUNK_SIDE - 1u) / DC_CHUNK_SIDE;
+        uint64_t pages = (uint64_t)columns * rows;
+        gpu->workspace_slots = pages < DC_GPU_CHUNK_SLOTS ? (uint32_t)pages : DC_GPU_CHUNK_SLOTS;
+    }
     gpu->pixel_pool_words = DC_GPU_INITIAL_PIXEL_POOL_WORDS;
     gpu->view_width = width; gpu->view_height = height;
     gpu->display_zoom = 1;
     gpu->fluid_interval = 1;
     gpu->fluid_step_scale = 1.0f;
-    for (uint32_t i = 0; i < DC_GPU_CHUNK_SLOTS; ++i) gpu->slot_page[i] = UINT32_MAX;
+    for (uint32_t i = 0; i < dc_gpu_slot_capacity(gpu); ++i) gpu->slot_page[i] = UINT32_MAX;
     VkDeviceSize bytes = (VkDeviceSize)width * height * sizeof(uint32_t);
-    VkDeviceSize atlas_bytes = (VkDeviceSize)DC_GPU_CHUNK_SLOTS * DC_CHUNK_CELLS * sizeof(dc_cell_t);
+    VkDeviceSize atlas_bytes = (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkDeviceSize required = bytes > atlas_bytes ? bytes : atlas_bytes;
     bool initialized = parent ? dc_gpu_inherit_device(gpu, parent, required, err, cap)
                               : dc_gpu_initialize_device(gpu, required, window_width, window_height, started, err, cap);

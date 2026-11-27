@@ -209,7 +209,7 @@ bool dc_gpu_structure_payload_valid(const dc_gpu_t *gpu,
     if (g->member_count > 16)
         return false;
     const uint32_t *current = dc_gpu_structural_data((dc_gpu_t *)gpu) +
-                              dc_gpu_structural_graph_offset();
+                              dc_gpu_structural_graph_offset(gpu);
     if (memcmp(p->graph + 29000u, current + 29000u, 36 * sizeof(uint32_t)))
         return false;
     for (unsigned i = 0; i < p->body_count; i++) {

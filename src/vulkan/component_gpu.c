@@ -10,7 +10,7 @@ bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats
     }
     stats->free_body_slots=stats->body_capacity-stats->owned_bodies;
     if(!gpu->automatic_components_enabled) return true;
-    const uint32_t *base=dc_gpu_structural_data(gpu),*graph=base+dc_gpu_structural_graph_offset();
+    const uint32_t *base=dc_gpu_structural_data(gpu),*graph=base+dc_gpu_structural_graph_offset(gpu);
     stats->arena_used_words=graph[40001];stats->arena_capacity_words=graph[40002];
     stats->pending=base[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u;
     stats->selected_components=graph[36257]<64u?graph[36257]:64u;
@@ -87,7 +87,7 @@ void dc_gpu_record_component_baseline(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout,0,1,&gpu->descriptor,0,NULL);
     uint32_t push[8]={gpu->width,gpu->height,0};
-    uint32_t groups=(DC_GPU_CHUNK_SLOTS*4096u+127u)/128u;
+    uint32_t groups=(dc_gpu_slot_capacity(gpu)*4096u+127u)/128u;
     extraction_stage(gpu,push,26,0,1);
     extraction_stage(gpu,push,9,0,groups);
     extraction_stage(gpu,push,11,0,groups);
@@ -103,13 +103,13 @@ void dc_gpu_record_component_extraction(dc_gpu_t *gpu) {
     uint32_t push[8] = {gpu->width,  gpu->height,        0,
                         0,           (uint32_t)x,        (uint32_t)(x >> 32),
                         (uint32_t)y, (uint32_t)(y >> 32)};
-    uint32_t cells = DC_GPU_CHUNK_SLOTS * 4096u, groups = (cells + 127u) / 128u;
+    uint32_t cells = dc_gpu_slot_capacity(gpu) * 4096u, groups = (cells + 127u) / 128u;
     if (gpu->component_profile)
         vkCmdWriteTimestamp2(gpu->command,
                              VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                              gpu->timestamp_pool, 4);
     extraction_stage(gpu, push, 26, 0, 1);
-    extraction_stage(gpu, push, 9, 0, (DC_GPU_CHUNK_SLOTS * 4u + 127u) / 128u);
+    extraction_stage(gpu, push, 9, 0, (dc_gpu_slot_capacity(gpu) * 4u + 127u) / 128u);
     extraction_stage(gpu, push, 10, 0, groups);
     if (gpu->component_profile)
         vkCmdWriteTimestamp2(gpu->command,

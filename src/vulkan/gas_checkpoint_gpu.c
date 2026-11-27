@@ -52,7 +52,7 @@ static bool copy_state_chunk(dc_gpu_t *g,uint32_t bank,uint32_t slot,bool upload
     return fr_gas_submit(g)||error(err,cap,"Cannot complete cold gas state staging");
 }
 bool fr_gas_gpu_checkpoint_packets(dc_gpu_t *g,uint32_t bank,uint32_t slot,const gas_packet_t **packets,char *err,uint32_t cap) {
-    if(!g||!g->gas||bank>=3u||slot>=DC_GPU_CHUNK_SLOTS||!packets) return error(err,cap,"Invalid cold gas state request");
+    if(!g||!g->gas||bank>=3u||slot>=dc_gpu_slot_capacity(g)||!packets) return error(err,cap,"Invalid cold gas state request");
     if(g->gas->sparse_owners&&bank==1u) {if(!fr_gas_gpu_materialize_owners(g,slot,false,err,cap)) return false;bank=0u;}
     if(g->gas->state[bank].mapped) {*packets=(const gas_packet_t *)g->gas->state[bank].mapped+(size_t)slot*4096u;return true;}
     if(!copy_state_chunk(g,bank,slot,false,err,cap)) return false;
@@ -88,7 +88,7 @@ static bool import_thermodynamics(const fr_gas_model_t *model,const fr_gas_state
 }
 bool fr_gas_gpu_seed_chunk(dc_gpu_t *g,uint32_t slot,const fr_gas_state_t *states,
     const double *volumes,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!states||!volumes||count!=4096u) return error(err,cap,"Invalid immutable gas import");
+    if(!g||!g->gas||slot>=dc_gpu_slot_capacity(g)||!states||!volumes||count!=4096u) return error(err,cap,"Invalid immutable gas import");
     gas_packet_t *packets=calloc(count,sizeof(*packets));if(!packets) return error(err,cap,"Cannot stage gas import");
     bool okay=true;
     for(uint32_t i=0;okay&&i<count;i++) {
@@ -118,7 +118,7 @@ static bool read_live_packets(dc_gpu_t *g, uint32_t slot, const gas_packet_t **p
                                           slot, packets, err, cap);
 }
 bool fr_gas_gpu_read_chunk(dc_gpu_t *g,uint32_t slot,fr_gas_state_t *states,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!states||count<4096u) return error(err,cap,"Invalid cold gas snapshot");
+    if(!g||!g->gas||slot>=dc_gpu_slot_capacity(g)||!states||count<4096u) return error(err,cap,"Invalid cold gas snapshot");
     const gas_packet_t *packets = NULL;
     if (!read_live_packets(g, slot, &packets, err, cap)) return false;
     for(uint32_t i=0;i<4096u;i++) states[i]=unpack(packets+i);
@@ -132,7 +132,7 @@ bool fr_gas_gpu_probe_cell(dc_gpu_t *g, uint32_t x, uint32_t y, fr_gas_gpu_probe
     const uint32_t *pages = g->page_mapped;
     size_t tile = (size_t)(y / DC_CHUNK_SIDE) * g->page_width + x / DC_CHUNK_SIDE;
     uint32_t page = pages[tile];
-    if (!page || page > DC_GPU_CHUNK_SLOTS)
+    if (!page || page > dc_gpu_slot_capacity(g))
         return error(err, cap, "Gas probe cell is not resident");
     if (!g->gas) return error(err, cap, "Gas probe requires an enabled gas field");
     const gas_packet_t *packets = NULL;
@@ -155,7 +155,7 @@ bool fr_gas_gpu_probe_cell(dc_gpu_t *g, uint32_t x, uint32_t y, fr_gas_gpu_probe
     return true;
 }
 bool fr_gas_gpu_export_checkpoint(dc_gpu_t *g,uint32_t slot,fr_gas_checkpoint_chunk_t *out,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!out) return error(err,cap,"Invalid cold gas checkpoint export");
+    if(!g||!g->gas||slot>=dc_gpu_slot_capacity(g)||!out) return error(err,cap,"Invalid cold gas checkpoint export");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas checkpoint export");
     struct fr_gas_gpu *t=g->gas;
     const gas_packet_t *packets=NULL;if(!fr_gas_gpu_checkpoint_packets(g,t->direct_publish?1u:0u,slot,&packets,err,cap)) return false;
@@ -185,7 +185,7 @@ static bool import_packet(const fr_gas_model_t *model,const fr_gas_checkpoint_ch
     return import_thermodynamics(model,&state,p[12],&thermo,err,cap);
 }
 bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpoint_chunk_t *input,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!input) return error(err,cap,"Invalid cold gas checkpoint import");
+    if(!g||!g->gas||slot>=dc_gpu_slot_capacity(g)||!input) return error(err,cap,"Invalid cold gas checkpoint import");
     struct fr_gas_gpu *t=g->gas;
     if(!isfinite(input->clock.advanced_seconds)||input->clock.advanced_seconds<0.||
        input->clock.substeps<input->clock.physical_steps||
@@ -204,7 +204,7 @@ bool fr_gas_gpu_import_checkpoint(dc_gpu_t *g,uint32_t slot,const fr_gas_checkpo
     fr_gas_gpu_invalidate_cache(g);t->large_step_hint=0;t->smoke_coordinate_reset=true;return true;
 }
 bool fr_gas_gpu_read_work_chunk(dc_gpu_t *g,uint32_t slot,double *work,uint32_t count,char *err,uint32_t cap) {
-    if(!g||!g->gas||slot>=DC_GPU_CHUNK_SLOTS||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
+    if(!g||!g->gas||slot>=dc_gpu_slot_capacity(g)||!work||count<4096u) return error(err,cap,"Invalid gas work snapshot");
     if(vkQueueWaitIdle(g->queue)!=VK_SUCCESS) return error(err,cap,"Cannot complete gas work snapshot");
     const gas_packet_t *packets=NULL;if(!fr_gas_gpu_checkpoint_packets(g,g->gas->direct_publish?1u:0u,slot,&packets,err,cap)) return false;
     for(uint32_t i=0;i<4096u;i++) work[i]=packets[i].words[15];

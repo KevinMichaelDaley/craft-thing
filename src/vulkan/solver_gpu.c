@@ -358,7 +358,7 @@ static void dispatch(dc_gpu_t *gpu, uint32_t mode, bool indirect) {
 void dc_gpu_record_solver_uncached(dc_gpu_t *gpu) {
     gpu->solver_recording = true;
     dc_gpu_record_contact_terrain(gpu);
-    dispatch(gpu, SOLVER_GRAIN_BED_PLAN | (DC_GPU_CHUNK_SLOTS << 8u), false);
+    dispatch(gpu, SOLVER_GRAIN_BED_PLAN | (dc_gpu_slot_capacity(gpu) << 8u), false);
     dispatch(gpu, SOLVER_GRAIN_BED_INIT, false);
     dispatch(gpu, SOLVER_GRAIN_BED_PUBLISH, false);
     for (uint32_t span=1, pass=0; span<gpu->height; span*=2, pass++)

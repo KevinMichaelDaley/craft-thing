@@ -29,7 +29,7 @@ static bool setup(void) {
     gpu = (dc_gpu_t){.width = 192u, .height = 192u, .page_width = 3u, .page_height = 3u,
         .page_mapped = pages, .runtime_pair_capacity = 1u, .runtime_contact_capacity = 1u};
     for (uint32_t slot = 0; slot < DC_GPU_CHUNK_SLOTS; ++slot) gpu.slot_page[slot] = UINT32_MAX;
-    size_t words = dc_gpu_structural_word_offset(&gpu) + dc_gpu_structural_graph_offset();
+    size_t words = dc_gpu_structural_word_offset(&gpu) + dc_gpu_structural_graph_offset(&gpu);
     gpu.body_mapped = calloc(1, DC_GPU_BODY_CAPACITY * sizeof(dc_gpu_body_record_t) + words * sizeof(uint32_t));
     return gpu.body_mapped != NULL;
 }
