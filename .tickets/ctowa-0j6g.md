@@ -1,6 +1,6 @@
 ---
 id: ctowa-0j6g
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T01:56:45Z
@@ -21,3 +21,9 @@ Derive shared capacity from the rounded page grid up to the configured slot limi
 ## Acceptance Criteria
 
 Vulkan tests prove a small shared workspace actually allocates smaller buffers, reaches its last partial page, rejects unavailable slots, and steps with exact channel readback. Existing foreground and checkpoint paths build and run with the same defaults.
+
+## Notes
+
+**2026-11-27T02:08:47Z**
+
+RED reproduced 2097152 bytes for both the two-page workspace and the foreground cell buffer. GREEN passed on RTX A2000 and software Vulkan with core and synchronization validation. The final software Vulkan case used 65536 versus 2097152 bytes, rejected the out-of-range slot, ticked the last partial page, and restored foreground terrain and exact colors into the compact atlas. Default app and quarter-native checkpoint binaries build, host and recording tests pass, and all 143 compiled make test prerequisites built. The final RTX checkpoint replay and the complete make test run are queued.
