@@ -19,8 +19,11 @@ bool fr_thermal_prepare_liquid_seam(dc_gpu_t *first, dc_gpu_t *second, char *err
         dc_gpu_seam_bind_buffers(first, compute->descriptor, buffers, 4u);
         return true;
     }
-    return fr_renderer_compute_init(first, compute, buffers, 4u, sizeof(thermal_face_push_t),
-        "build/shaders/thermal_liquid_seam.comp.spv", err, cap);
+    if (fr_renderer_compute_init(first, compute, buffers, 4u, sizeof(thermal_face_push_t),
+        "build/shaders/thermal_liquid_seam.comp.spv", err, cap)) return true;
+    fr_renderer_compute_destroy(first, compute);
+    *compute = (fr_renderer_compute_t){0};
+    return false;
 }
 
 static uint32_t face_base(dc_liquid_seam_endpoint_t tile, bool vertical, bool high) {

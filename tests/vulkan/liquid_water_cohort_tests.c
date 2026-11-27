@@ -467,7 +467,7 @@ cleanup:
     free(identity);
 }
 
-static void check_bulk_crossing(bool vertical) {
+static void check_bulk_crossing(bool vertical, bool reverse) {
     const char shader[] = "build/shaders/pattern.comp.spv";
     dc_gpu_t *owners[2] = {0}, *mono = NULL;
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *native = calloc(1, sizeof(*native));
@@ -475,47 +475,84 @@ static void check_bulk_crossing(bool vertical) {
     fr_bulk_phase_chunk_t *expected = calloc(1, sizeof(*expected));
     dc_liquid_seam_endpoint_t endpoints[2] = {0};
     float heat[DC_CHUNK_CELLS] = {0}, native_heat[DC_CHUNK_CELLS];
+    unsigned donor = reverse ? 1u : 0u;
+    const uint32_t pocket = 16u * DC_CHUNK_SIDE + 16u;
+    bool heated = vertical || reverse;
     ASSERT_TRUE(chunk && native && phase && expected);
     ASSERT_TRUE(dc_gpu_create(&owners[0], 64, 64, shader, g_err, sizeof(g_err)) &&
                 dc_gpu_create_shared(&owners[1], owners[0], 64, 64, shader, g_err, sizeof(g_err)) &&
                 dc_gpu_create(&mono, vertical ? 64 : 128, vertical ? 128 : 64, shader, g_err, sizeof(g_err)));
     ASSERT_TRUE(dc_gpu_set_fluid_interval(mono, 6u));
-    if (vertical) ASSERT_TRUE(fr_thermal_gpu_enable(mono, g_err, sizeof(g_err)));
+    if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(mono, g_err, sizeof(g_err)));
     for (unsigned i = 0; i < 2; ++i) {
         chunk->coord = (dc_chunk_coord_t){vertical ? 0 : i, vertical ? i : 0};
+        memset(chunk->cells, 0, sizeof(chunk->cells));
+        memset(heat, 0, sizeof(heat));
         if (vertical) {
             for (unsigned j = 0; j < DC_CHUNK_CELLS; ++j) chunk->cells[j] = (dc_cell_t){.material = DC_MATERIAL_STONE};
             unsigned row = i ? 0u : DC_CHUNK_SIDE - 1u;
             for (unsigned x = 30; x <= 34; x += 4)
                 chunk->cells[row * DC_CHUNK_SIDE + x] = (dc_cell_t){.fluid_mass = i ? DC_FLUID_FULL : 0u};
         }
-        endpoints[i] = (dc_liquid_seam_endpoint_t){.gpu = owners[i], .coord = chunk->coord};
-        if (vertical) ASSERT_TRUE(fr_thermal_gpu_enable(owners[i], g_err, sizeof(g_err)));
+        if (reverse) {
+            uint32_t x = i ? 0u : DC_CHUNK_SIDE - 1u, cell = 8u * DC_CHUNK_SIDE + x;
+            chunk->cells[cell].fluid_mass = DC_FLUID_FULL;
+            chunk->cells[cell - DC_CHUNK_SIDE].material = DC_MATERIAL_STONE;
+            chunk->cells[cell + DC_CHUNK_SIDE].material = DC_MATERIAL_STONE;
+            chunk->cells[i ? cell + 1u : cell - 1u].material = DC_MATERIAL_STONE;
+            heat[cell] = i ? 2.f : 100.f;
+            if (i == donor) {
+                chunk->cells[pocket-1u].material = chunk->cells[pocket+1u].material = DC_MATERIAL_STONE;
+                chunk->cells[pocket-DC_CHUNK_SIDE].material = chunk->cells[pocket+DC_CHUNK_SIDE].material = DC_MATERIAL_STONE;
+            }
+        }
+        endpoints[reverse ? 1u-i : i] = (dc_liquid_seam_endpoint_t){.gpu = owners[i], .coord = chunk->coord};
+        if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(owners[i], g_err, sizeof(g_err)));
         ASSERT_TRUE(dc_gpu_set_body_origin(owners[i], chunk->coord, g_err, sizeof(g_err)) &&
                     dc_gpu_set_fluid_interval(owners[i], 6u) &&
                     dc_gpu_upload_chunk(owners[i], 0, chunk, g_err, sizeof(g_err)) &&
                     dc_gpu_set_page(owners[i], 0, 0, 0, g_err, sizeof(g_err)) &&
                     dc_gpu_upload_chunk(mono, i, chunk, g_err, sizeof(g_err)) &&
                     dc_gpu_set_page(mono, chunk->coord.x, chunk->coord.y, i, g_err, sizeof(g_err)));
-        if (i) {
-            if (vertical) {
-                heat[30u] = 90.f;
-                heat[34u] = 62.f;
-                ASSERT_TRUE(fr_thermal_gpu_import_water_chunk(owners[i], 0, chunk, heat, g_err, sizeof(g_err)) &&
-                            fr_thermal_gpu_import_water_chunk(mono, i, chunk, heat, g_err, sizeof(g_err)));
-            }
-            continue;
+        if (vertical && i) {
+            heat[30u] = 90.f;
+            heat[34u] = 62.f;
         }
-        uint32_t at = vertical ? 63u * DC_CHUNK_SIDE + 30u : 30u * DC_CHUNK_SIDE + 63u;
+        if (heated) ASSERT_TRUE(fr_thermal_gpu_import_water_chunk(owners[i], 0, chunk, heat, g_err, sizeof(g_err)) &&
+                                fr_thermal_gpu_import_water_chunk(mono, i, chunk, heat, g_err, sizeof(g_err)));
+        if (i != donor) continue;
+        uint32_t at = vertical ? 63u * DC_CHUNK_SIDE + 30u : 30u * DC_CHUNK_SIDE + (reverse ? 0u : 63u);
         phase->oil_fp[at] = DC_FLUID_FULL;
-        phase->oil_momentum_x[at] = 10.f;
+        phase->oil_momentum_x[at] = reverse ? -10.f : 10.f;
         phase->oil_excess[at] = 3.f;
         at += vertical ? 4u : 4u * DC_CHUNK_SIDE;
         phase->slime_fp[at] = DC_FLUID_FULL;
-        phase->slime_momentum_x[at] = 100.f;
+        phase->slime_momentum_x[at] = reverse ? -100.f : 100.f;
         phase->slime_excess[at] = 6.f;
-        ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(owners[0], 0, chunk, phase, g_err, sizeof(g_err)) &&
-                    fr_bulk_phase_gpu_import_chunk(mono, 0, chunk, phase, g_err, sizeof(g_err)));
+        if (reverse) phase->oil_fp[pocket] = DC_FLUID_FULL;
+        ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(owners[i], 0, chunk, phase, g_err, sizeof(g_err)) &&
+                    fr_bulk_phase_gpu_import_chunk(mono, i, chunk, phase, g_err, sizeof(g_err)));
+    }
+    if (reverse) {
+        dc_gpu_t *domains[] = {mono, owners[0], owners[1]};
+        for (unsigned i = 0; i < 3; ++i) {
+            dc_gpu_t *g = domains[i];
+            ASSERT_TRUE(dc_gpu_set_rigid_solver(g, true));
+            if (i != 1u) {
+                int32_t x = i == 0u ? 80 : 16;
+                dc_gpu_body_t body = {.x_fp = x * DC_FLUID_FULL + DC_FLUID_FULL/2,
+                    .y_fp = 16 * DC_FLUID_FULL, .width = 1, .height = 1, .id = 201, .active = 1};
+                ASSERT_TRUE(dc_gpu_spawn_body(g, body, g_err, sizeof(g_err)) &&
+                    dc_gpu_set_body_motion(g, 201, 0, 0, DC_GPU_BODY_KINEMATIC, g_err, sizeof(g_err)));
+            }
+            if (i != 2u) {
+                dc_gpu_body_t body = {.x_fp = 63 * DC_FLUID_FULL, .y_fp = 30 * DC_FLUID_FULL + DC_FLUID_FULL/2,
+                    .width = 1, .height = 1, .id = 202, .active = 1};
+                ASSERT_TRUE(dc_gpu_spawn_body(g, body, g_err, sizeof(g_err)) &&
+                    dc_gpu_set_body_motion(g, 202, 0, 0, DC_GPU_BODY_KINEMATIC, g_err, sizeof(g_err)));
+            }
+            ASSERT_TRUE(dc_gpu_rigid_step(g, g_err, sizeof(g_err)));
+        }
     }
     const float elapsed[] = {1.f/240.f, 1.f/60.f, 1.f/60.f};
     for (unsigned tick = 0; tick < sizeof(elapsed)/sizeof(*elapsed); ++tick) {
@@ -526,12 +563,22 @@ static void check_bulk_crossing(bool vertical) {
         for (unsigned i = 0; i < 2; ++i) {
             ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(mono, i, expected, g_err, sizeof(g_err)) &&
                         fr_bulk_phase_gpu_export_chunk(owners[i], 0, phase, g_err, sizeof(g_err)));
+            if (memcmp(phase, expected, sizeof(*phase))) {
+                for (size_t byte = 0; byte < sizeof(*phase); ++byte) {
+                    if (((unsigned char *)phase)[byte] == ((unsigned char *)expected)[byte]) continue;
+                    fprintf(stderr, "tick %u owner %u channel %zu cell %zu momentum %.9g expected %.9g\n",
+                        tick, i, byte/(4*DC_CHUNK_CELLS), byte/4%DC_CHUNK_CELLS,
+                        phase->oil_momentum_x[byte/4%DC_CHUNK_CELLS], expected->oil_momentum_x[byte/4%DC_CHUNK_CELLS]);
+                    break;
+                }
+            }
             ASSERT_EQ(memcmp(phase, expected, sizeof(*phase)), 0);
+            if (reverse && i == donor) ASSERT_EQ(phase->oil_retained_fp[pocket], DC_FLUID_FULL / 2u);
             ASSERT_TRUE(dc_gpu_download_chunk(mono, i, native, g_err, sizeof(g_err)) &&
                         dc_gpu_download_chunk(owners[i], 0, chunk, g_err, sizeof(g_err)));
             ASSERT_EQ(memcmp(native->cells, chunk->cells, sizeof(native->cells)), 0);
             ASSERT_EQ(memcmp(native->face_velocity, chunk->face_velocity, sizeof(native->face_velocity)), 0);
-            if (vertical) {
+            if (heated) {
                 ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(owners[i], 0, heat, DC_CHUNK_CELLS, g_err, sizeof(g_err)) &&
                             fr_thermal_gpu_read_water_chunk(mono, i, native_heat, DC_CHUNK_CELLS, g_err, sizeof(g_err)));
                 for (unsigned j = 0; j < DC_CHUNK_CELLS; ++j)
@@ -540,6 +587,7 @@ static void check_bulk_crossing(bool vertical) {
         }
     }
     uint64_t oil = 0, slime = 0;
+    ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(mono, 1u-donor, expected, g_err, sizeof(g_err)));
     for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
         oil += expected->oil_fp[i];
         slime += expected->slime_fp[i];
@@ -564,8 +612,9 @@ cleanup:
     dc_gpu_destroy(owners[0]);
     free(native); free(chunk); free(phase); free(expected);
 }
-static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) { check_bulk_crossing(false); }
-static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_bulk_crossing(true); }
+static void test_bulk_crosses_the_shared_face_on_every_elapsed_tick(void) { check_bulk_crossing(false, false); }
+static void test_vertical_bulk_exchange_matches_monolithic_ticks(void) { check_bulk_crossing(true, false); }
+static void test_reverse_bulk_flow_conducts_heat_across_the_west_face(void) { check_bulk_crossing(false, true); }
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
@@ -575,9 +624,11 @@ int main(int argc, char **argv) {
     } else if (argc == 2 && strcmp(argv[1], "--bulk") == 0) {
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
+        RUN(test_reverse_bulk_flow_conducts_heat_across_the_west_face);
     } else if (argc == 1) {
         RUN(test_bulk_crosses_the_shared_face_on_every_elapsed_tick);
         RUN(test_vertical_bulk_exchange_matches_monolithic_ticks);
+        RUN(test_reverse_bulk_flow_conducts_heat_across_the_west_face);
         RUN(test_fractional_tick_without_a_phase_keeps_the_queue_idle);
         RUN(test_connected_tiles_match_monolithic_water_and_share_one_receipt);
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);

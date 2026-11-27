@@ -1,7 +1,7 @@
 ---
 id: ctowpe-3271
 status: in_progress
-deps: []
+deps: [ctowpe-eg19]
 links: []
 created: 2026-11-27T11:20:44Z
 type: task
