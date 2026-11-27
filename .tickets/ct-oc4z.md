@@ -1,6 +1,6 @@
 ---
 id: ct-oc4z
-status: open
+status: in_progress
 deps: []
 links: [ctlo-inhv]
 created: 2026-11-01T18:33:33Z
