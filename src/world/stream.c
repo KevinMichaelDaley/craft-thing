@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,7 @@ typedef struct {
     fr_gas_checkpoint_chunk_t *gas;
     uint8_t *bulk_packet;
     size_t bulk_bytes;
+    dc_stream_chunk_time_t time;
 } stream_job_t;
 
 typedef struct {
@@ -34,7 +36,14 @@ typedef struct {
     uint64_t seed;
 } chunk_header_t;
 
+enum { CHUNK_TIMED_VERSION = 12 };
+typedef struct {
+    uint32_t payload_version, reserved;
+    double completed_seconds;
+} chunk_time_header_t;
+
 _Static_assert(sizeof(chunk_header_t) == 32, "Chunk file header layout changed");
+_Static_assert(sizeof(chunk_time_header_t) == 16, "Chunk time header layout changed");
 
 struct dc_streamer {
     char *directory;
@@ -72,13 +81,25 @@ static bool prefix_hash(FILE *file,long end,uint64_t *out) {
     }
     *out=value;return true;
 }
+
+static bool verify_chunk_hash(FILE *file) {
+    long end = ftell(file);
+    uint64_t stored, actual;
+    return fread(&stored, sizeof(stored), 1, file) == 1 &&
+           fgetc(file) == EOF && !ferror(file) &&
+           prefix_hash(file, end, &actual) && actual == stored;
+}
+
+static bool valid_completed_time(double seconds) {
+    return isfinite(seconds) && seconds >= 0.0;
+}
 static void release_channel(fr_reactive_chunk_t *channel) {
     if(channel) {fr_reactive_chunk_release(channel);free(channel);}
 }
 static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const uint8_t *thermal,size_t thermal_bytes,const fr_gas_checkpoint_chunk_t *gas,
-    const uint8_t *bulk_packet,size_t bulk_bytes) {
+    const uint8_t *bulk_packet,size_t bulk_bytes,dc_stream_chunk_time_t time) {
     dc_chunk_colors_t ambient_colors={0};
     if(reactive&&!colors) colors=&ambient_colors;
     char temporary[1024], final[1024];
@@ -94,7 +115,11 @@ static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_
     if(thermal) header.version=8;
     if(gas) header.version=11;
     if(bulk_packet) header.version=10;
+    chunk_time_header_t time_header = {.payload_version = header.version,
+                                       .completed_seconds = time.seconds};
+    if (time.known) header.version = CHUNK_TIMED_VERSION;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
+        (!time.known || fwrite(&time_header, sizeof(time_header), 1, file) == 1) &&
         fwrite(chunk->cells, sizeof(chunk->cells), 1, file) == 1 &&
         chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
         chunk->particle_count <= DC_MPM_PARTICLES_PER_CHUNK &&
@@ -121,7 +146,7 @@ static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_
         size_t size=0,written=0;uint8_t *bytes=NULL;
         okay=fr_reactive_chunk_size(reactive->count,&size)&&(bytes=malloc(size))!=NULL&&
             fr_reactive_chunk_encode(reactive,chunk,bytes,size,&written,NULL,0);
-        uint64_t length=size,hash=0;
+        uint64_t length=size;
         if(okay) okay=fwrite(&length,sizeof(length),1,file)==1&&fwrite(bytes,size,1,file)==1;
         free(bytes);
         if(okay&&(thermal||gas||bulk_packet)) {
@@ -136,8 +161,12 @@ static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_
                 fwrite(&liquid_length,sizeof(liquid_length),1,file)==1&&
                 fwrite(bulk_packet,bulk_bytes,1,file)==1;
         } else if(okay&&gas) okay=fwrite(gas,sizeof(*gas),1,file)==1;
-        long end=okay?ftell(file):-1;
-        if(okay) okay=prefix_hash(file,end,&hash)&&fseek(file,end,SEEK_SET)==0&&fwrite(&hash,sizeof(hash),1,file)==1;
+    }
+    if (okay && (reactive || time.known)) {
+        long end = ftell(file);
+        uint64_t hash;
+        okay = prefix_hash(file, end, &hash) && fseek(file, end, SEEK_SET) == 0 &&
+               fwrite(&hash, sizeof(hash), 1, file) == 1;
     }
     if (fclose(file) != 0) okay = false;
     if (okay) okay = rename(temporary, final) == 0;
@@ -152,7 +181,7 @@ static bool load_gas_checkpoint(FILE *file,size_t bytes,fr_gas_checkpoint_chunk_
 
 static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc_chunk_coord_t coord,
     dc_chunk_colors_t *colors,fr_reactive_chunk_t **reactive,float **water_excess,
-    fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk) {
+    fr_gas_checkpoint_chunk_t **gas,fr_bulk_phase_chunk_t **bulk,dc_stream_chunk_time_t *completed) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     if (!chunk) return NULL;
     chunk->coord=coord;
@@ -179,20 +208,32 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
         return chunk;
     }
     if (!file) { free(chunk); return NULL; }
-    chunk_header_t header;
+    chunk_header_t header = {0};
     bool okay = fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCC1", 4) == 0 &&
-        (header.version >= 1 && header.version <= 11) &&
-        header.x == coord.x && header.y == coord.y && header.seed == stream->seed &&
-        fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
-    if (okay && header.version >= 2)
+        (header.version >= 1 && header.version <= CHUNK_TIMED_VERSION) &&
+        header.x == coord.x && header.y == coord.y && header.seed == stream->seed;
+    uint32_t version = header.version;
+    dc_stream_chunk_time_t time = {0};
+    if (okay && version == CHUNK_TIMED_VERSION) {
+        chunk_time_header_t time_header;
+        okay = fread(&time_header, sizeof(time_header), 1, file) == 1 &&
+               time_header.payload_version >= 5 && time_header.payload_version <= 11 &&
+               !time_header.reserved && valid_completed_time(time_header.completed_seconds);
+        if (okay) {
+            version = time_header.payload_version;
+            time = (dc_stream_chunk_time_t){.seconds = time_header.completed_seconds, .known = true};
+        }
+    }
+    if (okay) okay = fread(chunk->cells, sizeof(chunk->cells), 1, file) == 1;
+    if (okay && version >= 2)
         okay = fread(&chunk->marker_count, sizeof(chunk->marker_count), 1, file) == 1 &&
             chunk->marker_count <= DC_MARKERS_PER_CHUNK &&
             fread(chunk->markers, sizeof(dc_marker_t), chunk->marker_count, file) ==
                 chunk->marker_count;
-    if (okay && header.version >= 3)
+    if (okay && version >= 3)
         okay = fread(chunk->face_velocity, sizeof(chunk->face_velocity), 1, file) == 1;
-    if (okay && header.version >= 4) {
+    if (okay && version >= 4) {
         okay = fread(&chunk->particle_count, sizeof(chunk->particle_count), 1, file) == 1 &&
             chunk->particle_count <= DC_MPM_PARTICLES_PER_CHUNK;
         for (uint32_t n = 0; okay && n < chunk->particle_count; ++n) {
@@ -203,35 +244,36 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
                 index < DC_MPM_PARTICLES_PER_CHUNK && particle.mass_fp != 0;
             if (okay && chunk->particles[index].mass_fp) okay = false;
             if (okay) {
-                if (header.version == 4)
+                if (version == 4)
                     particle.grain_fp = dc_chunk_grain_radius_fp(particle.material);
                 chunk->particles[index] = particle;
             }
         }
     }
-    if(okay && header.version>=6) {
+    if(okay && version>=6) {
         uint64_t stored=0,hash=dc_color_hash(14695981039346656037ull,chunk->cells,sizeof(chunk->cells));
         okay=fread(colors,sizeof(*colors),1,file)==1 && fread(&stored,sizeof(stored),1,file)==1 &&
             dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2);
         hash=dc_color_hash(hash,colors,sizeof(*colors));
         okay=okay&&hash==stored;
-        if(okay&&header.version==6) okay=fgetc(file)==EOF&&!ferror(file);
+        if(okay&&version==6&&!time.known) okay=fgetc(file)==EOF&&!ferror(file);
     }
-    if(okay&&header.version>=7) {
+    if (okay && version < 7 && time.known) okay = verify_chunk_hash(file);
+    if(okay&&version>=7) {
         uint64_t length=0;size_t maximum=0;uint8_t *bytes=NULL;
         okay=fr_reactive_chunk_size(DC_CHUNK_CELLS+DC_MPM_PARTICLES_PER_CHUNK,&maximum)&&
             fread(&length,sizeof(length),1,file)==1&&length>=72u&&length<=maximum;
         if(okay) okay=(bytes=malloc((size_t)length))!=NULL&&fread(bytes,(size_t)length,1,file)==1;
         uint64_t liquid_length=0;uint8_t *liquid=NULL;
-        if(okay&&header.version>=8) {
+        if(okay&&version>=8) {
             enum { LIQUID_CHUNK_BYTES=48+16+DC_CHUNK_CELLS*4 };
             okay=fread(&liquid_length,sizeof(liquid_length),1,file)==1&&
-                (liquid_length==LIQUID_CHUNK_BYTES||(header.version>=9&&liquid_length==0u));
+                (liquid_length==LIQUID_CHUNK_BYTES||(version>=9&&liquid_length==0u));
             if(okay&&liquid_length) okay=(liquid=malloc((size_t)liquid_length))!=NULL&&fread(liquid,(size_t)liquid_length,1,file)==1;
         }
-        if(okay&&header.version==9) okay=load_gas_checkpoint(file,DC_LEGACY_GAS_CHECKPOINT_BYTES,gas);
-        if(okay&&header.version==11) okay=load_gas_checkpoint(file,sizeof(**gas),gas);
-        if(okay&&header.version==10) {
+        if(okay&&version==9) okay=load_gas_checkpoint(file,DC_LEGACY_GAS_CHECKPOINT_BYTES,gas);
+        if(okay&&version==11) okay=load_gas_checkpoint(file,sizeof(**gas),gas);
+        if(okay&&version==10) {
             uint64_t gas_length=0,bulk_length=0;uint8_t *packet=NULL;
             okay=fread(&gas_length,sizeof(gas_length),1,file)==1&&
                 (gas_length==0u||gas_length==DC_LEGACY_GAS_CHECKPOINT_BYTES||gas_length==sizeof(**gas));
@@ -244,9 +286,7 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
                 fr_bulk_phase_chunk_decode(chunk,packet,(size_t)bulk_length,*bulk);
             free(packet);
         }
-        long end=okay?ftell(file):-1;uint64_t stored=0,hash=0;
-        if(okay) okay=fread(&stored,sizeof(stored),1,file)==1&&fgetc(file)==EOF&&!ferror(file)&&
-            prefix_hash(file,end,&hash)&&hash==stored;
+        if(okay) okay=verify_chunk_hash(file);
         if(okay) okay=(*reactive=calloc(1,sizeof(**reactive)))!=NULL&&
             fr_reactive_chunk_decode(bytes,(size_t)length,chunk,*reactive,NULL,0);
         if(okay&&liquid) {
@@ -262,7 +302,8 @@ static dc_chunk_t *load_chunk(const dc_streamer_t *stream,const char *staging,dc
     if (!okay) {release_channel(*reactive);*reactive=NULL;free(*water_excess);*water_excess=NULL;
         free(*gas);*gas=NULL;free(*bulk);*bulk=NULL;free(chunk);return NULL;}
     chunk->coord = coord;
-    if (header.version < 4) dc_chunk_seed_particles(chunk);
+    if (version < 4) dc_chunk_seed_particles(chunk);
+    *completed = time;
     return chunk;
 }
 
@@ -282,11 +323,11 @@ static int worker_main(void *arg) {
         dc_stream_result_t result = { .coord = job.coord, .generation = job.generation };
         if (job.kind == JOB_LOAD) {
             result.colors=calloc(1,sizeof(*result.colors));
-            result.chunk = result.colors?load_chunk(stream,job.staging,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas,&result.bulk):NULL;
+            result.chunk = result.colors?load_chunk(stream,job.staging,job.coord,result.colors,&result.reactive,&result.water_excess,&result.gas,&result.bulk,&result.time):NULL;
             result.kind = result.chunk ? DC_STREAM_LOADED : DC_STREAM_FAILED;
         } else {
             result.kind = save_chunk(stream,job.staging,job.chunk,job.colors,job.reactive,job.thermal,job.thermal_bytes,
-                job.gas,job.bulk_packet,job.bulk_bytes) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
+                job.gas,job.bulk_packet,job.bulk_bytes,job.time) ? DC_STREAM_SAVED : DC_STREAM_FAILED;
             free(job.chunk);
             free(job.colors);
             release_channel(job.reactive);
@@ -416,9 +457,17 @@ bool dc_stream_request_save_bulk(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
     const fr_bulk_phase_chunk_t *bulk,uint64_t generation) {
+    return dc_stream_request_save_snapshot(stream,chunk,colors,reactive,water_excess,gas,bulk,
+                                           (dc_stream_chunk_time_t){0},generation);
+}
+bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
+    const fr_bulk_phase_chunk_t *bulk,dc_stream_chunk_time_t time,uint64_t generation) {
     fr_reactive_chunk_t empty={.next_id=1};
     if((water_excess||gas||bulk)&&!reactive) reactive=&empty;
     if (!stream || !chunk || !generation) return false;
+    if (time.known && !valid_completed_time(time.seconds)) return false;
     if(!gas_checkpoint_valid(gas)) return false;
     if(colors && !dc_color_records_valid((const float*)colors,DC_CHUNK_CELLS*2)) return false;
     if(reactive&&!fr_reactive_chunk_valid(reactive,chunk,NULL,0)) return false;
@@ -440,7 +489,7 @@ bool dc_stream_request_save_bulk(dc_streamer_t *stream,const dc_chunk_t *chunk,
         }
     }
     stream_job_t job = { .kind = JOB_SAVE, .coord = chunk->coord,
-        .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy };
+        .generation = generation, .chunk = copy,.colors=color_copy,.reactive=reaction_copy,.time=time };
     if(bulk) {
         job.bulk_bytes=fr_bulk_phase_chunk_bytes();job.bulk_packet=malloc(job.bulk_bytes);
         if(!job.bulk_packet||!fr_bulk_phase_chunk_encode(copy,bulk,job.bulk_packet,job.bulk_bytes)) {

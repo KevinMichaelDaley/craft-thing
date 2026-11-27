@@ -13,6 +13,9 @@
 
 typedef struct dc_streamer dc_streamer_t;
 
+/** Last completed position on the world simulation clock, in seconds. */
+typedef struct { double seconds; bool known; } dc_stream_chunk_time_t;
+
 typedef enum { DC_STREAM_LOADED, DC_STREAM_SAVED, DC_STREAM_FAILED } dc_stream_result_kind_t;
 
 typedef struct {
@@ -25,6 +28,7 @@ typedef struct {
     float *water_excess;
     fr_gas_checkpoint_chunk_t *gas;
     fr_bulk_phase_chunk_t *bulk;
+    dc_stream_chunk_time_t time;
 } dc_stream_result_t;
 
 /** Start a worker thread for procedural generation and chunk disk I/O. */
@@ -67,6 +71,11 @@ bool dc_stream_request_save_bulk(dc_streamer_t *stream,const dc_chunk_t *chunk,
     const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
     const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
     const fr_bulk_phase_chunk_t *bulk,uint64_t generation);
+/** Save the complete immutable chunk snapshot with an optional completed time. */
+bool dc_stream_request_save_snapshot(dc_streamer_t *stream,const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors,const fr_reactive_chunk_t *reactive,
+    const float *water_excess,const fr_gas_checkpoint_chunk_t *gas,
+    const fr_bulk_phase_chunk_t *bulk,dc_stream_chunk_time_t time,uint64_t generation);
 
 /** Poll one completed result without waiting for disk I/O. */
 bool dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *result);

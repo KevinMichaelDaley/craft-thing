@@ -275,7 +275,8 @@ static void test_completed_time_fixture_loads_with_physical_state(void) {
                   wait_result(stream, &result);
     dc_stream_destroy(stream);
     bool preserved = result.chunk && result.chunk->cells[10].fluid_mass == DC_FLUID_FULL &&
-                     result.chunk->face_velocity[10].x == 1.25f;
+                     result.chunk->face_velocity[10].x == 1.25f &&
+                     result.time.known && result.time.seconds == 42.125;
     dc_stream_result_kind_t kind = result.kind;
     dc_stream_result_release(&result);
     ASSERT_TRUE(loaded);
