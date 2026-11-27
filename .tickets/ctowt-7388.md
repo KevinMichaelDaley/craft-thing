@@ -30,3 +30,7 @@ The atomic GPU publication operation is available after settled rigid displaceme
 **2026-11-27T07:36:58Z**
 
 Paired publication now includes native marker advection, correction and velocity damping. The detached cycle leaves both context clocks and their active bank selectors with their owners. Rigid displacement is tracked by ctowtb-kz7x; generation reservation and interval scheduling for the connected set of owners remain part of this ticket.
+
+**2026-11-27T07:47:40Z**
+
+The sealed two-tile water cycle now begins with native rigid displacement using current occupancy and ends with native marker correction and damping. ctowd-09br tracks the shared solve and atomic receipt for a connected set of mapped owners. The level still needs to schedule that cycle once at a common interval, advance both owner clocks after confirmation, and publish the resulting snapshots through the staged world save.
