@@ -1,10 +1,9 @@
-#ifndef DC_STREAM_GAS_H
-#define DC_STREAM_GAS_H
+#ifndef FERRUM_FIRE_GAS_CHECKPOINT_INTERNAL_H
+#define FERRUM_FIRE_GAS_CHECKPOINT_INTERNAL_H
 #include <math.h>
 #include <stddef.h>
 #include "ferrum/fire/gas_checkpoint.h"
-#define DC_LEGACY_GAS_CHECKPOINT_BYTES offsetof(fr_gas_checkpoint_chunk_t,carrier_tail)
-static bool gas_checkpoint_valid(const fr_gas_checkpoint_chunk_t *gas) {
+static inline bool gas_checkpoint_valid(const fr_gas_checkpoint_chunk_t *gas) {
     if(!gas) return true;
     if(!isfinite(gas->clock.advanced_seconds)||gas->clock.advanced_seconds<0.||
        gas->clock.substeps<gas->clock.physical_steps||

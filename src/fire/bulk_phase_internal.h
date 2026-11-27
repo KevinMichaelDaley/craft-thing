@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ferrum/fire/bulk_phase.h"
+
 static inline bool bulk_phase_heat_valid(uint32_t oil,uint32_t slime,
     float oil_excess,float slime_excess) {
     return isfinite(oil_excess)&&isfinite(slime_excess)&&
@@ -15,6 +17,21 @@ static inline bool bulk_phase_momentum_valid(uint32_t oil,uint32_t slime,
     return isfinite(oil_x)&&isfinite(oil_y)&&isfinite(slime_x)&&isfinite(slime_y)&&
         (oil>0u||(oil_x==0.f&&oil_y==0.f))&&
         (slime>0u||(slime_x==0.f&&slime_y==0.f));
+}
+
+static inline bool bulk_phase_chunk_valid(const dc_chunk_t *chunk,
+                                         const fr_bulk_phase_chunk_t *phase) {
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        if ((uint64_t)chunk->cells[i].fluid_mass + phase->oil_fp[i] + phase->slime_fp[i] >
+            FR_BULK_CELL_FULL_FP || phase->oil_retained_fp[i] > phase->oil_fp[i] ||
+            phase->slime_retained_fp[i] > phase->slime_fp[i] ||
+            !bulk_phase_heat_valid(phase->oil_fp[i], phase->slime_fp[i],
+                                   phase->oil_excess[i], phase->slime_excess[i]) ||
+            !bulk_phase_momentum_valid(phase->oil_fp[i], phase->slime_fp[i],
+                phase->oil_momentum_x[i], phase->oil_momentum_y[i],
+                phase->slime_momentum_x[i], phase->slime_momentum_y[i])) return false;
+    }
+    return true;
 }
 
 #endif

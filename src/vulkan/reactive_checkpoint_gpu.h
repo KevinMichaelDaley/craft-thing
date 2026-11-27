@@ -9,7 +9,7 @@ bool fr_gpu_reactive_checkpoint_mass_valid(const fr_reactive_archive_t *archive,
     const dc_structural_store_payload_t *payload,const uint32_t *pixels,uint32_t pixel_words,
     char *err,uint32_t cap);
 /** Collect immutable body and resident/pending chunk channels at a cold boundary. */
-bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,
+bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,const uint32_t *slots,
     uint32_t count,fr_reactive_archive_t *out,char *err,uint32_t cap);
 /** Validate immutable checkpoint bindings and preflight detached GPU state before
  * the live physical checkpoint is changed. Failure preserves its entire source. */

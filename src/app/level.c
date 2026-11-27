@@ -28,7 +28,8 @@ static bool save_world_clock(dc_level_view_t *view, char *err, uint32_t cap) {
 
 static bool save_level_structure(dc_level_view_t *view, char *err, uint32_t cap) {
     return save_world_clock(view, err, cap) &&
-           fr_gpu_save_structure_with_chunk_times(view->gpu, view->body_path, &view->table, err, cap);
+           fr_gpu_save_level_structure(view->gpu, view->body_path, &view->table,
+                                       view->gas_admitted, err, cap);
 }
 
 bool dc_level_view_configure_atmosphere(dc_level_view_t *view, char *err, uint32_t cap) {
@@ -335,6 +336,45 @@ static bool queue_reserved_load(dc_level_view_t *view, uint32_t index, uint64_t 
     return error(err, cap, "Cannot queue chunk load");
 }
 
+static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
+    dc_stream_result_t *result, char *err, uint32_t cap) {
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        uint32_t material = result->chunk->cells[i].material;
+        if (material == DC_MATERIAL_STONE || material == DC_MATERIAL_WOOD ||
+            material == DC_MATERIAL_DENSE_WOOD || material == DC_MATERIAL_LEAVES)
+            result->chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
+    }
+    bool restored, gas_admitted;
+    dc_chunk_time_t checkpoint_time;
+    const dc_gpu_stream_fluids_t fluids = {
+        .gas = result->gas, .bulk = result->bulk, .time = result->time,
+        .ambient_gas = view->stream_ambient_gas
+    };
+    if (!dc_gpu_upload_streamed_chunk(view->gpu, index, result->chunk, &fluids,
+        &restored, &checkpoint_time, &gas_admitted, err, cap)) return false;
+    if (!restored &&
+        ((result->colors && !fr_renderer_upload_chunk_colors(view->gpu, index, result->colors, err, cap)) ||
+         !fr_gpu_reactive_import_chunk(view->gpu, index, result->chunk, result->reactive, err, cap) ||
+         (result->water_excess && !fr_thermal_gpu_import_water_chunk(view->gpu, index,
+             result->chunk, result->water_excess, err, cap)))) return false;
+    if (!dc_chunk_table_finish_load(&view->table, index, result->generation))
+        return error(err, cap, "Cannot finish loaded chunk publication");
+
+    view->gas_admitted[index] = gas_admitted;
+    dc_chunk_time_t time = restored ? checkpoint_time : result->time;
+    if (!restored && result->generated)
+        time = (dc_chunk_time_t){.seconds = view->world_seconds, .known = true};
+    view->table.slots[index].time = time;
+    if (view->closing) {
+        view->closing_structure_saved = false;
+        view->save_color_stale[index] = true;
+        if (getenv("DC_SAVE_TRACE")) fprintf(stderr, "Save late load slot%u\n", index);
+    }
+    if (restored || (!result->gas && view->stream_ambient_gas))
+        dc_chunk_table_mark_dirty(&view->table, index);
+    return true;
+}
+
 static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
     dc_stream_result_t result;
     while (dc_stream_poll(view->stream, &result)) {
@@ -361,48 +401,11 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
                                              "Cannot release failed chunk operation");
         }
         if (result.kind == DC_STREAM_LOADED) {
-            bool restored = false;
-            dc_chunk_time_t checkpoint_time;
-            for (uint32_t i=0;i<DC_CHUNK_CELLS;i++) {
-                uint32_t m=result.chunk->cells[i].material;
-                if (m==DC_MATERIAL_STONE || m==DC_MATERIAL_WOOD || m==DC_MATERIAL_DENSE_WOOD || m==DC_MATERIAL_LEAVES)
-                    result.chunk->cells[i].flags |= DC_CELL_LOADED_TERRAIN;
-            }
-            if (!fr_gpu_upload_structure_chunk_with_time(view->gpu,index,result.chunk,
-                                                         &restored,&checkpoint_time,err,cap)) {
+            if (!publish_loaded_chunk(view, index, &result, err, cap)) {
+                cancel_load(view, index, result.generation);
                 dc_stream_result_release(&result);
-                return error(err, cap, "Cannot publish loaded GPU chunk");
+                return false;
             }
-            if(!restored&&((result.colors&&!fr_renderer_upload_chunk_colors(view->gpu,index,result.colors,err,cap))||
-                !fr_gpu_reactive_import_chunk(view->gpu,index,result.chunk,result.reactive,err,cap)||
-                (result.water_excess&&!fr_thermal_gpu_import_water_chunk(view->gpu,index,result.chunk,result.water_excess,err,cap)))) {
-                dc_stream_result_release(&result);return false;
-            }
-            if(result.bulk&&!fr_bulk_phase_gpu_import_chunk(view->gpu,index,result.chunk,result.bulk,err,cap)) {
-                dc_stream_result_release(&result);return false;
-            }
-            if(result.gas&&!fr_gas_gpu_import_checkpoint(view->gpu,index,result.gas,err,cap)) {
-                dc_stream_result_release(&result);return false;
-            }
-            view->gas_admitted[index]=result.gas!=NULL;
-            if(!result.gas&&view->stream_ambient_gas) {
-                if(!fr_gas_gpu_queue_ambient_chunk(view->gpu,index,err,cap)) {dc_stream_result_release(&result);return false;}
-                view->gas_admitted[index]=true;
-            }
-            if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
-                dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
-            }
-            dc_chunk_time_t time = restored ? checkpoint_time : result.time;
-            if (!restored && result.generated) {
-                time = (dc_chunk_time_t){.seconds = view->world_seconds, .known = true};
-            }
-            view->table.slots[index].time = time;
-            if(view->closing) {
-                view->closing_structure_saved=false;
-                view->save_color_stale[index]=true;
-                if(getenv("DC_SAVE_TRACE")) fprintf(stderr,"Save late load slot%u\n",index);
-            }
-            if(restored||(!result.gas&&view->stream_ambient_gas)) dc_chunk_table_mark_dirty(&view->table,index);
         } else if (!dc_chunk_table_finish_save(&view->table, index, result.generation)) {
             dc_stream_result_release(&result);
             return error(err, cap, "Cannot complete chunk save");

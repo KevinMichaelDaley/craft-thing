@@ -30,16 +30,8 @@ bool fr_bulk_phase_gpu_import_chunk(dc_gpu_t *gpu,uint32_t slot,
     const dc_chunk_t *chunk,const fr_bulk_phase_chunk_t *phase,char *err,uint32_t cap) {
     if(!gpu||!gpu->bulk_phase_mapped||slot>=dc_gpu_slot_capacity(gpu)||!chunk||!phase)
         return error(err,cap,"Invalid bulk phase chunk import");
-    for(uint32_t i=0;i<DC_CHUNK_CELLS;i++)
-        if((uint64_t)chunk->cells[i].fluid_mass+phase->oil_fp[i]+phase->slime_fp[i]>
-            FR_BULK_CELL_FULL_FP||phase->oil_retained_fp[i]>phase->oil_fp[i]||
-            phase->slime_retained_fp[i]>phase->slime_fp[i]||
-            !bulk_phase_heat_valid(phase->oil_fp[i],phase->slime_fp[i],
-                phase->oil_excess[i],phase->slime_excess[i])||
-            !bulk_phase_momentum_valid(phase->oil_fp[i],phase->slime_fp[i],
-                phase->oil_momentum_x[i],phase->oil_momentum_y[i],
-                phase->slime_momentum_x[i],phase->slime_momentum_y[i]))
-            return error(err,cap,"Bulk phase inventory or retained volume is invalid");
+    if (!bulk_phase_chunk_valid(chunk, phase))
+        return error(err,cap,"Bulk phase inventory or retained volume is invalid");
     if(vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS)
         return error(err,cap,"Cannot complete bulk phase chunk import");
     bool occupied=false;

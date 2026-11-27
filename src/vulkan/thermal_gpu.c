@@ -472,24 +472,21 @@ static uint32_t resident_slot(dc_gpu_t *g,dc_chunk_coord_t coord) {
     }
     return UINT32_MAX;
 }
-bool fr_thermal_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,uint32_t count,
+bool fr_thermal_checkpoint_collect(dc_gpu_t *g,const uint32_t *slots,uint32_t count,
     fr_thermal_checkpoint_t *out,char *err,uint32_t cap) {
-    if(!g||!g->thermal||!out||(count&&!chunks)) return error(err,cap,"Invalid thermal save boundary");
+    if(!g||!g->thermal||!out||(count&&!slots)) return error(err,cap,"Invalid thermal save boundary");
     fr_thermal_checkpoint_t value={.purpose=g->thermal->purpose,.chunk_count=count};
     if(!fr_thermal_gpu_source_state(g,&value.source,err,cap)) return false;
     value.water_excess=count?calloc((size_t)count*4096u,sizeof(float)):NULL;
     if(count&&!value.water_excess) return error(err,cap,"Cannot stage thermal checkpoint liquid");
     for(uint32_t i=0;i<count;i++) {
-        uint32_t slot=resident_slot(g,chunks[i].coord);bool found=slot!=UINT32_MAX;
+        uint32_t slot = slots[i];
         float *destination=value.water_excess+(size_t)i*4096u;
-        if(found) memcpy(destination,(float *)g->thermal->water.mapped+(size_t)slot*4096u,4096u*sizeof(float));
-        for(uint32_t pending=0;!found&&pending<g->checkpoint_chunk_count;pending++)
-            if(memcmp(&g->checkpoint_chunks[pending].coord,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
-                if(g->thermal->pending_water&&pending<g->thermal->pending_count)
-                    memcpy(destination,g->thermal->pending_water+(size_t)pending*4096u,4096u*sizeof(float));
-                found=true;
-            }
-        if(!found) {fr_thermal_checkpoint_release(&value);return error(err,cap,"Thermal checkpoint has no logical liquid source");}
+        if (slot != UINT32_MAX)
+            memcpy(destination, (const float *)g->thermal->water.mapped + (size_t)slot * 4096u,
+                   4096u * sizeof(float));
+        else if (g->thermal->pending_water && i < g->thermal->pending_count)
+            memcpy(destination, g->thermal->pending_water + (size_t)i * 4096u, 4096u * sizeof(float));
     }
     *out=value;return true;
 }

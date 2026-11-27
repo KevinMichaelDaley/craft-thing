@@ -17,7 +17,7 @@ bool fr_combustion_clear_emission_chunk(dc_gpu_t *gpu,uint32_t slot,char *err,ui
 bool fr_thermal_prepare_paint(dc_gpu_t *gpu,uint32_t x,uint32_t y,uint32_t radius,
     uint32_t material,char *err,uint32_t cap);
 /** Collect immutable finite-source and logical liquid inventories at a cold boundary. */
-bool fr_thermal_checkpoint_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,uint32_t count,
+bool fr_thermal_checkpoint_collect(dc_gpu_t *gpu,const uint32_t *slots,uint32_t count,
     fr_thermal_checkpoint_t *out,char *err,uint32_t cap);
 /** Prepare detached thermal resources against the prepared parcel root. */
 bool fr_thermal_checkpoint_prepare(dc_gpu_t *gpu,struct fr_reactive_gpu *reactive,

@@ -55,7 +55,7 @@ static bool copy_channel(const fr_reactive_chunk_t *source,fr_reactive_chunk_t *
     }
     return true;
 }
-bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,
+bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,const uint32_t *slots,
     uint32_t count,fr_reactive_archive_t *out,char *err,uint32_t cap) {
     fr_reactive_archive_t archive={.chunk_count=count};
     if(!g||!out||(!chunks&&count)||!fr_gpu_reactive_export_bodies(g,&archive.bodies,
@@ -64,20 +64,12 @@ bool fr_gpu_reactive_checkpoint_collect(dc_gpu_t *g,const dc_chunk_t *chunks,
     if(count&&!archive.chunks) {fr_reactive_archive_release(&archive);return error(err,cap,"Cannot stage checkpoint chunk channels");}
     bool okay=true;
     for(uint32_t i=0;okay&&i<count;i++) {
-        bool found=false;
-        for(uint32_t slot=0;!found&&slot<dc_gpu_slot_capacity(g);slot++) {
-            const uint32_t *registry=dc_gpu_structural_data(g)+DC_STRUCTURAL_HEADER_WORDS+slot*8u;
-            if(registry[5]&&memcmp(registry,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
-                okay=fr_gpu_reactive_export_chunk(g,slot,chunks+i,archive.chunks+i,err,cap);found=true;
-            }
-        }
-        for(uint32_t old=0;!found&&old<g->checkpoint_chunk_count;old++)
-            if(memcmp(&g->checkpoint_chunks[old].coord,&chunks[i].coord,sizeof(chunks[i].coord))==0) {
-                if(g->checkpoint_reactive) okay=copy_channel(g->checkpoint_reactive+old,archive.chunks+i);
-                else archive.chunks[i].next_id=1;
-                found=true;
-            }
-        if(!found) okay=error(err,cap,"Checkpoint physical chunk has no immutable channel source");
+        if (slots[i] != UINT32_MAX)
+            okay = fr_gpu_reactive_export_chunk(g, slots[i], chunks + i, archive.chunks + i, err, cap);
+        else if (g->checkpoint_reactive)
+            okay = copy_channel(g->checkpoint_reactive + i, archive.chunks + i);
+        else
+            archive.chunks[i].next_id = 1;
         if(archive.chunks[i].next_id>archive.next_id) archive.next_id=archive.chunks[i].next_id;
     }
     if(!okay) {fr_reactive_archive_release(&archive);return false;}

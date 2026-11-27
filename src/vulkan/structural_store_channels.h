@@ -3,11 +3,16 @@
 #include "reactive_checkpoint_gpu.h"
 #include "thermal_gpu_internal.h"
 #include "revolute_gpu_internal.h"
-enum { DC_STRUCTURE_TIME_VERSION = 10 };
+#include "structural_store_fluids.h"
+enum { DC_STRUCTURE_TIME_VERSION = 10, DC_STRUCTURE_FLUID_VERSION = 11 };
 /** Cold checkpoint extension transaction; every allocation precedes publish. */
 typedef struct {
     uint8_t *reactive_bytes,*thermal_bytes,*joint_bytes,*time_bytes;
     size_t reactive_length,thermal_length,joint_length,time_length;
+    uint8_t *fluid_bytes;
+    size_t fluid_length;
+    uint32_t fluid_count;
+    dc_checkpoint_fluid_t *fluids;
     uint32_t version;
     dc_chunk_time_t *chunk_times;
     fr_reactive_archive_t reactive;
@@ -18,11 +23,15 @@ typedef struct {
     uint32_t **prepared_handles;
 } dc_checkpoint_channels_t;
 /** Collect and frame immutable logical channels without changing the live world. */
-bool dc_checkpoint_channels_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,uint32_t count,
+bool dc_checkpoint_channels_collect(dc_gpu_t *gpu,const dc_chunk_t *chunks,const uint32_t *slots,uint32_t count,
     dc_checkpoint_channels_t *out,char *err,uint32_t cap);
 /** Add an optional clock record for each chunk in snapshot order. */
 bool dc_checkpoint_channels_set_times(dc_checkpoint_channels_t *channels,
                                       const dc_chunk_time_t *times,uint32_t count);
+/** Encode gas and bulk from the same physical owners as the snapshot. */
+bool dc_checkpoint_channels_set_fluids(dc_gpu_t *gpu, dc_checkpoint_channels_t *channels,
+    const dc_chunk_t *chunks, const uint32_t *slots, uint32_t count, const bool *gas_admitted,
+    char *err, uint32_t cap);
 /** Decode checked clock bytes against the number of embedded physical chunks. */
 bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *channels,uint32_t count);
 /** Extend the outer snapshot checksum with canonical lengths and channel bytes. */

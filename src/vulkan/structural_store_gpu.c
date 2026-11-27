@@ -97,17 +97,25 @@ static void clear_transients(uint32_t *graph) {
         memset(graph + 30000u + i * 20u + 15u, 0, 3 * sizeof(uint32_t));
 }
 
-static dc_chunk_time_t resident_chunk_time(const dc_chunk_table_t *table,
+static const dc_chunk_slot_t *resident_chunk(const dc_chunk_table_t *table,
     uint32_t slot, dc_chunk_coord_t coord) {
-    if (!table || slot >= table->capacity) return (dc_chunk_time_t){0};
+    if (!table || slot >= table->capacity) return NULL;
     const dc_chunk_slot_t *owner = &table->slots[slot];
     if (owner->state == DC_SLOT_EMPTY || owner->state == DC_SLOT_LOADING ||
-        owner->coord.x != coord.x || owner->coord.y != coord.y) return (dc_chunk_time_t){0};
-    return owner->time;
+        owner->coord.x != coord.x || owner->coord.y != coord.y) return NULL;
+    return owner;
 }
 
-bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
-    const dc_chunk_table_t *resident, char *err, uint32_t cap) {
+static bool pending_chunk(const dc_gpu_t *gpu, dc_chunk_coord_t coord) {
+    for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; ++i) {
+        dc_chunk_coord_t saved = gpu->checkpoint_chunks[i].coord;
+        if (saved.x == coord.x && saved.y == coord.y) return true;
+    }
+    return false;
+}
+
+static bool save_structure_snapshot(dc_gpu_t *gpu, const char *path,
+    const dc_chunk_table_t *resident, const bool *gas_admitted, char *err, uint32_t cap) {
     if (!gpu || !path || !*path)
         return error(err, cap, "Invalid structure snapshot path");
     if(err&&cap) err[0]='\0';
@@ -188,6 +196,7 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
     bool collect_times = resident || gpu->checkpoint_times;
     dc_chunk_time_t *times = collect_times ?
         calloc(dc_gpu_slot_capacity(gpu) + gpu->checkpoint_chunk_count, sizeof(*times)) : NULL;
+    uint32_t slots[DC_GPU_CHUNK_SLOTS * 2u];
     okay = okay && chunks != NULL && colors != NULL && (!collect_times || times);
     if (okay && gpu->checkpoint_chunk_count) {
         memcpy(chunks, gpu->checkpoint_chunks,
@@ -197,6 +206,7 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
             (size_t)gpu->checkpoint_chunk_count*sizeof(*colors));
         if (gpu->checkpoint_times) memcpy(times,gpu->checkpoint_times,
             (size_t)gpu->checkpoint_chunk_count*sizeof(*times));
+        for (uint32_t i = 0; i < gpu->checkpoint_chunk_count; ++i) slots[i] = UINT32_MAX;
     }
     for (unsigned slot = 0; okay && slot < dc_gpu_slot_capacity(gpu); slot++) {
         const uint32_t *record = data + DC_STRUCTURAL_HEADER_WORDS + slot * 8u;
@@ -204,11 +214,14 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
             continue;
         dc_chunk_t *chunk = chunks + header.reserved[0];
         memcpy(&chunk->coord, record, sizeof(chunk->coord));
+        const dc_chunk_slot_t *owner = resident_chunk(resident, slot, chunk->coord);
+        if ((resident && !owner) || pending_chunk(gpu, chunk->coord)) continue;
         okay = dc_gpu_download_chunk(gpu, slot, chunk, err, cap) &&
                dc_gpu_checkpoint_chunk_valid(chunk);
         if (okay) {
             dc_gpu_read_chunk_colors(gpu,slot,colors+header.reserved[0]);
-            if (times) times[header.reserved[0]] = resident_chunk_time(resident,slot,chunk->coord);
+            if (times && owner) times[header.reserved[0]] = owner->time;
+            slots[header.reserved[0]] = slot;
             header.reserved[0]++;
         }
     }
@@ -226,8 +239,10 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
     for(unsigned c=0;okay&&c<header.reserved[0];c++)
         okay=dc_color_records_valid((const float*)(colors+c),DC_CHUNK_CELLS*2);
     dc_checkpoint_channels_t channels={0};
-    if(okay) okay=dc_checkpoint_channels_collect(gpu,chunks,header.reserved[0],&channels,err,cap);
+    if(okay) okay=dc_checkpoint_channels_collect(gpu,chunks,slots,header.reserved[0],&channels,err,cap);
     if(okay) okay=dc_checkpoint_channels_set_times(&channels,times,header.reserved[0]);
+    if (okay) okay = dc_checkpoint_channels_set_fluids(gpu, &channels, chunks, slots,
+        header.reserved[0], gas_admitted, err, cap);
     header.version = channels.version;
     if(okay) okay=fr_gpu_reactive_checkpoint_mass_valid(channels.reactive_length?&channels.reactive:NULL,
         payload,pixels,header.reserved[1],err,cap);
@@ -265,7 +280,18 @@ bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
 }
 
 bool fr_gpu_save_structure(dc_gpu_t *gpu, const char *path, char *err, uint32_t cap) {
-    return fr_gpu_save_structure_with_chunk_times(gpu, path, NULL, err, cap);
+    return save_structure_snapshot(gpu, path, NULL, NULL, err, cap);
+}
+
+bool fr_gpu_save_structure_with_chunk_times(dc_gpu_t *gpu, const char *path,
+    const dc_chunk_table_t *resident, char *err, uint32_t cap) {
+    return save_structure_snapshot(gpu, path, resident, NULL, err, cap);
+}
+
+bool fr_gpu_save_level_structure(dc_gpu_t *gpu, const char *path,
+    const dc_chunk_table_t *resident, const bool *gas_admitted, char *err, uint32_t cap) {
+    if (!resident || !gas_admitted) return error(err, cap, "Missing level checkpoint owners");
+    return save_structure_snapshot(gpu, path, resident, gas_admitted, err, cap);
 }
 
 static bool refresh_topology(dc_gpu_t *gpu) {
@@ -366,7 +392,7 @@ bool fr_gpu_load_structure(dc_gpu_t *gpu, const char *path, char *err,
     bool okay =
         framed && fread(&header, sizeof(header), 1, file) == 1 &&
         memcmp(header.magic, "DCS1", 4) == 0 && header.version >= 1 &&
-        header.version <= DC_STRUCTURE_TIME_VERSION && header.body_words &&
+        header.version <= DC_STRUCTURE_FLUID_VERSION && header.body_words &&
         header.body_words%(sizeof(dc_gpu_body_record_t)/4u)==0 &&
         (header.version>=7 || header.body_words==STORE_BODY_WORDS) &&
         header.graph_words == DC_STRUCTURAL_RESERVE_WORDS &&

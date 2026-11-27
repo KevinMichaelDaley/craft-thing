@@ -15,6 +15,7 @@
 #include "../../src/app/level_internal.h"
 #include "../../src/app/player_session_internal.h"
 #include "../../src/app/view_config.h"
+#include "../../src/vulkan/gpu_internal.h"
 
 static int g_pass, g_fail;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); } while (0)
@@ -79,11 +80,13 @@ bool __wrap_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out) {
     return !g_frame.hold_replies && __real_dc_stream_poll(stream, out);
 }
 
-bool __wrap_fr_gpu_upload_structure_chunk_with_time(dc_gpu_t *gpu, uint32_t slot,
-    const dc_chunk_t *chunk, bool *restored, dc_chunk_time_t *time, char *err, uint32_t cap) {
+bool __wrap_dc_gpu_upload_streamed_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+    const dc_gpu_stream_fluids_t *stream, bool *restored, dc_chunk_time_t *time,
+    bool *gas_admitted, char *err, uint32_t cap) {
     (void)gpu; (void)err; (void)cap;
     *restored = g_frame.restore_first_from_checkpoint && slot == 0;
     *time = (dc_chunk_time_t){0};
+    *gas_admitted = stream->gas != NULL || stream->ambient_gas;
     g_frame.material[slot] = *restored ? DC_MATERIAL_STONE : chunk->cells[0].material;
     ++g_frame.uploads[slot];
     return true;

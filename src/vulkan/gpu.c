@@ -12,6 +12,7 @@
 #include "reactive_checkpoint_gpu.h"
 #include "reactive_gpu_internal.h"
 #include "runtime_body_gpu.h"
+#include "structural_store_fluids.h"
 #include "thermal_gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -21,6 +22,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 void dc_gpu_destroy(dc_gpu_t *gpu) {
     if (!gpu) return;
     fr_gpu_reactive_checkpoint_clear_pending(gpu);
+    dc_checkpoint_fluid_destroy(gpu->checkpoint_fluids, gpu->checkpoint_chunk_count);
     free(gpu->checkpoint_chunks);
     free(gpu->checkpoint_times);
     if (gpu->device) vkDeviceWaitIdle(gpu->device);

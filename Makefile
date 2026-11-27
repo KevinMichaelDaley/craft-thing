@@ -105,6 +105,7 @@ GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_th
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
 GPU_OBJ += build/bulk_phase_gpu.o
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
+GPU_OBJ += build/structural_store_fluids.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o
@@ -685,7 +686,7 @@ build/chunk.o: src/world/chunk.c include/dungeoncraft/chunk.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/stream.o: src/world/stream.c src/world/stream_gas.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
+build/stream.o: src/world/stream.c src/fire/gas_checkpoint_internal.h include/dungeoncraft/stream.h include/dungeoncraft/chunk.h include/ferrum/fire/gas_checkpoint.h include/ferrum/fire/bulk_phase.h include/ferrum/fire/thermal_checkpoint.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/world_save.o: src/world/world_save.c include/dungeoncraft/color.h include/dungeoncraft/world_save.h
@@ -767,7 +768,7 @@ build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h
 
 LEVEL_TICK_CALLS = dc_gpu_set_page dc_gpu_set_body_origin dc_gpu_prepare_body_origin dc_gpu_set_tick_water_source dc_gpu_set_tick_seconds dc_gpu_tick_step dc_gpu_present_chunks_steps_progress
 LEVEL_TICK_CALLS += dc_players_prepare_view dc_players_present dc_players_step
-LEVEL_TICK_CALLS += fr_gpu_upload_structure_chunk_with_time dc_gpu_download_chunk dc_gpu_shift_velocity
+LEVEL_TICK_CALLS += dc_gpu_upload_streamed_chunk dc_gpu_download_chunk dc_gpu_shift_velocity
 LEVEL_TICK_CALLS += fr_renderer_upload_chunk_colors fr_renderer_download_chunk_colors
 LEVEL_TICK_CALLS += fr_gpu_reactive_import_chunk fr_gpu_reactive_export_chunk
 LEVEL_TICK_CALLS += fr_bulk_phase_gpu_import_chunk fr_bulk_phase_gpu_export_chunk
@@ -2336,6 +2337,9 @@ build/reactive_checkpoint_gpu.o: src/vulkan/reactive_checkpoint_gpu.c src/vulkan
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/structural_store_channels.o: src/vulkan/structural_store_channels.c src/vulkan/structural_store_channels.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/structural_store_fluids.o: src/vulkan/structural_store_fluids.c src/vulkan/structural_store_fluids.h src/vulkan/gpu_internal.h src/fire/bulk_phase_internal.h src/fire/gas_checkpoint_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+build/gpu.o build/chunk_gpu.o build/structural_store_channels.o: src/vulkan/structural_store_fluids.h
 build/gpu.o build/chunk_gpu.o build/structural_store_gpu.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/structural_store_channels.h
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)

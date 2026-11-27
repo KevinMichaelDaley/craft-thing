@@ -9,6 +9,8 @@
 #include "dungeoncraft/presentation.h"
 #include "dungeoncraft/color.h"
 #include "ferrum/structural/gpu.h"
+#include "ferrum/fire/bulk_phase.h"
+#include "ferrum/fire/gas_checkpoint.h"
 #include "ferrum/fire/reactive_chunk.h"
 #include "mpm_activity_layout.h"
 
@@ -192,6 +194,7 @@ struct dc_gpu {
     bool reactive_checkpoint_installing;
     dc_chunk_colors_t *checkpoint_colors;
     dc_chunk_time_t *checkpoint_times;
+    struct dc_checkpoint_fluid *checkpoint_fluids;
     uint32_t checkpoint_chunk_count;
     bool impact_fracture_enabled;
     bool rigid_solver_enabled;
@@ -450,6 +453,17 @@ bool dc_gpu_upload_chunk_checkpoint(dc_gpu_t *gpu, uint32_t slot,
                                     const dc_chunk_t *chunk, bool seed,
                                     bool *restored, dc_chunk_time_t *time,
                                     char *err, uint32_t cap);
+typedef struct {
+    const fr_gas_checkpoint_chunk_t *gas;
+    const fr_bulk_phase_chunk_t *bulk;
+    dc_chunk_time_t time;
+    bool ambient_gas;
+} dc_gpu_stream_fluids_t;
+
+/** Publish a streamed chunk or its pending structure owner with coherent fluids. */
+bool dc_gpu_upload_streamed_chunk(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+    const dc_gpu_stream_fluids_t *streamed, bool *restored,
+    dc_chunk_time_t *time, bool *gas_admitted, char *err, uint32_t cap);
 
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types);

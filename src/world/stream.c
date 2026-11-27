@@ -10,7 +10,9 @@
 #include "dungeoncraft/generate.h"
 #include "dungeoncraft/stream.h"
 #include "ferrum/fire/thermal_checkpoint.h"
-#include "stream_gas.h"
+#include "../fire/gas_checkpoint_internal.h"
+
+#define DC_LEGACY_GAS_CHECKPOINT_BYTES offsetof(fr_gas_checkpoint_chunk_t,carrier_tail)
 
 typedef enum { JOB_LOAD, JOB_SAVE } job_kind_t;
 typedef struct {
