@@ -61,7 +61,7 @@ typedef struct {
 /** The water cycle's stock and payload in original owner chunk order. */
 typedef struct {
     dc_liquid_seam_sample_t projection[DC_CHUNK_SIDE];
-    /** Signed Q16 volume across each lane after advection and marker correction. */
+    /** Signed Q16 volume across each lane for the complete water cycle. */
     int32_t crossing_fp[DC_CHUNK_SIDE];
     /** Signed Q16 volume across each lane during rigid displacement. */
     int32_t displaced_fp[DC_CHUNK_SIDE];
@@ -73,7 +73,7 @@ typedef struct {
     bool thermal_enabled;
 } dc_water_seam_plan_t;
 
-/** Plan the water cycle on the projected two-tile domain after rigid displacement.
+/** Plan the water cycle on a sealed two-tile domain with current rigid occupancy.
  * Signed flow is positive from first to second. Pressure work uses the native
  * pressure difference and advected volume in cells. The plan is written on
  * success and the owners are read-only. Expected and final heat
@@ -84,9 +84,9 @@ bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
     const float previous_normal[DC_CHUNK_SIDE], dc_water_seam_plan_t *plan,
     char *err, uint32_t cap);
 
-/** Run and publish the native water cycle for a sealed pair, including markers.
+/** Run and publish the native water cycle for a sealed pair.
  * The caller holds both owner mappings and generations at the same interval start.
- * Inputs require settled rigid displacement, matching marker correction settings,
+ * Inputs require current rigid occupancy, matching marker correction settings,
  * and matching fluid tick parity when marker correction is enabled.
  * A rejected sweep leaves both owners
  * and the optional plan unchanged. An unconfirmed sweep fences both owners until

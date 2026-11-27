@@ -589,6 +589,10 @@ bool dc_gpu_make_water_seam_pipeline(dc_gpu_t *gpu, uint32_t mode, VkPipeline *p
                                      char *err, uint32_t cap);
 bool dc_gpu_make_water_seam_correction_pipeline(dc_gpu_t *gpu, VkPipeline *pipeline,
                                                 char *err, uint32_t cap);
+bool dc_gpu_make_water_seam_displacement_pipeline(dc_gpu_t *gpu, uint32_t mode,
+    VkPipeline *pipeline, char *err, uint32_t cap);
+void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    const VkPipeline pipelines[2], uint32_t width, uint32_t height, uint32_t seam_axis);
 void dc_gpu_record_transport_sweep(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
                                    uint32_t *push, uint32_t push_bytes, bool occupancy);
 void dc_gpu_record_water_seam_transport(dc_gpu_t *gpu, VkDescriptorSet descriptor,

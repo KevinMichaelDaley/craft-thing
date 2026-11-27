@@ -62,8 +62,11 @@ bool valid_cell(uint atlas, bool second, uint local, Location owner, uint grid) 
     const uint bulk_base = (second ? FR_BULK_CHUNK_CHANNELS * CELLS : 0u) + local;
     const uint occupied = min(FULL, occupancy[2u * PAIR_CELLS + grid]) +
                           min(FULL, bulk[bulk_base]) + min(FULL, bulk[bulk_base + CELLS]);
+    const uint capacity = FULL - min(FULL, occupied);
+    /* A rigid pocket may retain existing excess when all escape routes are sealed. */
+    const uint allowed = occupancy[grid] != 0u ? max(capacity, before.y) : capacity;
     if (any(notEqual(before, current)) || before.x != after.x ||
-        before.y > FULL || after.y > FULL - min(FULL, occupied) ||
+        before.y > FULL || after.y > allowed ||
         !finite_color(initial_color[atlas]) || !finite_color(final_color[atlas]) ||
         !finite_velocity(final_velocity[grid]) ||
         any(notEqual(floatBitsToUint(current_color), floatBitsToUint(initial_color[atlas]))))

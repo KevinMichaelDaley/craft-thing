@@ -282,7 +282,8 @@ FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_
 WATER_SEAM_SHADERS = build/shaders/fluid_water_seam.comp.spv build/shaders/fluid_water_seam_16.comp.spv
 WATER_SEAM_SHADERS += build/shaders/fluid_water_seam_recompute.comp.spv build/shaders/fluid_water_seam_recompute_16.comp.spv
 WATER_SEAM_CORRECTION_SHADER = build/shaders/fluid_water_seam_correction.comp.spv
-FLUID_SHADER += $(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER)
+WATER_SEAM_DISPLACEMENT_SHADER = build/shaders/fluid_water_seam_displacement.comp.spv
+FLUID_SHADER += $(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER) $(WATER_SEAM_DISPLACEMENT_SHADER)
 FLUID_SHADER += build/shaders/liquid_seam.comp.spv build/shaders/liquid_water_publication.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
@@ -2548,8 +2549,13 @@ $(WATER_SEAM_CORRECTION_SHADER): shaders/sim/fluid.comp shaders/sim/fluid_apertu
 	@mkdir -p $(@D)
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_WATER_SEAM_PLAN=1 $< -o $@
 
-$(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER): include/dungeoncraft/liquid_seam_layout.h
-$(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER) build/shaders/fluid.comp.spv \
+$(WATER_SEAM_DISPLACEMENT_SHADER): shaders/sim/fluid_displacement.comp shaders/sim/bulk_phase.glsl include/dungeoncraft/bulk_phase_layout.h
+	@mkdir -p $(@D)
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_WATER_SEAM_PLAN=1 $< -o $@
+
+$(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER) $(WATER_SEAM_DISPLACEMENT_SHADER): include/dungeoncraft/liquid_seam_layout.h
+$(WATER_SEAM_SHADERS) $(WATER_SEAM_CORRECTION_SHADER) $(WATER_SEAM_DISPLACEMENT_SHADER) \
+build/shaders/fluid.comp.spv build/shaders/fluid_displacement.comp.spv build/diagnostics/fluid_displacement_profile.comp.spv \
 build/shaders/fluid_transport.comp.spv build/shaders/fluid_transport_16.comp.spv \
 build/shaders/fluid_transport_recompute.comp.spv build/shaders/fluid_transport_recompute_16.comp.spv \
 build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv \

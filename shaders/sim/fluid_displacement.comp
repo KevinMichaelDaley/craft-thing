@@ -9,7 +9,12 @@ layout(set=0,binding=1,std430) coherent buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 #include "water_color.glsl"
-layout(push_constant) uniform Params {uint width,height,mode;} params;
+layout(push_constant) uniform Params {
+    uint width,height,mode;
+#ifdef DC_WATER_SEAM_PLAN
+    uint seam_axis;
+#endif
+} params;
 const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
 #include "bulk_phase.glsl"
 shared uvec2 cached[CACHE_CELLS];
@@ -25,6 +30,7 @@ uint page_at(ivec2 p) {
     return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
 }
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
+#include "water_seam_crossing.glsl"
 bool permeable(uint material) {return material==0u||material==2u||material==4u||material==5u||material==6u||material==10u;}
 uint global_meta(ivec2 p,uint page) {
     uint index=uint(p.y)*params.width+uint(p.x),cells=params.width*params.height;
@@ -92,7 +98,12 @@ bool displace_source(ivec2 source) {
     uint remaining=available>prior?available-prior:0u;
     for(uint order=first;order<last&&remaining!=0u;order++) {
         uint flux=min(remaining,request_at(source,order,left,right));remaining-=flux;
-        if(flux!=0u) {ivec2 target=target_at(source,order);water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux,water);put_water(target,water_at(target)+flux);}
+        if(flux!=0u) {
+            ivec2 target=target_at(source,order);
+            record_water_crossing(source,target,flux);
+            water_color_move(atlas_index(source,page_at(source)),atlas_index(target,page_at(target)),water_at(target),flux,water);
+            put_water(target,water_at(target)+flux);
+        }
     }
     subgroupMemoryBarrierBuffer();subgroupBarrier();
     uint sent=min(available,total);

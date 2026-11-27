@@ -2,6 +2,27 @@
 #include "gpu_internal.h"
 #include "renderer_internal.h"
 
+void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    const VkPipeline pipelines[2], uint32_t width, uint32_t height, uint32_t seam_axis) {
+    enum { UPWARD = 0u, LATERAL = 1u };
+    const uint32_t order[] = {LATERAL, UPWARD};
+    uint32_t push[4] = {width, height, 0u, seam_axis};
+    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout, 0, 1, &descriptor, 0, NULL);
+    for (uint32_t i = 0; i < sizeof(order) / sizeof(order[0]); ++i) {
+        const uint32_t mode = order[i];
+        const uint32_t lines = mode == LATERAL ? height : width;
+        push[2] = 11u + mode;
+        vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines[mode]);
+        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            VK_SHADER_STAGE_COMPUTE_BIT, 0, (seam_axis ? 4u : 3u) * sizeof(uint32_t), push);
+        vkCmdDispatch(gpu->command, lines < 65535u ? lines : 65535u, (lines + 65534u) / 65535u, 1u);
+        fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
+}
+
 static uint32_t aperture_leaves(uint32_t length) {
     uint32_t leaves = 1;
     while (leaves < (length + DC_FLUID_APERTURE_TILE_CELLS - 1u) / DC_FLUID_APERTURE_TILE_CELLS)
