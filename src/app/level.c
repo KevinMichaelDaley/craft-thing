@@ -1116,6 +1116,8 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool staged = dc_world_save_directory(view->save, true) != NULL;
     bool okay = !view->liquid_seam_failed || error(err, cap, "Cannot close an unconfirmed liquid seam");
+    if (okay && view->pending_steps && view->gpu && view->gpu->water_cycle_peer)
+        okay = execute_level_steps(view, err, cap);
     if (okay) okay = dc_camera_offscreen_service(view, true, err, cap) &&
         dc_level_offscreen_flush_pairs(view, err, cap);
     if (okay && staged) okay = view->players ? dc_players_save_inventory(view, err, cap) :
