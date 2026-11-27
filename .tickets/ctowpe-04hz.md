@@ -23,3 +23,7 @@ For independent workspaces, show actual GPU dispatch dimensions exclude the unma
 **2026-11-27T18:54:06Z**
 
 Cache regression passed 9/9. On the RTX A2000 under synchronization validation the real Vulkan calls used depths 1, 6 and 1 as sparse slot five was admitted and retired. Six page-indexed pressure and sixteen mass dispatch recordings per case all had the expected depth. Full pressure fields, mapped cell stock, velocities, sorted marker records and completed fluid ticks matched a resident full-extent reference after every pair of cycles. Camera performance comparison pending.
+
+**2026-11-27T18:58:17Z**
+
+The complete six-case Vulkan pressure suite passed, including changes between pressure batches, residual dry pressure and mixed materials. No synchronization-validation errors were reported. Native and half-native measurements are serialized behind the previous runtime revision.

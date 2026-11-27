@@ -22,3 +22,7 @@ Prove the grain stage is omitted for empty independent rooms, retained for grain
 **2026-11-27T18:49:23Z**
 
 The mixed water/grain room regression failed only its per-owner stage expectation before the change and passed on the RTX A2000 after it. Serial and batched replay agree on all mapped cell, face velocity, live marker, particle, bulk and color state and confirmed timestamps. Grain admission on an additional page activates the previously empty owner. Production timings and the full suite at 8abb9206 are scheduled on hidden :93.
+
+**2026-11-27T18:58:17Z**
+
+Post-fix half-native camera run on hidden :93, 16 owners and 60 measured frames per band: near 24.263/38.107, middle 24.554/44.956, far 24.440/44.747 ms mean/p95. Every band advanced 2.000000104 seconds. Means pass and p95 remains over 33.333 ms. Full native run is in progress.
