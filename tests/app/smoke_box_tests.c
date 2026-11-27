@@ -199,7 +199,75 @@ static void test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke(void) 
     ASSERT_EQ(SDL_SaveBMP(image,"build/screenshots/smoke_box_carved_vent.bmp"),0);SDL_FreeSurface(image);free(pixels);free(snapshot);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));PASS();
 }
+static _Thread_local struct {
+    bool active, stalled, delivered;
+    uint64_t elapsed, spacing;
+    unsigned saved;
+} close_test;
+
+Uint64 __real_SDL_GetTicks64(void);
+Uint64 __wrap_SDL_GetTicks64(void) {
+    return __real_SDL_GetTicks64() + close_test.elapsed;
+}
+
+void __real_SDL_Delay(Uint32 ms);
+void __wrap_SDL_Delay(Uint32 ms) {
+    if (close_test.active && ms == 1u) {
+        close_test.delivered = false;
+        if (close_test.stalled) close_test.elapsed += close_test.spacing;
+    }
+    __real_SDL_Delay(ms);
+}
+
+bool __real_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out);
+bool __wrap_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out) {
+    if (close_test.active && (close_test.stalled || close_test.delivered)) return false;
+    if (!__real_dc_stream_poll(stream, out)) return false;
+    if (close_test.active && out->kind == DC_STREAM_SAVED) {
+        ++close_test.saved;
+        close_test.delivered = true;
+        close_test.elapsed += close_test.spacing;
+    }
+    return true;
+}
+
+static void check_close_receipts(bool stalled) {
+    char directory[] = "build/smoke_close_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = dc_level_view_create_smoke_box(directory, 314, err, sizeof(err));
+    ASSERT_TRUE(view);
+    unsigned dirty = 0;
+    for (uint32_t i = 0; i < view->table.capacity; ++i) {
+        if (view->table.slots[i].state != DC_SLOT_ACTIVE) continue;
+        ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, i));
+        ++dirty;
+    }
+    ASSERT_TRUE(dirty > 4);
+    memset(&close_test, 0, sizeof(close_test));
+    close_test.stalled = stalled;
+    close_test.spacing = (5000u + 50u * view->table.capacity) / 3u;
+    close_test.active = true;
+    bool okay = dc_level_view_destroy(view, err, sizeof(err));
+    close_test.active = false;
+    close_test.elapsed = 0;
+    if (stalled) {
+        ASSERT_TRUE(!okay && strstr(err, "Timed out saving modified chunks"));
+    } else {
+        ASSERT_TRUE(okay);
+        ASSERT_TRUE(close_test.saved >= dirty);
+    }
+    PASS();
+}
+
+static void test_close_waits_for_progressing_saves(void) { check_close_receipts(false); }
+static void test_close_detects_stalled_saves(void) { check_close_receipts(true); }
+
 int main(int argc,char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "--close-saves")) {
+        RUN(test_close_waits_for_progressing_saves);
+        RUN(test_close_detects_stalled_saves);
+        return g_fail != 0;
+    }
     if(argc==2 && !strcmp(argv[1],"--restore-gas")) {
         RUN(test_missing_superseded_gas_recovers_archive);
         RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
@@ -211,5 +279,7 @@ int main(int argc,char **argv) {
     RUN(test_native_incomplete_smoke_admission_fails_without_overwriting_saved_world);
     RUN(test_native_smoke_streaming_restores_sleeping_stock_and_initializes_new_slots);
     RUN(test_native_air_brush_opens_a_real_roof_vent_for_rising_smoke);
+    RUN(test_close_waits_for_progressing_saves);
+    RUN(test_close_detects_stalled_saves);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
