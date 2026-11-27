@@ -182,7 +182,59 @@ static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terra
     }
     free(a);free(b);dc_gpu_destroy(sparse);dc_gpu_destroy(dense);PASS();
 }
-int main(void) {
+static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
+    enum { SIDE = DC_CHUNK_SIDE * 3, PIXELS = SIDE * SIDE };
+    const char *shader = "build/shaders/pattern.comp.spv";
+    char err[256] = {0};
+    dc_gpu_t *resident = NULL, *workspace = NULL;
+    ASSERT_TRUE(dc_gpu_create(&resident, SIDE, SIDE, shader, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_create_shared(&workspace, resident, SIDE, SIDE, shader, err, sizeof(err)));
+    dc_gpu_t *owners[] = {resident, workspace};
+    dc_chunk_t *chunks = calloc(2, sizeof(*chunks));
+    float *pressure = malloc(2 * PIXELS * sizeof(*pressure));
+    ASSERT_TRUE(chunks && pressure);
+    for (unsigned round = 0; round < 3; ++round) {
+        unsigned slot = round ? 5 : 0;
+        unsigned tile = round ? 1 : 0;
+        memset(chunks, 0, sizeof(*chunks));
+        chunks->cells[32 * DC_CHUNK_SIDE + 32].fluid_mass = DC_FLUID_FULL;
+        chunks->face_velocity[32 * DC_CHUNK_SIDE + 32].x = .5f;
+        chunks->marker_count = 1;
+        chunks->markers[0] = (dc_marker_t){32 * DC_FLUID_FULL, 32 * DC_FLUID_FULL, 33 + slot, DC_MARKER_INSIDE};
+        for (unsigned owner = 0; owner < 2; ++owner) {
+            dc_gpu_t *g = owners[owner];
+            if (round < 2)
+                ASSERT_TRUE(dc_gpu_upload_chunk(g, slot, chunks, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_set_page(g, tile, 0, round == 2 ? UINT32_MAX : slot, err, sizeof(err)));
+            /* Two full cycles return cached command selection to the same parity. */
+            for (unsigned cycle = 0; cycle < 2; ++cycle)
+                ASSERT_TRUE(dc_gpu_fluid_step(g, err, sizeof(err)));
+            ASSERT_TRUE(pressure_snapshot(g, pressure + owner * PIXELS, err, sizeof(err)));
+        }
+        ASSERT_EQ(resident->fluid_tick, workspace->fluid_tick);
+        ASSERT_EQ(resident->fluid_tick, (round + 1) * 2);
+        ASSERT_EQ(memcmp(pressure, pressure + PIXELS, PIXELS * sizeof(*pressure)), 0);
+        for (unsigned page = 0; page < (round == 1 ? 2u : 1u); ++page) {
+            for (unsigned owner = 0; owner < 2; ++owner)
+                ASSERT_TRUE(dc_gpu_download_chunk(owners[owner], page * 5, chunks + owner, err, sizeof(err)));
+            ASSERT_EQ(memcmp(chunks[0].cells, chunks[1].cells, sizeof(chunks[0].cells)), 0);
+            ASSERT_EQ(memcmp(chunks[0].face_velocity, chunks[1].face_velocity, sizeof(chunks[0].face_velocity)), 0);
+            ASSERT_EQ(chunks[0].marker_count, chunks[1].marker_count);
+            ASSERT_EQ(memcmp(chunks[0].markers, chunks[1].markers,
+                             chunks[0].marker_count * sizeof(*chunks[0].markers)), 0);
+        }
+    }
+    free(pressure);
+    free(chunks);
+    ASSERT_EQ(dc_gpu_validation_errors(resident), 0u);
+    dc_gpu_destroy(workspace);
+    dc_gpu_destroy(resident);
+    PASS();
+}
+
+int main(int argc, char **argv) {
+    RUN(test_sparse_workspace_pages_match_full_slot_dispatch);
+    if (argc == 2 && !strcmp(argv[1], "--workspace")) return g_fail != 0;
     RUN(test_pressure_batches_have_exact_stencil_cache_storage);
     RUN(test_pressure_stencil_does_not_increase_mapped_memory);
     RUN(test_pressure_work_is_empty_then_wakes_for_local_water);

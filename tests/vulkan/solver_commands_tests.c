@@ -10,6 +10,9 @@ static uint32_t dispatches,executed,allocated;
 static uint64_t program_hashes[256],last_executed_hash;
 static dc_gpu_t *expected_mpm;
 static VkPipeline bound;
+static const VkPipeline page_pressure = (VkPipeline)(uintptr_t)501;
+static const VkPipeline page_mass = (VkPipeline)(uintptr_t)502;
+static uint32_t pressure_depth, mass_depth, expected_depth, bad_depths;
 static uint32_t pushed_mode,mpm_modes,bad_mpm_bindings,generic_mpm_binds;
 static const uint64_t HASH_SEED=1469598103934665603ull;
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
@@ -29,7 +32,13 @@ VKAPI_ATTR void VKAPI_CALL vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout
     if(o==0u&&n>=12u) memcpy(&pushed_mode,(const uint8_t *)v+8u,4u);
     for(unsigned i=0;i<n;i++) hash_word(((const uint8_t *)v)[i]);
 }
-VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;hash_word(3);hash_word(x);hash_word(y);hash_word(z);dispatches++;}
+VKAPI_ATTR void VKAPI_CALL vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {(void)c;hash_word(3);hash_word(x);hash_word(y);hash_word(z);dispatches++;
+    if (bound == page_pressure || bound == page_mass) {
+        if (bound == page_pressure) pressure_depth = z;
+        else mass_depth = z;
+        if (z != expected_depth) ++bad_depths;
+    }
+}
 VKAPI_ATTR void VKAPI_CALL vkCmdDispatchIndirect(VkCommandBuffer c,VkBuffer b,VkDeviceSize o) {(void)c;hash_word(4);hash_word((uintptr_t)b);hash_word(o);dispatches++;
     if(expected_mpm&&pushed_mode<8u&&(bound==expected_mpm->mpm_pipeline||((uintptr_t)bound>=0x200u&&(uintptr_t)bound<0x208u))) {
         mpm_modes|=1u<<pushed_mode;bad_mpm_bindings+=bound!=expected_mpm->mpm_phase_pipelines[pushed_mode];
@@ -166,7 +175,35 @@ static void test_graph_authoring_invalidates_cached_empty_graph_commands(void) {
     ASSERT_EQ(recordings,2u);ASSERT_TRUE(last_executed_hash!=empty);
     dc_gpu_solver_commands_destroy(&g);PASS();
 }
+static void test_cached_water_dispatch_tracks_sparse_page_extent(void) {
+    dc_gpu_t g = fake_gpu();
+    char err[128];
+    g.workspace_slots = 9;
+    g.width = g.height = 192;
+    g.projection_pipeline = page_pressure;
+    g.fluid_pipeline = page_mass;
+    memset(g.slot_page, 0xff, sizeof(g.slot_page));
+    g.slot_page[0] = 0;
+    ASSERT_TRUE(dc_gpu_solver_commands_init(&g, err, sizeof(err)));
+    const uint32_t depths[] = {1, 6, 1};
+    for (unsigned i = 0; i < 3; ++i) {
+        expected_depth = depths[i];
+        g.slot_page[5] = i == 1 ? 2 : UINT32_MAX;
+        pressure_depth = mass_depth = UINT32_MAX;
+        bad_depths = 0;
+        dc_gpu_record_fluid_phase(&g, 3);
+        ASSERT_EQ(pressure_depth, expected_depth);
+        ASSERT_EQ(mass_depth, expected_depth);
+        ASSERT_INT_EQ(bad_depths, 0);
+        dispatches = 0;
+        dc_gpu_record_fluid_phase(&g, 3);
+        ASSERT_INT_EQ(dispatches, 0);
+    }
+    dc_gpu_solver_commands_destroy(&g);
+    PASS();
+}
 int main(void) {
+    RUN(test_cached_water_dispatch_tracks_sparse_page_extent);
     RUN(test_graph_authoring_invalidates_cached_empty_graph_commands);
     RUN(test_reuses_the_exact_solver_program_without_recording_again);
     RUN(test_rebuilds_for_origin_growth_descriptor_and_structural_changes);
