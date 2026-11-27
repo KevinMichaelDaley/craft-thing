@@ -1,6 +1,6 @@
 ---
 id: ctowpe-d0v7
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T18:26:39Z
@@ -23,3 +23,7 @@ Compare equal-time granular trajectories and stable particle stock with the Vulk
 **2026-11-27T18:46:07Z**
 
 At 9daa0546, synchronization-validated RTX A2000 runs on hidden Xephyr :93 passed all three equal-time, half-dose, and half-travel cases with the MPM cache enabled and disabled. The shared cohort passed all three grain-crossing cases including multi-interval parcel identity, and all four grid-fusion variants matched particle and grid state. The complete particle executable and aggregate suite are still pending.
+
+**2026-11-27T18:52:29Z**
+
+Full particle executable passed 30/30 on the RTX A2000 under synchronization validation, including seam crossings, granular moisture and momentum, wet clumps, pressure response and sorting. No Vulkan validation errors were reported.
