@@ -63,3 +63,7 @@ The queued full run at 5451860205ee63bab7c22c118e61f36218eb5651 exited 2. Still-
 **2026-11-27T06:25:46Z**
 
 The offscreen-active full run at 2375074c1df21f8e180948a3710476b23a41a934 also exited 2 with the same three forest deadline failures. The paired-owner pressure regression retry subsequently passed all eight targeted Vulkan checks.
+
+**2026-11-27T14:09:57Z**
+
+The supervised full-suite run at 274d015c reached 180 simulated seconds in still air, then failed forest_bonfire_tests.c:559 (warm). The 70-second probe measured 296.64 K against the 298.15 K runtime lower bound. The run also recorded 5 of 11 samples outside the locked band. This failure preceded the gas-domain implementation.

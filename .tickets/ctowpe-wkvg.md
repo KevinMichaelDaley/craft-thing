@@ -29,3 +29,7 @@ Both controlled shutdown cases now pass on Xephyr :93. Slow actual save receipts
 **2026-11-27T13:48:19Z**
 
 The 6fa25fe8 full-run log reached the final stream tests and contains zero reported test failures. The smoke enclosure and watchdog cases passed 8/8. The process wrapper returned 143 rather than a clean exit; the supervised 274d015c full-suite job is the outstanding verification.
+
+**2026-11-27T14:13:48Z**
+
+The supervised 274d015c full run exited 2 at the unrelated 70-second forest warmth check before reaching smoke. The newer 1fe0df09 supervised full run is in progress; prior focused smoke and shutdown checks remain green.

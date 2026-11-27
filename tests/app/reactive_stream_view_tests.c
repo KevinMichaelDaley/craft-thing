@@ -117,6 +117,7 @@ static bool structure_time_gpu(dc_gpu_t **gpu, char *err, uint32_t cap) {
 
 #include "reactive_stream_takeover_cases.h"
 #include "reactive_stream_camera_cases.h"
+#include "reactive_stream_cache_cases.h"
 #include "reactive_stream_bond_cases.h"
 #include "reactive_stream_seam_cases.h"
 
@@ -368,6 +369,11 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--camera-opposite") == 0) {
+        RUN(test_camera_keeps_rooms_on_opposite_sides_of_the_view);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera-cadence") == 0) {
         RUN(test_middle_band_finishes_its_due_interval);
         printf("%d passed, %d failed\n", g_pass, g_fail);
@@ -502,6 +508,7 @@ int main(int argc, char **argv) {
     RUN(test_distant_rooms_sleep_and_prefetch_before_camera_return);
     RUN(test_saturated_sleeping_rooms_all_return_at_the_world_clock);
     RUN(test_middle_band_finishes_its_due_interval);
+    RUN(test_camera_keeps_rooms_on_opposite_sides_of_the_view);
     RUN(test_camera_reopens_shared_gas_stock_and_pressure);
     RUN(test_camera_reopens_grains_after_they_cross_the_owner_face);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
