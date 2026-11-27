@@ -148,13 +148,21 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     dc_stream_result_t remote = {0};
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)) &&
                 dc_offscreen_snapshot(workspace, owners.offscreen, owners.offscreen_generation, &remote, err, sizeof(err)));
+    dc_chunk_colors_t pigment = {0};
+    for (uint32_t cell = 0; cell < DC_CHUNK_CELLS; ++cell) {
+        if (!observed.cells[cell].fluid_mass) continue;
+        pigment.water[cell][1] = .75f;
+        pigment.water[cell][3] = 1.f;
+    }
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(view->gpu, slot, &pigment, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_upload_chunk(mono, 0u, &observed, err, sizeof(err)) &&
                 dc_gpu_set_page(mono, 0u, 0u, 0u, err, sizeof(err)) &&
                 dc_gpu_upload_chunk(mono, 1u, remote.chunk, err, sizeof(err)) &&
                 dc_gpu_set_page(mono, 1u, 0u, 1u, err, sizeof(err)));
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(mono, 0u, &pigment, err, sizeof(err)));
     dc_stream_result_release(&remote);
     const float elapsed = 1.f / 60.f;
-    for (unsigned step = 0; step < 2u; ++step) {
+    for (unsigned step = 0; step < 4u; ++step) {
         ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, elapsed) && dc_gpu_tick_step(mono, err, sizeof(err)));
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
         if (step == 0u) {
@@ -165,7 +173,7 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
             ASSERT_EQ(view->pending_steps, 1u);
             ASSERT_TRUE(!view->world_save_staged);
             --workspace->generations[0];
-        } else {
+        } else if (step == 1u) {
             ++view->table.slots[slot].generation;
             ASSERT_TRUE(!execute_level_steps(view, err, sizeof(err)));
             ASSERT_EQ(workspace->time.seconds, view->world_seconds);
@@ -178,11 +186,12 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
         ASSERT_EQ(view->world_seconds, 2. + (step + 1u) * (double)elapsed);
         ASSERT_EQ(workspace->time.seconds, view->world_seconds);
         ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
-        ASSERT_EQ(dc_gpu_liquid_owner_held(workspace->gpu), step == 0u);
+        ASSERT_EQ(dc_gpu_liquid_owner_held(workspace->gpu), step % 2u == 0u);
     }
     dc_chunk_t expected[2] = {0};
     ASSERT_TRUE(dc_gpu_download_chunk(mono, 0u, &expected[0], err, sizeof(err)) &&
                 dc_gpu_download_chunk(mono, 1u, &expected[1], err, sizeof(err)));
+    ASSERT_TRUE(fr_renderer_download_chunk_colors(mono, 1u, &pigment, err, sizeof(err)));
     dc_gpu_destroy(mono);
     uint32_t mass[2] = {0};
     for (unsigned tile = 0; tile < 2u; ++tile)
@@ -191,6 +200,7 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     ASSERT_EQ(mass[0] + mass[1], 11u * (DC_FLUID_FULL / 2u));
     ASSERT_TRUE(dc_offscreen_snapshot(workspace, owners.offscreen, owners.offscreen_generation, &remote, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(remote.chunk, &expected[1]));
+    ASSERT_TRUE(!memcmp(remote.colors->water, pigment.water, sizeof(pigment.water)));
     dc_stream_result_release(&remote);
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
@@ -206,6 +216,7 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     ASSERT_EQ(workspace->time.seconds, end);
     ASSERT_TRUE(dc_offscreen_snapshot(workspace, owners.offscreen, owners.offscreen_generation, &remote, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(remote.chunk, &expected[1]));
+    ASSERT_TRUE(!memcmp(remote.colors->water, pigment.water, sizeof(pigment.water)));
     dc_stream_result_release(&remote);
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
@@ -224,6 +235,7 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
     ASSERT_TRUE(dc_offscreen_snapshot(workspace, owners.offscreen, owners.offscreen_generation, &remote, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(remote.chunk, &expected[1]));
+    ASSERT_TRUE(!memcmp(remote.colors->water, pigment.water, sizeof(pigment.water)));
     dc_stream_result_release(&remote);
     dc_level_view_discard(view);
     dc_offscreen_destroy(workspace);

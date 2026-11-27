@@ -192,8 +192,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                              gpu->timestamp_pool, 0);
     }
-    dc_gpu_record_tick_water_source(gpu);
-    record_scheduled_rigid(gpu);
+    record_before_water(gpu);
     if (capture) {
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 1);
@@ -205,10 +204,7 @@ static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
                              gpu->timestamp_pool, 2);
     }
-    stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                  VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    dc_gpu_record_mpm(gpu);
-    fr_thermal_record_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
+    record_particles_and_heat(gpu);
     if (capture) {
         record_probe(gpu, 1);
         vkCmdWriteTimestamp2(gpu->command, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
