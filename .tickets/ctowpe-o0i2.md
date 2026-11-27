@@ -1,7 +1,7 @@
 ---
 id: ctowpe-o0i2
 status: in_progress
-deps: []
+deps: [ctowpe-ysgp]
 links: []
 created: 2026-11-27T16:08:21Z
 type: task
@@ -43,3 +43,7 @@ Hidden Xephyr :93, populated 960x540 internal render with real 1920x1080 swapcha
 **2026-11-27T17:34:27Z**
 
 Isolated two-device diagnostic keeps RTX physics, rendering, blitting and composition. It reads the complete composed image into cached coherent RAM and uploads it to a same-format full-size FIFO Vulkan swapchain on llvmpipe, in the same Xephyr window. Initial half-native frame 10 matched all 8,294,400 staged bytes and all 1,228,800 visible RGB pixels. Near/middle/far mean/p95 30.961/50.886, 29.913/58.565, 28.376/56.352 ms. The first validation run flagged an acquire-to-layout-transition stage hazard in the experimental presenter. A corrected diagnostic is queued and the runtime presenter has not changed.
+
+**2026-11-27T17:40:56Z**
+
+Same-format 1920x1080 BGRA8_UNORM FIFO transfer control with a different full-frame pattern every frame: RTX WSI mean/p95 56.643/68.968 ms and llvmpipe WSI 1.424/1.805 ms. ctowpe-ysgp tracks production integration of the verified two-device experiment. Corrected 720 concave passes the frame budget with byte-exact readback; full native and half-native diagnostic verification is queued.
