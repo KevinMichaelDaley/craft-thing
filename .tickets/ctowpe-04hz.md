@@ -27,3 +27,7 @@ Cache regression passed 9/9. On the RTX A2000 under synchronization validation t
 **2026-11-27T18:58:17Z**
 
 The complete six-case Vulkan pressure suite passed, including changes between pressure batches, residual dry pressure and mixed materials. No synchronization-validation errors were reported. Native and half-native measurements are serialized behind the previous runtime revision.
+
+**2026-11-27T19:16:55Z**
+
+Half-native measured on persistent hidden Xephyr :93 at 782cb32c. Near/middle/far mean and p95 ms: 24.397/36.938, 24.113/43.107, 24.362/43.807. All three p95 exceed 33.333 ms. Native run underway.
