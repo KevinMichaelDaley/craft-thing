@@ -104,7 +104,7 @@ unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_st
     return !(faces & (faces - 1u)) ? faces : 0;
 }
 
-bool dc_camera_offscreen_water_ready(dc_level_view_t *view) {
+bool dc_camera_offscreen_ready(dc_level_view_t *view) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
     if (!camera->water_face && !camera->rigid_group) return true;
     dc_chunk_time_t time;

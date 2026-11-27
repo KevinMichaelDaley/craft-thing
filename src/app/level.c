@@ -769,9 +769,9 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
                      4u * WORLD_SCALE;
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
-    bool water_ready = dc_camera_offscreen_water_ready(view);
-    if (all_resident && water_ready && !dc_level_offscreen_restore_camera_pair(view, err, cap)) return false;
-    uint32_t ready_steps = all_resident && water_ready ? view->pending_steps : 0u;
+    bool offscreen_ready = dc_camera_offscreen_ready(view);
+    if (all_resident && offscreen_ready && !dc_level_offscreen_restore_camera_pair(view, err, cap)) return false;
+    uint32_t ready_steps = all_resident && offscreen_ready ? view->pending_steps : 0u;
     if (ready_steps && (view->players || view->offscreen_handoffs || view->end_run - view->first_run > 1u)) {
         /* A mixed frame publishes each completed step before trying to present. */
         if (view->players && !dc_players_present(view, err, cap)) return false;
@@ -787,7 +787,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
                                                           &completed, err, cap);
     consume_level_steps(view, completed);
     if (!presented) return false;
-    if (!water_ready) return true;
+    if (!offscreen_ready) return true;
     view->pending_steps = 0;
     view->first_run = view->end_run = 0;
     return true;
@@ -810,7 +810,7 @@ bool dc_level_view_wait_visible(dc_level_view_t *view, uint32_t timeout_ms,
             }
         }
         if (ready && !view->pending_chunk_dx && !view->pending_chunk_dy &&
-            dc_camera_offscreen_water_ready(view)) return true;
+            dc_camera_offscreen_ready(view)) return true;
         SDL_Delay(1);
     } while (SDL_GetTicks64() < deadline);
     return error(err, cap, "Timed out waiting for visible chunks");
