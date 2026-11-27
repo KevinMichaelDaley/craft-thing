@@ -796,11 +796,15 @@ static void test_level_water_settings_change_all_owners_together(void) {
     ASSERT_EQ(peer.fluid_interval, 3u);
     ASSERT_TRUE(dc_level_view_set_marker_correction(&view, true));
     ASSERT_TRUE(resident.marker_correction && peer.marker_correction);
+    resident.fluid_phase = peer.fluid_phase = 1u;
+    ASSERT_TRUE(!dc_level_view_set_fluid_interval(&view, 4u));
     peer.liquid_seam_orphaned = true;
     ASSERT_TRUE(!dc_level_view_set_fluid_interval(&view, 6u));
     ASSERT_TRUE(!dc_level_view_set_marker_correction(&view, false));
     ASSERT_EQ(resident.fluid_interval, 3u);
     ASSERT_EQ(peer.fluid_interval, 3u);
+    ASSERT_EQ(resident.fluid_phase, 1u);
+    ASSERT_EQ(peer.fluid_phase, 1u);
     ASSERT_TRUE(resident.marker_correction && peer.marker_correction);
     PASS();
 }
