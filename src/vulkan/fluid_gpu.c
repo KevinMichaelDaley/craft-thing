@@ -59,8 +59,6 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->fluid_a_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_b_buffer,
                &gpu->fluid_b_memory, err, cap) &&
-           dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_VELOCITY, bytes * 2, &gpu->velocity_buffer,
-               &gpu->velocity_memory, &gpu->velocity_mapped, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->pressure_a_buffer,
                &gpu->pressure_a_memory, err, cap) &&
            dc_gpu_make_device_buffer(gpu, bytes, &gpu->fluid_previous_buffer,

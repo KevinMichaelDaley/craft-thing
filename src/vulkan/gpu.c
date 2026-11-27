@@ -72,9 +72,15 @@ void dc_gpu_destroy(dc_gpu_t *gpu) {
     free(gpu);
 }
 
-static bool make_cells(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap) {
-    return dc_gpu_make_mapped_buffer(gpu, bytes, &gpu->cells,
-                                     &gpu->memory, &gpu->mapped, err, cap);
+static bool make_grid_buffers(dc_gpu_t *gpu, VkDeviceSize bytes, char *err, uint32_t cap) {
+    /* The projection and rigid passes repeatedly scan these grids. Reserve
+       mapped device-local memory for them before allocating the other fields. */
+    return dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_OCCUPANCY,
+               bytes * (DC_HYDRO_MPM_OCCUPANCY_PLANE + 1u), &gpu->occupancy_buffer,
+               &gpu->occupancy_memory, &gpu->occupancy_mapped, err, cap) &&
+           dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_VELOCITY, 2u * bytes, &gpu->velocity_buffer,
+               &gpu->velocity_memory, &gpu->velocity_mapped, err, cap) &&
+           dc_gpu_make_mapped_buffer(gpu, bytes, &gpu->cells, &gpu->memory, &gpu->mapped, err, cap);
 }
 
 static bool make_pipeline(dc_gpu_t *gpu, const char *path, VkDeviceSize bytes,
@@ -215,7 +221,7 @@ static bool create_gpu(dc_gpu_t **out, const dc_gpu_t *parent, uint32_t width, u
     bool initialized = parent ? dc_gpu_inherit_device(gpu, parent, required, err, cap)
                               : dc_gpu_initialize_device(gpu, required, window_width, window_height, started, err, cap);
     if (!initialized) goto fail;
-    if (!make_cells(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
+    if (!make_grid_buffers(gpu, bytes, err, cap) || !dc_gpu_chunks_init(gpu, err, cap) ||
         !dc_gpu_rigid_buffers_init(gpu, err, cap) ||
         !make_pipeline(gpu, shader_path, bytes, err, cap)) goto fail;
     dc_gpu_startup_trace("core buffers and draw",started);
