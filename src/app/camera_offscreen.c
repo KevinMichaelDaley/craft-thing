@@ -348,8 +348,13 @@ static dc_offscreen_t *shared_return_workspace(dc_level_view_t *view, const dc_c
     return NULL;
 }
 
+typedef struct {
+    dc_camera_offscreen_t *rooms[DC_CAMERA_WORKSPACE_LIMIT];
+    unsigned count;
+} due_rooms_t;
+
 static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, bool closing,
-    bool selected, bool capacity, char *err, uint32_t cap) {
+    bool selected, bool capacity, due_rooms_t *due, char *err, uint32_t cap) {
     if (camera->bond) return dc_camera_bond_service(view, closing, err, cap);
     if (camera->phase == DC_CAMERA_OFFSCREEN_IDLE || camera->phase == DC_CAMERA_OFFSCREEN_SAVING)
         return true;
@@ -416,6 +421,14 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
     camera->parking = false;
     if (needed || view->world_seconds - time.seconds >= period / 60.)
         camera->workspace->due_seconds = view->world_seconds;
+    dc_offscreen_t *workspace = camera->workspace;
+    if (!closing && !needed && independent && time.seconds < workspace->due_seconds &&
+        workspace->references == 1u && !workspace->failed && !workspace->held_writes &&
+        !workspace->water_coupled && !dc_gpu_liquid_owner_held(workspace->gpu) &&
+        !workspace->gpu->gas && dc_gpu_chunk_physics_isolated(workspace->gpu)) {
+        due->rooms[due->count++] = camera;
+        return true;
+    }
     if (!closing && independent && time.seconds < camera->workspace->due_seconds &&
         !dc_offscreen_advance(camera->workspace, camera->workspace->due_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
         if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
@@ -429,6 +442,7 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
 }
 
 bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap) {
+    due_rooms_t due = {0};
     dc_camera_offscreen_t *selected[DC_CAMERA_WORKSPACE_LIMIT] = {0};
     unsigned priorities[DC_CAMERA_WORKSPACE_LIMIT], count = 0, live = 0, returning = 0;
     for (size_t i = 0; i <= view->sealed_capacity; ++i) {
@@ -459,11 +473,20 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
         bool needed = camera_needs_chunk(view, room->coord);
         /* Overlap one returning room's write with the next room's load. */
         bool capacity = live < DC_CAMERA_WORKSPACE_LIMIT && (!needed || returning < 2u);
-        if (!service_room(view, room, closing, chosen, capacity, err, cap)) return false;
+        if (!service_room(view, room, closing, chosen, capacity, &due, err, cap)) return false;
         if (had_workspace != (room->workspace != NULL)) {
             if (had_workspace) { --live; returning -= needed; }
             else { ++live; returning += needed; }
         }
     }
-    return true;
+    dc_offscreen_t *workspaces[DC_CAMERA_WORKSPACE_LIMIT];
+    for (unsigned i = 0; i < due.count; ++i) workspaces[i] = due.rooms[i]->workspace;
+    if (dc_offscreen_advance_due_group(workspaces, due.count, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap))
+        return true;
+    for (unsigned i = 0; i < due.count; ++i) {
+        dc_camera_offscreen_t *room = due.rooms[i];
+        if (room->workspace->failed && dc_level_offscreen_cancel(view, room->coord, room->generation, NULL, 0))
+            dc_camera_offscreen_release(room);
+    }
+    return false;
 }

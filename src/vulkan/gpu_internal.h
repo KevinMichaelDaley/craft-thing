@@ -628,6 +628,10 @@ void dc_gpu_record_tick_water_source(dc_gpu_t *gpu);
 /** Initialize dry fluid scratch before scheduling can omit its zero work. */
 bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_tick_step(dc_gpu_t *gpu);
+
+enum { DC_GPU_TICK_BATCH_LIMIT = 16u };
+/** Advance independent sealed owners on one queue and wait for the entire submission. */
+bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char *err, uint32_t cap);
 /** Submit both owners' source and rigid stages before shared water, or their remaining physics after it. */
 bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float seconds,
     bool before_water, bool shared_grains, char *err, uint32_t cap);

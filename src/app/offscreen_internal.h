@@ -60,6 +60,10 @@ struct dc_offscreen {
     bool failed, water_coupled;
 };
 
+/** Advance exclusively leased, independently due rooms and commit their clocks after each fence. */
+bool dc_offscreen_advance_due_group(dc_offscreen_t *const *rooms, unsigned count, unsigned budget,
+                                    char *err, uint32_t cap);
+
 typedef struct dc_level_offscreen_handoff {
     struct dc_level_offscreen_handoff *next;
     dc_offscreen_t *workspace;
