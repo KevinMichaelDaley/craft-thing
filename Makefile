@@ -1368,7 +1368,7 @@ build/shaders/fluid_aperture.comp.spv: shaders/sim/fluid_aperture.comp include/d
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
-build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.comp shaders/sim/fluid_aperture.glsl include/dungeoncraft/fluid_aperture_layout.h
+build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.comp shaders/sim/fluid_aperture.glsl include/dungeoncraft/fluid_aperture_layout.h shaders/sim/hydraulic_face.glsl
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 

@@ -30,7 +30,7 @@ void vertical_tile(uint id) {
     uint column=id%params.width,tile=id/params.width;
     if(tile>=params.leaves) return;
     uint start=tile*DC_FLUID_APERTURE_TILE_CELLS;
-    uint count=min(DC_FLUID_APERTURE_TILE_CELLS,params.height-min(start,params.height));
+    uint count=start<params.height?min(DC_FLUID_APERTURE_TILE_CELLS,params.height-start):0u;
     uint values[DC_FLUID_APERTURE_TILE_CELLS],minimum=FULL;
     for(uint i=0u;i<count;++i) {
         values[i]=face_value(uvec2(column,start+i),true);

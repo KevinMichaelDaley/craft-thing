@@ -42,10 +42,16 @@ static void barrier(fixture_t *f) {
     vkCmdPipelineBarrier(f->p.command,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&memory,0,NULL,0,NULL);
 }
+static bool soil_at(const fixture_t *f,unsigned x,unsigned y) {
+    if(x>=WIDTH||y>=HEIGHT) return false;
+    unsigned page=f->words[0][(y/64)*3+x/64];
+    return page && f->words[5][2*((page-1)*4096+(y%64)*64+x%64)]==4u;
+}
 static uint32_t reference(const fixture_t *f,unsigned x,unsigned y,unsigned axis) {
     if (!f->words[0][(y/64)*3+x/64]) return 0;
     unsigned covered=f->words[1][(axis?4:3)*CELLS+y*WIDTH+x];
-    return FULL-(covered<FULL?covered:FULL);
+    unsigned opening=FULL-(covered<FULL?covered:FULL);
+    return soil_at(f,x,y)||soil_at(f,x+!axis,y+axis)?opening/64u:opening;
 }
 static void run_case(unsigned axis,unsigned unknown) {
     fixture_t *f=calloc(1,sizeof(*f)); ASSERT_TRUE(f);
@@ -60,6 +66,10 @@ static void run_case(unsigned axis,unsigned unknown) {
     for (unsigned i=0;i<6;i++) f->words[0][i]=unknown&&i==1?0:i+1;
     for (unsigned y=0;y<HEIGHT;y++) for (unsigned x=0;x<WIDTH;x++) {
         uint32_t hash=(x*12413u+y*17239u)^((x+y)*7919u);
+        if(axis && (y%16u==15u || x%19u==7u)) {
+            unsigned slot=(y/64)*3+x/64;
+            f->words[5][2*(slot*4096+(y%64)*64+x%64)]=4u;
+        }
         f->words[1][3*CELLS+y*WIDTH+x]=hash%11==0?FULL:hash%(FULL+1u);
         f->words[1][4*CELLS+y*WIDTH+x]=hash%13==0?0:(hash*7u)%(FULL+1u);
     }

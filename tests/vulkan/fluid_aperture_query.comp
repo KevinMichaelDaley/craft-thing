@@ -1,18 +1,26 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 layout(local_size_x=64) in;
+layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
 layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 layout(set=0,binding=28,std430) readonly buffer Prefix {uint aperture_prefix[];};
 layout(set=0,binding=29,std430) readonly buffer Tree {uint aperture_tree[];};
 layout(set=0,binding=30,std430) buffer Results {uint results[];};
 layout(push_constant) uniform Params {uint width,height,axis,unused0,unused1;} params;
+uint page_at(ivec2 p) {
+    if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
+    return pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+}
+uint atlas_index(ivec2 p,uint page) { return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64); }
+#include "../../shaders/sim/hydraulic_face.glsl"
 float face_aperture(ivec2 source,ivec2 direction) {
     ivec2 p=source+min(direction,ivec2(0));
-    uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
+    uint page=page_at(p);
     if(page==0u) return 0.;
     uint i=uint(p.y)*params.width+uint(p.x),axis=direction.x!=0?3u:4u;
-    return float(65536u-min(65536u,occupancy[axis*params.width*params.height+i]))/65536.;
+    uint opening=65536u-min(65536u,occupancy[axis*params.width*params.height+i]);
+    return float(hydraulic_aperture(opening,p,direction))/65536.;
 }
 #include "../../shaders/sim/fluid_aperture.glsl"
 void main() {
