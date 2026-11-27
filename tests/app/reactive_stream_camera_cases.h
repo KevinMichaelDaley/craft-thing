@@ -432,7 +432,7 @@ static void test_camera_heated_water_returns_with_its_energy(void) { check_camer
 static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(CAMERA_BULK); }
 static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(CAMERA_HEAT|CAMERA_BULK|CAMERA_REOPEN); }
 
-static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
+static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch, bool check_cadence) {
     char directory[] = "build/camera_two_rooms_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -456,6 +456,24 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
         dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[0]));
     ASSERT_TRUE(dc_level_offscreen_owns(view, rooms[1]));
+    if (check_cadence) {
+        uint64_t deadline = SDL_GetTicks64() + 25000u;
+        dc_level_offscreen_handoff_t *lease = dc_level_offscreen_lookup(view, rooms[1]);
+        while (lease && !lease->admitted && SDL_GetTicks64() < deadline) {
+            ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+            SDL_Delay(1);
+        }
+        ASSERT_TRUE(lease && lease->admitted);
+        ASSERT_TRUE(dc_level_view_step_timed(view, .125f, err, sizeof(err)) &&
+            dc_level_view_tick(view, err, sizeof(err)) && dc_level_view_tick(view, err, sizeof(err)));
+        ASSERT_EQ(view->world_seconds, 2.125);
+        ASSERT_EQ(lease->workspace->time.seconds, 2.);
+        ASSERT_TRUE(dc_level_view_step_timed(view, .125f, err, sizeof(err)) &&
+            dc_level_view_tick(view, err, sizeof(err)));
+        for (unsigned i = 0; i < 4u; ++i) ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+        ASSERT_EQ(view->world_seconds, 2.25);
+        ASSERT_EQ(lease->workspace->time.seconds, view->world_seconds);
+    }
     if (sleep_and_prefetch) {
         ASSERT_TRUE(dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0) &&
             dc_level_view_pan_pixels(view, VIEW_WIDTH, 0) &&
@@ -482,7 +500,7 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
         ASSERT_TRUE(!dc_level_offscreen_owns(view, rooms[i]) &&
             dc_chunk_table_find(&view->table, rooms[i], &slot) &&
             dc_gpu_download_chunk(view->gpu, slot, chunk, err, sizeof(err)));
-        ASSERT_EQ(view->table.slots[slot].time.seconds, 2.0625);
+        ASSERT_EQ(view->table.slots[slot].time.seconds, check_cadence ? 2.3125 : 2.0625);
         ASSERT_EQ(camera_stock(chunk, NULL, false), 14000u + i);
         ASSERT_TRUE(chunk->cells[center].fluid_mass < 14000u + i);
     }
@@ -492,11 +510,15 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch) {
 }
 
 static void test_two_evicted_sealed_rooms_return_at_the_world_clock(void) {
-    check_two_evicted_sealed_rooms(false);
+    check_two_evicted_sealed_rooms(false, false);
 }
 
 static void test_distant_rooms_sleep_and_prefetch_before_camera_return(void) {
-    check_two_evicted_sealed_rooms(true);
+    check_two_evicted_sealed_rooms(true, false);
+}
+
+static void test_middle_band_finishes_its_due_interval(void) {
+    check_two_evicted_sealed_rooms(false, true);
 }
 
 static void test_saturated_sleeping_rooms_all_return_at_the_world_clock(void) {
