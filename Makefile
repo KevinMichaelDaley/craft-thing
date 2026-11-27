@@ -303,7 +303,8 @@ build/bonfire_scene_tests: tests/app/bonfire_scene_tests.c $(THERMAL_BENCH_SRC) 
 test: test_bonfire_scene
 test_bonfire_scene: build/bonfire_scene_tests
 	./build/bonfire_scene_tests
-NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
+OFFSCREEN_SRC = src/app/offscreen.c
+NATIVE_SRC = src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c src/app/session.c src/app/shutdown.c src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_SRC) src/world/chunk.c src/world/stream.c src/world/world_save.c src/fire/bulk_phase_packet.c src/world/generate.c
 PLAYER_RUNTIME_SRC = src/app/player_session.c src/app/player_view.c src/app/player_clock.c src/app/smoke_profile.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/placement.c src/vulkan/player_drive_gpu.c $(PLAYER_SRC) $(BEAVER_SRC)
 PLAYER_RUNTIME_SRC += src/app/player_inventory_save.c src/app/player_join.c
 NATIVE_SRC += $(PLAYER_RUNTIME_SRC)
@@ -758,7 +759,8 @@ build/stream_tests: tests/world/stream_tests.c $(STREAM_OBJ) $(CHUNK_OBJ) $(GENE
 build/shutdown.o: src/app/shutdown.c src/app/shutdown.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/dungeoncraft: build/shutdown.o src/app/structural_demo.c src/app/structural_demo.h src/app/main.c src/app/level.c src/app/level.h src/app/view_config.h src/app/session.c src/app/session.h src/app/shutdown.c src/app/player_session.c src/app/player_clock.c src/app/beaver_fire_scene.c src/app/beaver_fire_plan.c src/player/fire_ray_gpu.c src/player/input.c src/player/input_sdl.c src/player/control.c src/player/body_gpu.c src/player/manipulation.c src/player/hotbar.c src/player/abilities.c src/player/chew.c src/player/chew_world.c src/player/registry.c src/player/state.c src/player/animation.c src/player/beaver_art.c src/player/beaver_asset.c src/vulkan/player_drive_gpu.c build/shutdown.o $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c build/shutdown.o src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) src/app/main.c src/app/prop_scene.c src/app/structural_demo.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c build/shutdown.o src/app/smoke_box.c src/app/smoke_level.c src/app/smoke_audit.c $(OFFSCREEN_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
+build/dungeoncraft: $(OFFSCREEN_SRC) src/app/offscreen.h
 
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
@@ -776,8 +778,8 @@ test: test_level_ticks
 test_level_ticks: build/level_ticks_tests
 	./build/level_ticks_tests
 
-build/offscreen_workspace_tests: tests/app/offscreen_workspace_tests.c src/app/offscreen.c src/app/offscreen.h $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/offscreen.c $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_step -Wl,--wrap=dc_gpu_set_tick_seconds
+build/offscreen_workspace_tests: tests/app/offscreen_workspace_tests.c $(OFFSCREEN_SRC) src/app/offscreen.h $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(OFFSCREEN_SRC) $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_step -Wl,--wrap=dc_gpu_set_tick_seconds
 .PHONY: test_offscreen_workspace
 test_offscreen_workspace: build/offscreen_workspace_tests
 	./build/offscreen_workspace_tests
