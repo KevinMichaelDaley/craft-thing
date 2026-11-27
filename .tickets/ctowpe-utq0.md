@@ -16,3 +16,9 @@ An arithmetic replay of the implementation with alternating 1/60, 1/30, 0.125 an
 ## Acceptance Criteria
 
 Reproduce the elapsed-step divergence with deterministic mixed intervals, including larger catch-up calls and partial pressure/MPM work. Retain the native sequence through deferred rounds while smoothing regular frames. Verify stock, all confirmed epochs and real displayed performance.
+
+## Notes
+
+**2026-11-27T19:54:12Z**
+
+Reduced host reproduction to seven middle-band service calls from world time 2.0 s. Foreground advances: 0.125, 0.125, 2*(float)(1/60), 0.125, 2*(float)(1/60), 0.125, 2*(float)(1/60). On the seventh call the original trajectory visits 2.408333335071802 s, while paced replay skips that confirmed boundary from 2.399999976158142 s. Use the same sequence against actual owner physics.

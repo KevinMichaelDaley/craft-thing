@@ -449,6 +449,8 @@ static unsigned replay_rounds(const dc_level_view_t *view, const due_rooms_t *du
 
     const dc_level_step_run_t *runs = view->step_runs ? view->step_runs : &view->inline_step;
     const dc_level_step_run_t run = runs[view->first_run];
+    /* Defer a second round only while all owners stay inside their cadence
+       through the queued foreground advance. Draining and catch-up retain both rounds. */
     const double next_world = view->world_seconds + (double)run.seconds * run.count;
     for (unsigned i = 0; i < due->count; ++i) {
         const dc_camera_offscreen_t *room = due->rooms[i];
