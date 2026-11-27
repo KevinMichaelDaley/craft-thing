@@ -142,8 +142,7 @@ bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscre
         if (body->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG || body->piece_count > DC_GPU_BODY_PIECES ||
             room_relation(body, page) == OUTSIDE_ROOM || !dc_offscreen_collect_bond_group(gpu, body->body.id, group))
             continue;
-        const uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
-        return graph[1] == group->member_count;
+        return true;
     }
     return false;
 }
@@ -240,31 +239,30 @@ bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
         memcmp(confirmed.pages, group->pages, confirmed.page_count * sizeof(*group->pages)))
         return error(err, cap, "Bonded assembly changed before handoff");
     uint32_t *a = dc_gpu_structural_data(from) + dc_gpu_structural_graph_offset(from);
-    fr_structural_gpu_graph_t *graph = (void *)a;
-    if (to->structural_graph_possible || graph->member_count != group->member_count ||
-        graph->member_count > FR_STRUCTURAL_MEMBER_CAPACITY)
-        return error(err, cap, "Cannot move a partial authored graph");
+    if (group->member_count > FR_STRUCTURAL_MEMBER_CAPACITY) return error(err, cap, "Bonded group exceeds graph capacity");
     uint32_t dest_slots[FR_STRUCTURAL_MEMBER_CAPACITY], capacity = dc_gpu_body_capacity(to), available = 0;
-    for (uint32_t i = 0; i < group->member_count; ++i) {
-        const fr_structural_gpu_member_t *m = &graph->members[i];
-        const dc_gpu_body_record_t *body = m->reserved < from->body_count ? dc_gpu_body_record(from, m->reserved) : NULL;
-        if (!body || !(m->flags & 2u) || body->body.id != FR_STRUCTURAL_BODY_ID_BASE + m->id ||
-            body->reserved[1] != m->generation || dc_gpu_find_body_record(to, body->body.id) ||
-            (body->motion_flags & (DC_BODY_MOTION_REACTIVE_MASS | DC_BODY_MOTION_THERMAL_GRID)))
+    for (unsigned i = 0; i < group->member_count; ++i) {
+        const dc_offscreen_bond_member_t *m = &group->members[i];
+        if (dc_gpu_find_body_record(to, m->id) || (dc_gpu_body_record(from, m->slot)->motion_flags &
+                (DC_BODY_MOTION_REACTIVE_MASS | DC_BODY_MOTION_THERMAL_GRID)))
             return error(err, cap, "Invalid converted member or destination identity");
-        uint32_t j = 0;
-        while (j < group->member_count && group->members[j].slot != m->reserved) ++j;
-        if (j == group->member_count) return error(err, cap, "Authored member belongs to another assembly");
     }
-    for (uint32_t i = 0; i < DC_OFFSCREEN_BOND_CAPACITY; ++i) {
+    uint32_t source_bonds[DC_OFFSCREEN_BOND_CAPACITY], targets[DC_OFFSCREEN_BOND_CAPACITY];
+    uint32_t endpoints[DC_OFFSCREEN_BOND_CAPACITY][2], moved = 0, retained = 0;
+    for (unsigned i = 0; i < DC_OFFSCREEN_BOND_CAPACITY; ++i) {
         const uint32_t *bond = a + 30000u + 20u * i;
         if (!bond[0]) continue;
+        unsigned members[2] = {0};
+        for (unsigned end = 0; end < 2; ++end)
+            while (members[end] < group->member_count && group->members[members[end]].id != bond[3u + end])
+                ++members[end];
+        if (members[0] == group->member_count && members[1] == group->member_count) { ++retained; continue; }
         for (unsigned end = 0; end < 2; ++end) {
-            uint32_t j = 0;
-            while (j < group->member_count && group->members[j].slot != bond[1u + end]) ++j;
-            if (j == group->member_count || group->members[j].id != bond[3u + end])
+            if (members[end] == group->member_count || group->members[members[end]].slot != bond[1u + end])
                 return error(err, cap, "An external bond requires another owner");
+            endpoints[moved][end] = members[end];
         }
+        source_bonds[moved++] = i;
     }
     for (uint32_t i = 0; i < capacity; ++i) available += free_slot(to, i);
     if (available < group->member_count) {
@@ -273,41 +271,30 @@ bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
     }
     if (!dc_gpu_solver_graph_prepare(to, err, cap) || !dc_gpu_set_rigid_solver(to, true)) return false;
     uint32_t *b = dc_gpu_structural_data(to) + dc_gpu_structural_graph_offset(to);
+    unsigned count = 0;
+    for (unsigned i = 0; i < DC_OFFSCREEN_BOND_CAPACITY && count < moved; ++i)
+        if (!b[30000u + 20u * i]) targets[count++] = i;
+    if (count != moved) return error(err, cap, "Destination bond pool is full");
     uint32_t next = 0;
-    for (uint32_t i = 0; i < graph->member_count; ++i) {
+    for (uint32_t i = 0; i < group->member_count; ++i) {
         while (!free_slot(to, next)) ++next;
         dest_slots[i] = next++;
     }
-    for (uint32_t i = 0; i < DC_OFFSCREEN_BOND_CAPACITY; ++i) {
-        uint32_t *old = a + 30000u + 20u * i, *bond = b + 30000u + 20u * i;
-        if (!old[0]) continue;
-        move_words(bond, old, 20u);
-        for (unsigned end = 0; end < 2; ++end)
-            for (uint32_t j = 0; j < graph->member_count; ++j)
-                if (graph->members[j].reserved == bond[1u + end]) {
-                    bond[1u + end] = dest_slots[j];
-                    break;
-                }
+    if (!dc_offscreen_partition_graph(from, to, group, dest_slots))
+        return error(err, cap, "Cannot partition the authored graph at this boundary");
+    for (unsigned i = 0; i < moved; ++i) {
+        uint32_t *bond = b + 30000u + 20u * targets[i];
+        move_words(bond, a + 30000u + 20u * source_bonds[i], 20u);
+        for (unsigned end = 0; end < 2; ++end) bond[1u + end] = dest_slots[endpoints[i][end]];
     }
-    for (uint32_t i = 0; i < graph->member_count; ++i) {
-        move_record(from, graph->members[i].reserved, to, dest_slots[i]);
-        graph->members[i].reserved = dest_slots[i];
-    }
-    const struct { unsigned start, words; } ranges[] = {
-        {0, DC_STRUCTURAL_GRAPH_WORDS},
-        {2u * DC_STRUCTURAL_GRAPH_WORDS, FR_STRUCTURAL_NODE_CAPACITY * DC_STRUCTURAL_NODE_STATE_WORDS},
-        {24000u, FR_STRUCTURAL_MEMBER_CAPACITY * 16u}, {24400u, FR_STRUCTURAL_NODE_CAPACITY * 16u},
-        {28000u, FR_STRUCTURAL_NODE_CAPACITY * 4u}, {28300u, FR_STRUCTURAL_JOINT_CAPACITY + FR_STRUCTURAL_ANCHOR_CAPACITY}
-    };
-    for (unsigned i = 0; i < sizeof(ranges) / sizeof(*ranges); ++i)
-        move_words(b + ranges[i].start, a + ranges[i].start, ranges[i].words);
+    for (unsigned i = 0; i < group->member_count; ++i)
+        move_record(from, group->members[i].slot, to, dest_slots[i]);
     uint32_t *old_control = dc_gpu_structural_data(from), *new_control = dc_gpu_structural_data(to);
-    new_control[0] = old_control[0];
-    old_control[0] = old_control[9] = 0;
+    old_control[9] = retained != 0;
     new_control[9] = 1;
     old_control[10] = old_control[11] = new_control[10] = new_control[11] = 1;
     if (new_control[14] < old_control[14]) new_control[14] = old_control[14];
-    from->structural_graph_possible = false;
+    from->structural_graph_possible = a[0] || a[1] || retained;
     to->structural_graph_possible = to->structural_enabled = true;
     dc_gpu_refresh_body_registry(from);
     dc_gpu_refresh_body_registry(to);

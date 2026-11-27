@@ -46,6 +46,9 @@ bool dc_offscreen_collect_bond_group(dc_gpu_t *gpu, uint32_t id, dc_offscreen_bo
 /** Move a confirmed converted group, preserving member generations and remapping bond slots. */
 bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscreen_bond_group_t *group,
     char *err, uint32_t cap);
+/** Partition authored nodes, members, attachments and history at a confirmed rigid boundary. */
+bool dc_offscreen_partition_graph(dc_gpu_t *from, dc_gpu_t *to, const dc_offscreen_bond_group_t *group,
+    const uint32_t *dest_slots);
 
 struct dc_offscreen {
     dc_gpu_t *gpu;
