@@ -1286,6 +1286,7 @@ build/native_720_component_tests: tests/vulkan/native_720_component_tests.c test
 test_native_720_components: build/native_720_component_tests
 	./build/native_720_component_tests
 
+build/offscreen_half_native_bench build/offscreen_native_bench: Makefile src/fire/material_profile_data.inc include/dungeoncraft/coating_layout.h
 OFFSCREEN_CACHE_BENCH_SRC = tests/app/offscreen_cache_bench.c $(filter-out src/app/main.c,$(NATIVE_SRC))
 build/offscreen_half_native_bench: $(OFFSCREEN_CACHE_BENCH_SRC) build/dungeoncraft_half_native
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_HALF_NATIVE_VIEW -DDC_GPU_CHUNK_SLOTS=187u -DDC_PRESSURE_SWEEPS=16u $(OFFSCREEN_CACHE_BENCH_SRC) -o $@ $(LDLIBS)
@@ -1531,6 +1532,7 @@ GPU_SOURCE_BINARIES = $(addprefix build/, \
     dungeoncraft_native dungeoncraft_quarter_native marker_slot_tests \
     material_cut_buoyancy_tests dynamic_body_capacity_tests \
     native_360_performance_tests native_720_component_tests \
+    offscreen_half_native_bench offscreen_native_bench \
     native_720_performance_tests native_bench pixel_dynamics_visual_tests \
     pixel_performance_tests structural_bench structural_cadence_tests \
     structural_material_visual_tests structural_visual_scene_tests \
