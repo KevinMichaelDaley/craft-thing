@@ -57,9 +57,9 @@ enum { STAYS = 1u, MOVES = 2u };
 
 bool dc_offscreen_partition_graph(dc_gpu_t *from, dc_gpu_t *to, const dc_offscreen_bond_group_t *group,
     const uint32_t *dest_slots) {
-    graph_state_t source, remaining = {0}, destination;
+    graph_state_t source, remaining = {0}, destination = {0};
     copy_state(from, &source, false);
-    copy_state(to, &destination, false);
+    if (to) copy_state(to, &destination, false);
     const fr_structural_gpu_graph_t *g = &source.graph;
     uint32_t owners[FR_STRUCTURAL_NODE_CAPACITY] = {0}, moved = 0;
     for (unsigned i = 0; i < g->member_count; ++i) {
@@ -70,7 +70,7 @@ bool dc_offscreen_partition_graph(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
         if (moving) {
             if (!(m.flags & 2u) || m.reserved != group->members[j].slot ||
                 m.generation != group->members[j].member_generation) return false;
-            m.reserved = dest_slots[j];
+            if (to) m.reserved = dest_slots[j];
             ++moved;
         }
         graph_state_t *out = moving ? &destination : &remaining;
@@ -122,7 +122,9 @@ bool dc_offscreen_partition_graph(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
                     FR_STRUCTURAL_ANCHOR_CAPACITY, &g->anchors[i])) return false;
         out->anchors[at] = source.anchors[i];
     }
-    copy_state(from, &remaining, true);
-    copy_state(to, &destination, true);
+    if (to) {
+        copy_state(from, &remaining, true);
+        copy_state(to, &destination, true);
+    }
     return true;
 }

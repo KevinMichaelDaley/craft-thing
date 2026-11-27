@@ -142,7 +142,7 @@ bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscre
         if (body->reserved[0] != DC_GPU_STRUCTURAL_CONVERTED_TAG || body->piece_count > DC_GPU_BODY_PIECES ||
             room_relation(body, page) == OUTSIDE_ROOM || !dc_offscreen_collect_bond_group(gpu, body->body.id, group))
             continue;
-        return true;
+        return dc_offscreen_partition_graph(gpu, NULL, group, NULL);
     }
     return false;
 }
@@ -269,7 +269,7 @@ bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
         uint32_t extra = group->member_count - available;
         if (extra > UINT32_MAX - capacity || !dc_gpu_runtime_bodies_reserve(to, capacity + extra, err, cap)) return false;
     }
-    if (!dc_gpu_solver_graph_prepare(to, err, cap) || !dc_gpu_set_rigid_solver(to, true)) return false;
+    if (!dc_gpu_solver_graph_prepare(to, err, cap)) return false;
     uint32_t *b = dc_gpu_structural_data(to) + dc_gpu_structural_graph_offset(to);
     unsigned count = 0;
     for (unsigned i = 0; i < DC_OFFSCREEN_BOND_CAPACITY && count < moved; ++i)
@@ -282,6 +282,7 @@ bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscre
     }
     if (!dc_offscreen_partition_graph(from, to, group, dest_slots))
         return error(err, cap, "Cannot partition the authored graph at this boundary");
+    dc_gpu_set_rigid_solver(to, true);
     for (unsigned i = 0; i < moved; ++i) {
         uint32_t *bond = b + 30000u + 20u * targets[i];
         move_words(bond, a + 30000u + 20u * source_bonds[i], 20u);

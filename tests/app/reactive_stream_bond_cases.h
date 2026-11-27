@@ -61,15 +61,17 @@ static void check_camera_bonded_assembly(enum bond_check check) {
             .a = i + 1u, .b = i + 2u, .material = i ? FR_STRUCTURAL_STONE : FR_STRUCTURAL_WOOD,
             .depth_fp = 2u * DC_FLUID_FULL};
     if (check == BOND_SEPARATE_MEMBER) {
-        graph.node_count += 2u;
-        graph.member_count++;
-        for (unsigned i = 0; i < 2; ++i) {
+        graph.node_count += 3u;
+        graph.member_count += 2u;
+        for (unsigned i = 0; i < 3; ++i) {
             graph.nodes[3u + i] = (fr_structural_gpu_node_t){.id = 4u + i, .generation = 5,
                 .chunk = {origin.x + 3, origin.y}, .x_fp = (12 + (int)i * 8) * DC_FLUID_FULL,
                 .y_fp = 18 * DC_FLUID_FULL};
         }
         graph.members[2] = (fr_structural_gpu_member_t){.id = 3u, .generation = 5u, .a = 4u, .b = 5u,
             .material = FR_STRUCTURAL_WOOD, .depth_fp = DC_FLUID_FULL};
+        graph.members[3] = (fr_structural_gpu_member_t){.id = 4u, .generation = 6u, .a = 5u, .b = 6u,
+            .material = FR_STRUCTURAL_STONE, .depth_fp = DC_FLUID_FULL};
     }
     ASSERT_TRUE(fr_gpu_place_structure(view->gpu, &graph, err, sizeof(err)));
     for (unsigned i = 0; i < 90; ++i) ASSERT_TRUE(dc_gpu_rigid_step(view->gpu, err, sizeof(err)));
@@ -200,6 +202,8 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     ASSERT_TRUE(!camera_has_live_bond(view->gpu, first, first + 1u));
     if (check == BOND_SEPARATE_MEMBER) {
         fr_structural_gpu_member_state_t state;
+        ASSERT_TRUE(camera_has_live_bond(view->gpu, first + 2u, first + 3u));
+        ASSERT_TRUE(!camera_has_live_bond(remote, first + 2u, first + 3u));
         ASSERT_TRUE(fr_gpu_read_structure_member(view->gpu, 3u, &state));
         ASSERT_EQ(state.generation, 5u);
         ASSERT_TRUE(!fr_gpu_read_structure_member(remote, 3u, &state));
@@ -291,7 +295,8 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     }
     ASSERT_EQ(view->world_seconds, handoff_seconds + .03125);
     if (check == BOND_SEPARATE_MEMBER) {
-        for (unsigned i = 0; i < 3; ++i) {
+        ASSERT_TRUE(camera_has_live_bond(view->gpu, first + 2u, first + 3u));
+        for (unsigned i = 0; i < graph.member_count; ++i) {
             fr_structural_gpu_member_state_t state;
             ASSERT_TRUE(fr_gpu_read_structure_member(view->gpu, i + 1u, &state));
             ASSERT_EQ(state.generation, graph.members[i].generation);
