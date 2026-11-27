@@ -27,3 +27,7 @@ A cold and warm catapult_demo on the actual RTX display render the first frame q
 **2026-11-27T00:32:27Z**
 
 The catapult executable now has a first-frame startup probe on its actual 256x128 load, fixed launch scene and lit presentation path. Run make test_catapult_startup with an X11 Vulkan-capable display, or run ./build/catapult_demo --startup-probe directly. DC_BONFIRE_STARTUP_TRACE=1 also exposes the existing device, shader-pipeline and swapchain milestones. Use DC_PIPELINE_CACHE_DIR and DC_PIPELINE_CACHE_TRACE=1 to compare a fresh and then warmed pipeline cache. The portable regression reproduces and verifies the launch marker on an unavailable display. RTX cold and warm first-present evidence and startup reduction remain open.
+
+**2026-11-27T00:42:31Z**
+
+Pinned 255d0c96 completed both first-present cases on the RTX A2000 with the isolated X11 display. Empty Vulkan cache loaded 0 bytes and took 181.437 s to first present, including 102.065 s GPU setup and 48.448 s thermal setup. The detailed cold GPU milestones were structural pipeline 78.213 s and tick pipeline 101.648 s cumulative. Reusing the 29,892,603-byte cache took 9.533 s. Warm gas setup was 3.181 s, structural settle 2.515 s, and renderer setup 1.903 s. Both runs presented one lit 256x128 frame and passed 2/2 checks. Other GPU jobs were active. The measured startup performance ticket remains open.
