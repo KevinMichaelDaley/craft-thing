@@ -10,7 +10,7 @@ static bool rewrite_parked_source(dc_streamer_t *writer, const dc_stream_result_
     return okay;
 }
 
-static void test_reversal_replays_a_sleeping_slot_before_residency(void) {
+static void check_sleeping_slot_replay(bool transfer) {
     char directory[] = "build/camera_sleeping_reversal_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -35,6 +35,19 @@ static void test_reversal_replays_a_sleeping_slot_before_residency(void) {
     view->table.slots[slot].checkpoint_owner = owner;
     view->camera_offscreen = (dc_camera_offscreen_t){.coord=coord,.owner=owner,
         .phase=DC_CAMERA_OFFSCREEN_STORED,.time=time};
+    uint32_t neighbor_slot = 0;
+    if (transfer) {
+        dc_chunk_coord_t neighbor = {coord.x + 1, coord.y};
+        *chunk = (dc_chunk_t){.coord=neighbor};
+        chunk->cells[32u * DC_CHUNK_SIDE].fluid_mass = 100u;
+        ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, neighbor, &neighbor_slot, &generation) &&
+            dc_gpu_upload_chunk(view->gpu, neighbor_slot, chunk, err, sizeof(err)) &&
+            dc_chunk_table_finish_load(&view->table, neighbor_slot, generation));
+        view->table.slots[neighbor_slot].time = (dc_chunk_time_t){view->world_seconds,true};
+        int64_t x = neighbor.x * DC_CHUNK_SIDE, y = neighbor.y * DC_CHUNK_SIDE + 32;
+        ASSERT_TRUE(dc_level_view_queue_transfer(view,x,y,x-1,y,1u,DC_GPU_TRANSFER_SCALAR,err,sizeof(err)));
+        ASSERT_TRUE(view->transfer_pending && !view->destination_bound);
+    }
     ASSERT_TRUE(dc_level_view_move(view,-1,0) &&
         dc_level_view_wait_visible(view,30000u,err,sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, &slot));
@@ -42,9 +55,25 @@ static void test_reversal_replays_a_sleeping_slot_before_residency(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu,slot,chunk,err,sizeof(err)));
     ASSERT_EQ(camera_stock(chunk,NULL,false),14000u);
     ASSERT_TRUE(chunk->cells[center].fluid_mass < 14000u);
+    if (transfer) {
+        dc_gpu_transfer_state_t state;
+        ASSERT_TRUE(dc_level_view_transfer_result(view,&state));
+        ASSERT_EQ(state,DC_GPU_TRANSFER_BLOCKED);
+        ASSERT_TRUE(!view->table.slots[neighbor_slot].pinned && !view->table.slots[slot].pinned);
+        ASSERT_TRUE(dc_gpu_download_chunk(view->gpu,neighbor_slot,chunk,err,sizeof(err)));
+        ASSERT_EQ(camera_stock(chunk,NULL,false),100u);
+    }
     dc_level_view_discard(view);
     free(chunk);
     PASS();
+}
+
+static void test_reversal_replays_a_sleeping_slot_before_residency(void) {
+    check_sleeping_slot_replay(false);
+}
+
+static void test_world_transfer_resolves_against_replayed_room(void) {
+    check_sleeping_slot_replay(true);
 }
 
 static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch, bool check_cadence, bool reopen) {

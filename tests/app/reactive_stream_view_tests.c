@@ -370,6 +370,7 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--camera-reversal") == 0) {
+        RUN(test_world_transfer_resolves_against_replayed_room);
         RUN(test_reversal_replays_a_sleeping_slot_before_residency);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
@@ -519,6 +520,7 @@ int main(int argc, char **argv) {
     RUN(test_saturated_sleeping_rooms_all_return_at_the_world_clock);
     RUN(test_middle_band_finishes_its_due_interval);
     RUN(test_camera_keeps_rooms_on_opposite_sides_of_the_view);
+    RUN(test_world_transfer_resolves_against_replayed_room);
     RUN(test_reversal_replays_a_sleeping_slot_before_residency);
     RUN(test_parked_rooms_reopen_from_confirmed_epochs);
     RUN(test_camera_reopens_shared_gas_stock_and_pressure);
