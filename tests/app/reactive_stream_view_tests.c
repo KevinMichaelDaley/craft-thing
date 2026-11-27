@@ -368,6 +368,7 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--camera") == 0) {
         RUN(test_camera_eviction_keeps_the_published_owner_across_archive_rewrites);
+        RUN(test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
@@ -389,5 +390,6 @@ int main(int argc, char **argv) {
     RUN(test_cold_reopen_rejects_receipt_for_previous_owner);
     RUN(test_workspace_takeover_retries_and_commits_exactly_once);
     RUN(test_camera_eviction_keeps_the_published_owner_across_archive_rewrites);
+    RUN(test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
