@@ -76,6 +76,23 @@ static void test_world_transfer_resolves_against_replayed_room(void) {
     check_sleeping_slot_replay(true);
 }
 
+static VkCommandBuffer watched_owner_commands[2];
+static unsigned shared_owner_submissions;
+
+VkResult __real_vkQueueSubmit(VkQueue, uint32_t, const VkSubmitInfo *, VkFence);
+VkResult __wrap_vkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo *items, VkFence fence) {
+    if (watched_owner_commands[0] && watched_owner_commands[1]) {
+        unsigned seen = 0;
+        for (uint32_t i = 0; i < count; ++i)
+            for (uint32_t j = 0; j < items[i].commandBufferCount; ++j)
+                for (unsigned owner = 0; owner < 2; ++owner)
+                    if (items[i].pCommandBuffers[j] == watched_owner_commands[owner])
+                        seen |= 1u << owner;
+        if (seen == 3u) ++shared_owner_submissions;
+    }
+    return __real_vkQueueSubmit(queue, count, items, fence);
+}
+
 static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch, bool check_cadence, bool reopen) {
     char directory[] = "build/camera_two_rooms_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
@@ -132,11 +149,19 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch, bool check_c
             dc_level_view_tick(view, err, sizeof(err)) && dc_level_view_tick(view, err, sizeof(err)));
         ASSERT_EQ(view->world_seconds, 2.125);
         ASSERT_EQ(lease->workspace->time.seconds, 2.);
+        dc_level_offscreen_handoff_t *other = dc_level_offscreen_lookup(view, rooms[0]);
+        ASSERT_TRUE(other && other->admitted && other->workspace != lease->workspace);
+        watched_owner_commands[0] = lease->workspace->gpu->command;
+        watched_owner_commands[1] = other->workspace->gpu->command;
+        shared_owner_submissions = 0;
         ASSERT_TRUE(dc_level_view_step_timed(view, .125f, err, sizeof(err)) &&
             dc_level_view_tick(view, err, sizeof(err)));
         for (unsigned i = 0; i < 4u; ++i) ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
         ASSERT_EQ(view->world_seconds, 2.25);
         ASSERT_EQ(lease->workspace->time.seconds, view->world_seconds);
+        memset(watched_owner_commands, 0, sizeof(watched_owner_commands));
+        ASSERT_EQ(other->workspace->time.seconds, view->world_seconds);
+        ASSERT_TRUE(shared_owner_submissions > 0u);
     }
     if (sleep_and_prefetch) {
         ASSERT_TRUE(dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0) &&
