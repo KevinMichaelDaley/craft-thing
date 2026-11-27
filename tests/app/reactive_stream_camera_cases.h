@@ -402,6 +402,10 @@ static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) 
         ASSERT_EQ(memcmp(&initial, &observed, sizeof(initial)), 0);
         ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, id + 1u, &observed, err, sizeof(err)));
         ASSERT_TRUE(!dc_gpu_read_world_body(view->camera_offscreen.workspace->gpu, id + 1u, &observed, NULL, 0));
+        ASSERT_TRUE(!dc_gpu_spawn_world_body(view->gpu, initial, err, sizeof(err)));
+        dc_gpu_world_body_t duplicate = initial;
+        duplicate.body.id = id + 1u;
+        ASSERT_TRUE(!dc_gpu_spawn_world_body(view->camera_offscreen.workspace->gpu, duplicate, err, sizeof(err)));
     }
     ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
