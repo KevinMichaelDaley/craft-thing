@@ -21,3 +21,9 @@ Transfer body and member identities, contact state, transforms, momentum and ext
 ## Acceptance Criteria
 
 A moving body and a spanning bonded assembly cross the camera boundary in both directions with one authoritative owner throughout. Verify time, momentum, bonds, failure retry and cold reopen on the RTX native path.
+
+## Notes
+
+**2026-11-27T12:57:15Z**
+
+Native RTX tests now cover a two-page bonded camera pan, remapped runtime slots, member generations, terrain contact records, a failed page return followed by shutdown, and cold reopen. The current transfer accepts one connected converted authored graph. Combined Vulkan validation and the full regression suite are still running; mixed authored graphs and uninterrupted momentum comparison remain to verify.

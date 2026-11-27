@@ -34,20 +34,21 @@ bool dc_camera_bond_offer(dc_level_view_t *view, const dc_stream_result_t *sourc
         unsigned occupied = group.page_count;
         if (needed(view, &group) || !dc_camera_bond_enclose(view, &group) ||
             !dc_camera_bond_page_sealed(&group, source)) return false;
-        for (unsigned i = 0; i < group.page_count; ++i) {
-            uint32_t slot;
-            if (!dc_chunk_table_find(&view->table, group.pages[i], &slot)) return false;
-            const dc_chunk_slot_t *s = &view->table.slots[slot];
-            if (!s->dirty || s->pinned || !s->time.known || s->time.seconds != source->time.seconds) return false;
-        }
         dc_camera_bond_t *bond = calloc(1, sizeof(*bond));
         if (!bond) return false;
         bond->group = group;
         bond->occupied_pages = occupied;
         for (unsigned i = 0; i < group.page_count; ++i) {
             uint32_t slot;
-            if (!dc_chunk_table_find(&view->table, group.pages[i], &slot)) { free(bond); return false; }
+            if (!dc_chunk_table_find(&view->table, group.pages[i], &slot)) {
+                free(bond);
+                return false;
+            }
             const dc_chunk_slot_t *s = &view->table.slots[slot];
+            if (!s->dirty || s->pinned || !s->time.known || s->time.seconds != source->time.seconds) {
+                free(bond);
+                return false;
+            }
             if (s->state == DC_SLOT_SAVING && dc_chunk_owner_valid(s->checkpoint_owner)) {
                 bond->receipts[i].owner = s->checkpoint_owner;
                 bond->receipts[i].save_generation = s->save_generation;

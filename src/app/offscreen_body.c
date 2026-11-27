@@ -143,23 +143,22 @@ bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscre
             room_relation(body, page) == OUTSIDE_ROOM || !dc_offscreen_collect_bond_group(gpu, body->body.id, group))
             continue;
         const uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
-        if (graph[1] != group->member_count) return false;
-        return true;
+        return graph[1] == group->member_count;
     }
     return false;
 }
 
 bool dc_offscreen_bond_pages_clear(dc_gpu_t *gpu, const dc_offscreen_bond_group_t *group) {
     for (uint32_t j = 0; j < gpu->body_count; ++j) {
-            const dc_gpu_body_record_t *other = dc_gpu_body_record(gpu, j);
-            if (!other->body.id) continue;
-            if (other->piece_count > DC_GPU_BODY_PIECES ||
-                (other->motion_flags & (DC_BODY_MOTION_REACTIVE_MASS | DC_BODY_MOTION_THERMAL_GRID))) return false;
-            uint32_t k = 0;
-            while (k < group->member_count && group->members[k].slot != j) ++k;
-            if (k != group->member_count) continue;
-            for (k = 0; k < group->page_count; ++k)
-                if (room_relation(other, group->pages[k]) != OUTSIDE_ROOM) return false;
+        const dc_gpu_body_record_t *other = dc_gpu_body_record(gpu, j);
+        if (!other->body.id) continue;
+        if (other->piece_count > DC_GPU_BODY_PIECES ||
+            (other->motion_flags & (DC_BODY_MOTION_REACTIVE_MASS | DC_BODY_MOTION_THERMAL_GRID))) return false;
+        uint32_t k = 0;
+        while (k < group->member_count && group->members[k].slot != j) ++k;
+        if (k != group->member_count) continue;
+        for (k = 0; k < group->page_count; ++k)
+            if (room_relation(other, group->pages[k]) != OUTSIDE_ROOM) return false;
     }
     return true;
 }
