@@ -125,17 +125,20 @@ int next_source(int position) {
     }
     return word*32+(LATERAL!=0u?findLSB(bits):findMSB(bits));
 }
-void main() {
-    line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
-    length=LATERAL!=0u?params.width:params.height;
-    if(gl_SubgroupID!=0u||line>=(LATERAL!=0u?params.height:params.width)) return;
+bool line_has_rigid_occupancy() {
     uint occupied = 0u;
     for (uint pos = gl_SubgroupInvocationID; pos < length; pos += gl_SubgroupSize) {
         ivec2 cell = point_at(pos);
         occupied = occupancy[uint(cell.y) * params.width + uint(cell.x)];
         if (occupied != 0u) break;
     }
-    if (subgroupMax(occupied) == 0u) return;
+    return subgroupMax(occupied) != 0u;
+}
+void main() {
+    line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
+    length=LATERAL!=0u?params.width:params.height;
+    if(gl_SubgroupID!=0u||line>=(LATERAL!=0u?params.height:params.width)) return;
+    if (!line_has_rigid_occupancy()) return;
 #ifdef DC_DISPLACEMENT_PROFILE
     if(gl_SubgroupInvocationID==0u) atomicAdd(prepared_lines,1u);
 #endif
