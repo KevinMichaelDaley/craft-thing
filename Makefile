@@ -190,7 +190,7 @@ $(GPU_OBJ) build/chunk.o build/structural_mechanics_tests: include/dungeoncraft/
 build/shaders/pattern.comp.spv build/shaders/mpm.comp.spv build/shaders/rigid.comp.spv build/shaders/rigid_solver.comp.spv build/shaders/structural.comp.spv build/shaders/broadphase.comp.spv build/shaders/contacts.comp.spv: include/dungeoncraft/material_density.h
 build/structural_gpu.o: src/vulkan/structural_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h build/shaders/structural.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/structural_store_gpu.o: src/vulkan/structural_store_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/gpu.h
+build/structural_store_gpu.o: src/vulkan/structural_store_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/chunk.h include/ferrum/structural/gpu.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/structural_store_validate.o: src/vulkan/structural_store_validate.c src/vulkan/structural_store_internal.h src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

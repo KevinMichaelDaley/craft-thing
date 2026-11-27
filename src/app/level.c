@@ -1065,9 +1065,14 @@ bool dc_level_view_queue_transfer(dc_level_view_t *view, int64_t from_x, int64_t
     view->transfer_amount = amount;
     view->transfer_kind = kind;
     view->destination_bound = false;
-    view->transfer_complete = false;
     view->transfer_pending = true;
-    return bind_transfer_destination(view, err, cap);
+    if (!bind_transfer_destination(view, err, cap)) {
+        view->table.slots[index].pinned = false;
+        view->transfer_pending = false;
+        return false;
+    }
+    view->transfer_complete = false;
+    return true;
 }
 
 bool dc_level_view_transfer_result(dc_level_view_t *view,
