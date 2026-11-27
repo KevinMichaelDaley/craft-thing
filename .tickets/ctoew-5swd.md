@@ -1,6 +1,6 @@
 ---
 id: ctoew-5swd
-status: in_progress
+status: closed
 deps: [ctswc-xr49, ctost-pneh, ctost-uuni, ctdot-kbys, ctcdo-rcs9, ctcdo-kld7, ctoae-hgsd, ctoae-mi91, ctowpe-t43r]
 links: []
 created: 2026-11-27T02:31:49Z
@@ -31,3 +31,7 @@ The production camera tick can demote, advance and promote one sealed stationary
 **2026-11-27T04:57:04Z**
 
 The streaming admission now reports the selected owner and its idle proof. Confirmed dry sealed chunks catch up without replaying solver time, and newly painted water starts at the edit epoch. Open seam exchange, moving body handoff and the native frame budget remain under this parent.
+
+**2026-11-27T21:18:50Z**
+
+The integrated camera/structure executable passed 45/45 checks at f90a75ca on the hidden persistent Xephyr display. The run exercised two-screen pans, clock catch-up, cold reopen, failed archive publication, moving rigid/bonded owners, gas, water, particles, heat, bulk liquids and partial shared cycles. All six saturated production camera bands met the 33.333 ms mean and p95 gates with 16 owners. The remaining full make test result is tracked on ctfm-w80b.

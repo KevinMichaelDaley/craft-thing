@@ -1,6 +1,6 @@
 ---
 id: ctowpe-fh6w
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T19:16:55Z
@@ -30,3 +30,7 @@ Focused GPU regression at 7de09c5f passed all three pan cycles, exact shared gas
 **2026-11-27T19:46:33Z**
 
 All seven far chambers now have only an outward-facing opening. The designated room returned at its saved clock and did both native updates while the shared gas pair matched its reference. Both regular execution and synchronization validation passed the full focused regression within its original per-pan deadline. Latest aggregate suite pending.
+
+**2026-11-27T21:18:50Z**
+
+The aggregate test_level_structure_snapshots run at f90a75ca on Xephyr :93 completed with 45 passed, 0 failed. test_camera_reopens_shared_gas_stock_and_pressure passed in sequence after the saturated, reversal and parked-room cases. It retained the shared gas reference and the older resident's independent two-step clock assertions. This confirms the earlier focused and synchronization-validation runs.
