@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -37,6 +38,7 @@ static void test_worker_generates_saves_and_reloads_chunk(void) {
     ASSERT_TRUE(wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.generation, 7u);
+    ASSERT_TRUE(!result.time.known);
     ASSERT_TRUE(result.chunk != NULL);
     ASSERT_EQ(result.chunk->coord.x, -1);
     result.chunk->cells[10 * DC_CHUNK_SIDE + 63].material = 42;
@@ -185,6 +187,7 @@ static void test_legacy_chunk_loads_with_zero_velocity(void) {
     ASSERT_EQ(result.chunk->markers[0].id, 42u);
     ASSERT_TRUE(result.chunk->face_velocity[10].x == 0.0f);
     ASSERT_TRUE(result.chunk->face_velocity[10].y == 0.0f);
+    ASSERT_TRUE(!result.time.known);
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     PASS();
@@ -233,16 +236,19 @@ static void test_version_four_grain_radius_migrates(void) {
     PASS();
 }
 
+typedef struct {
+    char magic[4];
+    uint32_t version;
+    int64_t x, y;
+    uint64_t seed;
+    uint32_t payload_version, reserved;
+    double completed_seconds;
+} timed_chunk_fixture_header_t;
+
 static bool write_chunk_clock_fixture(const char *path) {
-    const struct {
-        char magic[4];
-        uint32_t version;
-        int64_t x, y;
-        uint64_t seed;
-        uint32_t payload_version, reserved;
-        double completed_seconds;
-    } header = {.magic = {'D', 'C', 'C', '1'}, .version = 12, .seed = 98,
-                .payload_version = 5, .completed_seconds = 42.125};
+    const timed_chunk_fixture_header_t header = {
+        .magic = {'D', 'C', 'C', '1'}, .version = 12, .seed = 98,
+        .payload_version = 5, .completed_seconds = 42.125};
     dc_cell_t cells[DC_CHUNK_CELLS] = {0};
     dc_face_velocity_t faces[DC_CHUNK_CELLS] = {0};
     const uint32_t zero = 0;
@@ -282,6 +288,53 @@ static void test_completed_time_fixture_loads_with_physical_state(void) {
     ASSERT_TRUE(loaded);
     ASSERT_EQ(kind, DC_STREAM_LOADED);
     ASSERT_TRUE(preserved);
+    PASS();
+}
+
+static void test_known_zero_survives_restart_and_invalid_clock_cannot_replace_it(void) {
+    char directory[] = "build/stream_clock_zero_XXXXXX", path[256];
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_streamer_t *stream = dc_stream_create(directory, 98, 2);
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(stream && chunk);
+    chunk->cells[0].material = DC_MATERIAL_WOOD;
+    const dc_stream_chunk_time_t zero_time = {.known = true};
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(dc_stream_request_save_snapshot(stream, chunk, NULL, NULL, NULL, NULL,
+                                               NULL, zero_time, 1u));
+    ASSERT_TRUE(wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+
+    stream = dc_stream_create(directory, 98, 2);
+    ASSERT_TRUE(stream);
+    chunk->cells[0].material = DC_MATERIAL_AIR;
+    const double invalid[] = {NAN, INFINITY, -1.0};
+    for (unsigned i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+        dc_stream_chunk_time_t bad = {.seconds = invalid[i], .known = true};
+        ASSERT_TRUE(!dc_stream_request_save_snapshot(stream, chunk, NULL, NULL, NULL,
+                                                     NULL, NULL, bad, 2u));
+    }
+    ASSERT_TRUE(dc_stream_request_load(stream, chunk->coord, 3u) && wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_LOADED);
+    ASSERT_TRUE(result.time.known && result.time.seconds == 0.0);
+    ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_WOOD);
+    dc_stream_result_release(&result);
+
+    snprintf(path, sizeof(path), "%s/chunk_0000000000000000_0000000000000000.bin", directory);
+    FILE *file = fopen(path, "r+b");
+    ASSERT_TRUE(file);
+    const double changed = 0.5;
+    ASSERT_TRUE(fseek(file, offsetof(timed_chunk_fixture_header_t, completed_seconds), SEEK_SET) == 0 &&
+                fwrite(&changed, sizeof(changed), 1, file) == 1);
+    ASSERT_EQ(fclose(file), 0);
+    ASSERT_TRUE(dc_stream_request_load(stream, chunk->coord, 4u) && wait_result(stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_FAILED);
+    ASSERT_TRUE(!result.chunk && !result.time.known);
+    dc_stream_result_release(&result);
+    dc_stream_destroy(stream);
+    free(chunk);
     PASS();
 }
 
@@ -347,9 +400,16 @@ static void test_staged_chunk_reload_prefers_the_current_world_edit(void) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     dc_stream_result_t result = {0};
     ASSERT_TRUE(save && stream && chunk);
+    dc_chunk_colors_t *colors = calloc(1, sizeof(*colors));
+    ASSERT_TRUE(colors);
+    colors->terrain[0][0] = .5f;
+    colors->terrain[0][3] = 1.0f;
+    const dc_stream_chunk_time_t canonical = {.seconds = 10.125, .known = true};
+    const dc_stream_chunk_time_t staged = {.seconds = 11.25, .known = true};
     chunk->coord = (dc_chunk_coord_t){-1, 0};
     chunk->cells[0].material = DC_MATERIAL_WOOD;
-    ASSERT_TRUE(dc_stream_request_save(stream, chunk, 1) && wait_result(stream, &result));
+    ASSERT_TRUE(dc_stream_request_save_snapshot(stream, chunk, colors, NULL, NULL, NULL,
+                                               NULL, canonical, 1u) && wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_SAVED);
     dc_stream_result_release(&result);
     ASSERT_TRUE(dc_world_save_begin(save, err, sizeof(err)));
@@ -357,16 +417,21 @@ static void test_staged_chunk_reload_prefers_the_current_world_edit(void) {
     ASSERT_TRUE(dc_stream_request_load(stream, chunk->coord, 2) && wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE(result.time.known && result.time.seconds == canonical.seconds);
+    ASSERT_EQ(result.colors->terrain[0][0], .5f);
     dc_stream_result_release(&result);
 
     chunk->cells[0].material = DC_MATERIAL_AIR;
-    ASSERT_TRUE(dc_stream_request_save(stream, chunk, 3) && dc_stream_request_load(stream, chunk->coord, 4));
+    ASSERT_TRUE(dc_stream_request_save_snapshot(stream, chunk, NULL, NULL, NULL, NULL,
+                                               NULL, staged, 3u) &&
+                dc_stream_request_load(stream, chunk->coord, 4u));
     ASSERT_TRUE(wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_SAVED);
     dc_stream_result_release(&result);
     ASSERT_TRUE(wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_AIR);
+    ASSERT_TRUE(result.time.known && result.time.seconds == staged.seconds);
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     dc_world_save_close(save);
@@ -375,8 +440,10 @@ static void test_staged_chunk_reload_prefers_the_current_world_edit(void) {
     ASSERT_TRUE(stream && dc_stream_request_load(stream, chunk->coord, 5) && wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_EQ(result.chunk->cells[0].material, DC_MATERIAL_WOOD);
+    ASSERT_TRUE(result.time.known && result.time.seconds == canonical.seconds);
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
+    free(colors);
     free(chunk);
     PASS();
 }
@@ -389,6 +456,7 @@ int main(void) {
     RUN(test_legacy_chunk_loads_with_zero_velocity);
     RUN(test_version_four_grain_radius_migrates);
     RUN(test_completed_time_fixture_loads_with_physical_state);
+    RUN(test_known_zero_survives_restart_and_invalid_clock_cannot_replace_it);
     RUN(test_color_chunk_roundtrip_and_corruption_rejection);
     RUN(test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime);
     RUN(test_staged_chunk_reload_prefers_the_current_world_edit);

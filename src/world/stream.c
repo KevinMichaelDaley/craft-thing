@@ -36,6 +36,7 @@ typedef struct {
     uint64_t seed;
 } chunk_header_t;
 
+/* The timed envelope leaves all existing channel payload layouts intact. */
 enum { CHUNK_TIMED_VERSION = 12 };
 typedef struct {
     uint32_t payload_version, reserved;
@@ -116,7 +117,7 @@ static bool save_chunk(const dc_streamer_t *stream,const char *staging,const dc_
     if(gas) header.version=11;
     if(bulk_packet) header.version=10;
     chunk_time_header_t time_header = {.payload_version = header.version,
-                                       .completed_seconds = time.seconds};
+                                       .completed_seconds = time.known ? time.seconds : 0.0};
     if (time.known) header.version = CHUNK_TIMED_VERSION;
     bool okay = fwrite(&header, sizeof(header), 1, file) == 1 &&
         (!time.known || fwrite(&time_header, sizeof(time_header), 1, file) == 1) &&

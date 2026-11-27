@@ -65,13 +65,16 @@ static void test_gas_stream_retains_pending_products_at_zero_volume(void) {
     fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
     ASSERT_TRUE(bulk);
     bulk->oil_fp[source + 1u] = 1000u;
-    ASSERT_TRUE(dc_stream_request_save_bulk(stream, chunk, NULL, NULL, NULL, gas, bulk, 4));
+    dc_stream_chunk_time_t stamp = {.seconds = 75.5, .known = true};
+    ASSERT_TRUE(dc_stream_request_save_snapshot(stream, chunk, NULL, NULL, NULL,
+                                               gas, bulk, stamp, 4u));
     ASSERT_TRUE(wait_result(stream, &result) && result.kind == DC_STREAM_SAVED);
     dc_stream_result_release(&result);
     ASSERT_TRUE(dc_stream_request_load(stream, chunk->coord, 5) && wait_result(stream, &result));
     ASSERT_EQ(result.kind, DC_STREAM_LOADED);
     ASSERT_TRUE(result.gas && memcmp(gas, result.gas, sizeof(*gas)) == 0);
     ASSERT_TRUE(result.bulk && result.bulk->oil_fp[source + 1u] == 1000u);
+    ASSERT_TRUE(result.time.known && result.time.seconds == stamp.seconds);
     dc_stream_result_release(&result);
     dc_stream_destroy(stream);
     free(bulk);

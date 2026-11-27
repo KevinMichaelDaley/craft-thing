@@ -1,6 +1,6 @@
 ---
 id: ctsct-f96g
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T00:52:55Z
@@ -18,3 +18,9 @@ The existing chunk worker restores physical stock but has no common timestamp fo
 
 Round-trip a finite nonnegative completion time through the production stream save and load path, including a known zero, the optional world-state channels and staged saves. Preserve legacy archives and distinguish an absent timestamp. Reject corrupt or invalid clock input without replacing the previous snapshot.
 
+
+## Notes
+
+**2026-11-27T00:59:33Z**
+
+A checksummed version 12 envelope stores known completion time on the stream packet while preserving existing channel payloads and the physical dc_chunk_t ABI, including raw legacy structure records. Eleven stream, three chunk, three reactive, three thermal, two gas, and four world-save tests passed. Known zero, legacy unknown, staged-versus-canonical timestamps, invalid replacement refusal, and single-field corruption are covered. The level clock producer and promotion wiring have a tracked follow-up.

@@ -18,12 +18,14 @@ static void test_worker_preserves_immutable_liquid_enthalpy_with_colors_and_parc
     fr_reactive_chunk_t channel={.count=1,.next_id=51,.attachments=&a};fr_reactive_record_t saved=a.record;
     float heat[4096]={0};c->cells[1].fluid_mass=65536;c->cells[2].fluid_mass=1024;
     heat[1]=123.375f;heat[2]=-2.25f;colors->water[1][0]=.6f;colors->water[1][3]=1.f;
-    ASSERT_TRUE(dc_stream_request_save_thermal(s,c,colors,&channel,heat,7));
+    dc_stream_chunk_time_t stamp = {.seconds = 89.25, .known = true};
+    ASSERT_TRUE(dc_stream_request_save_snapshot(s,c,colors,&channel,heat,NULL,NULL,stamp,7u));
     heat[1]=99;c->cells[1].fluid_mass=0;a.record.state.thermal_energy=99;colors->water[1][0]=.9f;
     dc_stream_result_t result={0};ASSERT_TRUE(wait_result(s,&result));ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);
     ASSERT_TRUE(dc_stream_request_load(s,c->coord,8)&&wait_result(s,&result));ASSERT_EQ(result.kind,DC_STREAM_LOADED);
     ASSERT_TRUE(result.water_excess&&result.reactive);ASSERT_EQ(result.water_excess[1],123.375f);ASSERT_EQ(result.water_excess[2],-2.25f);
     ASSERT_EQ(result.chunk->cells[1].fluid_mass,65536u);ASSERT_EQ(result.colors->water[1][0],.6f);
+    ASSERT_TRUE(result.time.known && result.time.seconds == stamp.seconds);
     ASSERT_TRUE(memcmp(&result.reactive->attachments[0].record,&saved,sizeof(saved))==0);
     for(uint32_t i=3;i<4096;i++) ASSERT_EQ(result.water_excess[i],0.f);
     dc_stream_result_release(&result);ASSERT_TRUE(!result.water_excess);dc_stream_destroy(s);free(c);free(colors);PASS();
