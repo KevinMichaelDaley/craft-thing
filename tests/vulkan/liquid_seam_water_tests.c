@@ -20,7 +20,6 @@ static char g_err[256];
 #define PASS() ++g_pass
 
 enum { FORWARD = 12, REVERSE = 16, SHALLOW = 21, BLOCKED = 26, BACKPRESSURE = 31 };
-static const float step_seconds = 1.f / 60.f;
 static const uint32_t donor_stock = 49152u;
 
 static uint32_t index_on_line(bool y_axis, uint32_t normal, uint32_t lane, uint32_t width) {
@@ -66,8 +65,9 @@ static void seed_apertures(dc_gpu_t *gpu, bool y_axis, uint32_t x, uint32_t y) {
     plane[base + index_on_line(y_axis, 63, BLOCKED, gpu->width)] = DC_FLUID_FULL;
 }
 
-static bool native_water_passes(dc_gpu_t *gpu, VkBuffer pressure_readback) {
+static bool native_water_passes(dc_gpu_t *gpu, float step_seconds, VkBuffer pressure_readback) {
     gpu->fluid_step_scale = step_seconds * 60.f;
+    gpu->timed_fluid = true;
     if (!fr_renderer_begin(gpu)) return false;
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -88,6 +88,7 @@ static bool native_water_passes(dc_gpu_t *gpu, VkBuffer pressure_readback) {
 
 static void compare_plan(dc_liquid_seam_axis_t axis) {
     const bool y_axis = axis == DC_LIQUID_SEAM_Y;
+    const float step_seconds = y_axis ? 1.f / 30.f : 1.f / 60.f;
     const uint32_t width = y_axis ? 64u : 128u, height = y_axis ? 128u : 64u;
     const char shader[] = "build/shaders/pattern.comp.spv";
     dc_chunk_t *chunks[2] = {calloc(1, sizeof(*chunks[0])), calloc(1, sizeof(*chunks[1]))};
@@ -134,7 +135,11 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(far_forward > 0 && far_reverse > 0);
     ASSERT_TRUE(plan->crossing_fp[FORWARD] > 0 && plan->crossing_fp[REVERSE] < 0);
     ASSERT_TRUE(plan->crossing_fp[SHALLOW] > 0);
-    ASSERT_TRUE(plan->crossing_fp[SHALLOW] <= (int32_t)(DC_FLUID_FULL / 4u));
+    ASSERT_INT_EQ(plan->projection[SHALLOW].aperture_fp, DC_FLUID_FULL / 4u);
+    for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
+        uint32_t recipient = index_on_line(y_axis, i, SHALLOW, DC_CHUNK_SIDE);
+        ASSERT_TRUE(plan->cells[1][recipient].crossing_in_fp <= DC_FLUID_FULL / 4u);
+    }
     ASSERT_INT_EQ(plan->crossing_fp[BLOCKED], 0);
     ASSERT_INT_EQ(plan->crossing_fp[BACKPRESSURE], 0);
 
@@ -160,7 +165,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     seed_apertures(mono, y_axis, 0, 0);
     ASSERT_TRUE(dc_gpu_make_mapped_buffer(mono, 2u * DC_CHUNK_CELLS * sizeof(float),
                                          &readback, &memory, &mapped, g_err, sizeof(g_err)));
-    ASSERT_TRUE(native_water_passes(mono, readback));
+    ASSERT_TRUE(native_water_passes(mono, step_seconds, readback));
     int32_t stock_delta[2][DC_CHUNK_SIDE] = {{0}};
     int32_t crossing[2][DC_CHUNK_SIDE] = {{0}};
     for (unsigned owner = 0; owner < 2; ++owner) {

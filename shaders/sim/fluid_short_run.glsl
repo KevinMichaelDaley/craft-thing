@@ -85,6 +85,13 @@ uint short_run_block(int first,bool positive) {
     }
     uint far_flux=lane<count?min(value.x,value.y):0u;
     uint near_flux=lane<count?mass-far_flux:0u;
+#ifdef DC_WATER_SEAM_PLAN
+    if (lane < count) {
+        ivec2 source = point_at(position);
+        record_water_crossing(source, point_at(uint(coordinate + direction * int(distance - 1u))), near_flux);
+        record_water_crossing(source, point_at(uint(coordinate + direction * int(distance))), far_flux);
+    }
+#endif
     vec3 pigment=DEFAULT_WATER_COLOR;
     float heat_density=0.;
     if(thermal_water_on()&&lane<count&&mass!=0u) heat_density=thermal_water_at(atlas_index(point_at(position),page_at(point_at(position))))/float(mass);

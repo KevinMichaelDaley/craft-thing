@@ -30,6 +30,7 @@ uint one_cell_block(int first,bool positive) {
     }
     uint outgoing=lane<count?min(value.x,value.y):0u;
     if(subgroupOr(outgoing)==0u) return count;
+    if (outgoing != 0u) record_water_crossing(point_at(position), point_at(target), outgoing);
     uint incoming=subgroupShuffleDown(outgoing,1u);
     if(lane+1u>=count) incoming=0u;
     float own_heat=0.,out_heat=0.,terminal_heat=0.;

@@ -1,5 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/fluid_aperture_layout.h"
 layout(local_size_x=64) in;
 layout(set=0,binding=1,std430) readonly buffer Cells {uvec2 chunk_cells[];};
 layout(set=0,binding=2,std430) readonly buffer Pages {uint pages[];};
@@ -7,7 +8,7 @@ layout(set=0,binding=3,std430) readonly buffer Coverage {uint occupancy[];};
 layout(set=0,binding=28,std430) buffer Prefix {uint aperture_prefix[];};
 layout(set=0,binding=29,std430) buffer Tree {uint aperture_tree[];};
 layout(push_constant) uniform Params {uint width,height,axis,nodes,leaves;} params;
-const uint FULL=65536u,TREE_BASE=16448u;
+const uint FULL=65536u;
 shared uint prefix[64],suffix[64];
 uint page_at(ivec2 p) {
     if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,ivec2(params.width,params.height)))) return 0u;
@@ -23,7 +24,7 @@ void main() {
         uint index=group*64u+lane;
         if(index>=lines*params.nodes) return;
         uint line=index/params.nodes,node=params.nodes+index%params.nodes;
-        uint base=TREE_BASE+line*2u*params.leaves;
+        uint base=DC_FLUID_APERTURE_TREE_BASE+line*2u*params.leaves;
         aperture_tree[base+node]=min(aperture_tree[base+2u*node],aperture_tree[base+2u*node+1u]);
         return;
     }
@@ -50,5 +51,5 @@ void main() {
     }
     uint tile=position/16u;
     if(lane%16u==15u&&tile<params.leaves)
-        aperture_tree[TREE_BASE+line*2u*params.leaves+params.leaves+tile]=prefix[lane];
+        aperture_tree[DC_FLUID_APERTURE_TREE_BASE+line*2u*params.leaves+params.leaves+tile]=prefix[lane];
 }

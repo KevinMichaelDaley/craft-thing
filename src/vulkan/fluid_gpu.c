@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dungeoncraft/fluid_aperture_layout.h"
 #include "fluid_transport_limits.h"
 #include "ferrum/fire/bulk_phase.h"
 #include "gpu_internal.h"
@@ -63,16 +64,17 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->fluid_previous_memory, err, cap);
 }
 
-static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPipeline *pipeline,
-                          char *err, uint32_t cap) {
+static bool make_fluid_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase,
+                                uint32_t seam_length, VkPipeline *pipeline, char *err, uint32_t cap) {
     VkShaderModule shader = VK_NULL_HANDLE;
     bool transport=strcmp(path,"build/shaders/fluid_transport.comp.spv")==0;
     bool displacement=strcmp(path,"build/shaders/fluid_displacement.comp.spv")==0;
     uint32_t length=(displacement?phase==0:phase<2)?gpu->height:gpu->width;
+    if (seam_length) length = seam_length;
     const char *dry=getenv("DC_TRANSPORT_DRY_SCAN");
     const char *scan=getenv("DC_TRANSPORT_LONG_SCAN");
     const char *page_cache=getenv("DC_TRANSPORT_PAGE_CACHE");
-    uint32_t values[7]={phase,length<2048u?length:2048u,1u,0u,transport&&(!dry||strcmp(dry,"0")!=0),
+    uint32_t values[7]={phase,length<2048u?length:2048u,seam_length == 0u,0u,transport&&(!dry||strcmp(dry,"0")!=0),
         transport&&scan&&strcmp(scan,"1")==0,transport&&page_cache&&strcmp(page_cache,"1")==0};
     uint32_t required_size=transport?dc_gpu_transport_subgroup_size(gpu->physical):0u;
     if(transport) {
@@ -80,11 +82,22 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
         VkPhysicalDeviceProperties2 device={.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,.pNext=&subgroup};
         vkGetPhysicalDeviceProperties2(gpu->physical,&device);
         VkPhysicalDeviceProperties properties=device.properties;
-        if(required_size==16u||subgroup.subgroupSize==16u) path="build/shaders/fluid_transport_16.comp.spv";
-        const char *requests=getenv("DC_TRANSPORT_REQUESTS");
-        if(!requests||strcmp(requests,"cached")!=0)
-            path=required_size==16u||subgroup.subgroupSize==16u?
-                "build/shaders/fluid_transport_recompute_16.comp.spv":"build/shaders/fluid_transport_recompute.comp.spv";
+        const bool lanes16 = required_size == 16u || subgroup.subgroupSize == 16u;
+        const char *requests = getenv("DC_TRANSPORT_REQUESTS");
+        const bool recompute = !requests || strcmp(requests, "cached") != 0;
+        if (seam_length) {
+            static const char *const shaders[2][2] = {
+                {"build/shaders/fluid_water_seam.comp.spv", "build/shaders/fluid_water_seam_16.comp.spv"},
+                {"build/shaders/fluid_water_seam_recompute.comp.spv",
+                 "build/shaders/fluid_water_seam_recompute_16.comp.spv"}
+            };
+            path = shaders[recompute][lanes16];
+        } else if (recompute) {
+            path = lanes16 ? "build/shaders/fluid_transport_recompute_16.comp.spv" :
+                             "build/shaders/fluid_transport_recompute.comp.spv";
+        } else if (lanes16) {
+            path = "build/shaders/fluid_transport_16.comp.spv";
+        }
         values[1]=dc_gpu_transport_cache_cells(length,properties.limits.maxComputeSharedMemorySize);
     }
     const char *load_path=phase==6u&&strcmp(path,"build/shaders/projection.comp.spv")==0?
@@ -119,6 +132,17 @@ static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPip
     snprintf(name, sizeof(name), "fluid:%s:phase%u", path, phase);
     dc_gpu_name_object(gpu, VK_OBJECT_TYPE_PIPELINE, (uint64_t)*pipeline, name);
     return true;
+}
+
+static bool make_pipeline(dc_gpu_t *gpu, const char *path, uint32_t phase, VkPipeline *pipeline,
+                          char *err, uint32_t cap) {
+    return make_fluid_pipeline(gpu, path, phase, 0u, pipeline, err, cap);
+}
+
+bool dc_gpu_make_water_seam_pipeline(dc_gpu_t *gpu, uint32_t mode, VkPipeline *pipeline,
+                                     char *err, uint32_t cap) {
+    return make_fluid_pipeline(gpu, "build/shaders/fluid_transport.comp.spv", mode,
+                               2u * DC_CHUNK_SIDE, pipeline, err, cap);
 }
 
 bool dc_gpu_fluid_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -280,7 +304,8 @@ void dc_gpu_record_projection_begin(dc_gpu_t *gpu) {
 
 static uint32_t aperture_leaves(uint32_t length) {
     uint32_t leaves = 1;
-    while (leaves < (length + 15u) / 16u) leaves *= 2;
+    while (leaves < (length + DC_FLUID_APERTURE_TILE_CELLS - 1u) / DC_FLUID_APERTURE_TILE_CELLS)
+        leaves *= 2;
     return leaves;
 }
 
@@ -293,18 +318,43 @@ static void aperture_dispatch(dc_gpu_t *gpu, uint32_t groups) {
                    VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 }
 
-static void record_aperture_cache(dc_gpu_t *gpu, bool vertical, uint32_t leaves) {
-    uint32_t lines = vertical ? gpu->width : gpu->height;
-    uint32_t push[8] = {gpu->width, gpu->height, vertical, 0, leaves};
+static void record_aperture_cache(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+                                  uint32_t width, uint32_t height, bool vertical, uint32_t leaves) {
+    uint32_t lines = vertical ? width : height;
+    uint32_t push[8] = {width, height, vertical, 0, leaves};
     vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, gpu->fluid_aperture_pipeline);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-        gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
+        gpu->pipeline_layout, 0, 1, &descriptor, 0, NULL);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     aperture_dispatch(gpu, lines * ((leaves + 3u) / 4u));
     for (uint32_t nodes = leaves / 2; nodes; nodes /= 2) {
         push[3] = nodes;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         aperture_dispatch(gpu, (lines * nodes + 63u) / 64u);
+    }
+}
+
+static void record_transport_sweep(dc_gpu_t *gpu, VkDescriptorSet descriptor, VkPipeline pipeline,
+                                   uint32_t *push, uint32_t push_bytes, bool occupancy) {
+    const bool vertical = push[2] < 2u;
+    push[4] = occupancy ? aperture_leaves(vertical ? push[1] : push[0]) : 0u;
+    if (push[4] && push[2] != 1u)
+        record_aperture_cache(gpu, descriptor, push[0], push[1], vertical, push[4]);
+    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+    vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
+        gpu->pipeline_layout, 0, 1, &descriptor, 0, NULL);
+    vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT, 0, push_bytes, push);
+    aperture_dispatch(gpu, vertical ? push[0] : push[1]);
+}
+
+void dc_gpu_record_water_seam_transport(dc_gpu_t *gpu, VkDescriptorSet descriptor,
+    const VkPipeline pipelines[4], uint32_t width, uint32_t height,
+    float step_scale, bool occupancy, uint32_t axis) {
+    uint32_t push[8] = {width, height, 0, 0, 0, dc_gpu_float_bits(step_scale), step_scale > 1.0001f, axis};
+    for (uint32_t mode = 0; mode < 4u; ++mode) {
+        push[2] = mode;
+        record_transport_sweep(gpu, descriptor, pipelines[mode], push, sizeof(push), occupancy);
     }
 }
 
@@ -327,27 +377,16 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
     for (uint32_t mode = first; mode < stop; ++mode) {
-        if (mode < 4u) {
-            bool vertical = mode < 2u;
-            push[4] = gpu->rigid_occupancy_present ? aperture_leaves(vertical ? gpu->height : gpu->width) : 0;
-            if (push[4] && mode != 1u) record_aperture_cache(gpu, vertical, push[4]);
-        }
         push[2] = mode;
-        bind_fluid_mode(gpu, push[2]);
-        vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-        uint32_t work = mode < 2u ? gpu->width : gpu->height;
-        if (mode < 4u)
-            vkCmdDispatch(gpu->command, work < 65535u ? work : 65535u,
-                           (work + 65534u) / 65535u, 1u);
-        else
-            vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u,
-                          1u, dc_gpu_slot_capacity(gpu));
-        if (mode < 4u)
-            fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        if (mode < 4u) {
+            record_transport_sweep(gpu, gpu->descriptor, gpu->fluid_transport_pipelines[mode],
+                                   push, sizeof(push), gpu->rigid_occupancy_present);
+        } else {
+            bind_fluid_mode(gpu, mode);
+            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+            vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, dc_gpu_slot_capacity(gpu));
+        }
     }
 }
 

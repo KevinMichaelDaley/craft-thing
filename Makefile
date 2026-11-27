@@ -104,7 +104,7 @@ GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o 
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
 GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o build/liquid_seam_projection_gpu.o
-build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h src/vulkan/renderer_internal.h
+build/liquid_seam_projection_gpu.o: src/vulkan/liquid_seam_projection_gpu.c include/dungeoncraft/fluid_aperture_layout.h include/dungeoncraft/liquid_seam_layout.h include/ferrum/fire/bulk_phase.h include/dungeoncraft/liquid_seam.h include/dungeoncraft/terrain_flags.h src/vulkan/renderer_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h include/dungeoncraft/liquid_seam_layout.h src/vulkan/gas_gpu_internal.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
@@ -275,6 +275,9 @@ PROBE_SHADER = build/shaders/tick_probe.comp.spv
 HALO_SHADER = build/shaders/halo.comp.spv
 FLUID_SHADER = build/shaders/fluid_transport_16.comp.spv build/shaders/fluid.comp.spv build/shaders/fluid_aperture.comp.spv build/shaders/fluid_transport.comp.spv build/shaders/fluid_displacement.comp.spv
 FLUID_SHADER += build/shaders/bulk_phase_pair.comp.spv build/shaders/bulk_phase_retained.comp.spv build/shaders/bulk_phase_thermal.comp.spv
+WATER_SEAM_SHADERS = build/shaders/fluid_water_seam.comp.spv build/shaders/fluid_water_seam_16.comp.spv
+WATER_SEAM_SHADERS += build/shaders/fluid_water_seam_recompute.comp.spv build/shaders/fluid_water_seam_recompute_16.comp.spv
+FLUID_SHADER += $(WATER_SEAM_SHADERS)
 FLUID_SHADER += build/shaders/liquid_seam.comp.spv
 $(FLUID_SHADER): shaders/sim/bulk_phase.glsl
 $(FLUID_SHADER): include/dungeoncraft/bulk_phase_layout.h
@@ -637,7 +640,7 @@ $(HALO_SHADER): shaders/sim/halo.comp
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
-build/shaders/fluid.comp.spv: shaders/sim/fluid.comp shaders/sim/fluid_aperture.glsl
+build/shaders/fluid.comp.spv: shaders/sim/fluid.comp shaders/sim/fluid_aperture.glsl include/dungeoncraft/fluid_aperture_layout.h
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -S comp -o $@ $<
 
@@ -1260,7 +1263,7 @@ build/diagnostics/runtime_contacts_terrain_scan.comp.spv: shaders/sim/contacts.c
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TERRAIN_SCAN_PROFILE=1 -DDC_RUNTIME_BODY_STORAGE=1 -o $@ $<
 build/contact_terrain_work_tests build/diagnostics/contact_scaling: build/diagnostics/runtime_contacts_terrain_scan.comp.spv
 
-build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl
+build/diagnostics/fluid_transport_profile.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl include/dungeoncraft/fluid_aperture_layout.h
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE=1 -o $@ $<
 
 build/fluid_transport_partial_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv
@@ -1305,18 +1308,18 @@ build/hydro_head_tests: tests/vulkan/hydro_head_tests.c tools/diagnostics/vulkan
 
 test: build/hydro_head_tests
 
-build/shaders/fluid_aperture.comp.spv: shaders/sim/fluid_aperture.comp
+build/shaders/fluid_aperture.comp.spv: shaders/sim/fluid_aperture.comp include/dungeoncraft/fluid_aperture_layout.h
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
-build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.comp shaders/sim/fluid_aperture.glsl
+build/shaders/fluid_aperture_query.comp.spv: tests/vulkan/fluid_aperture_query.comp shaders/sim/fluid_aperture.glsl include/dungeoncraft/fluid_aperture_layout.h
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
 build/fluid_aperture_tests: tests/vulkan/fluid_aperture_tests.c tools/diagnostics/shader_fixture.h $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/fluid_aperture.comp.spv build/shaders/fluid_aperture_query.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl Makefile
+build/shaders/fluid_transport.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl include/dungeoncraft/fluid_aperture_layout.h Makefile
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 
@@ -1466,7 +1469,7 @@ $(GPU_SOURCE_BINARIES): $(RENDERER_SHADERS) build/shaders/prop_place.comp.spv bu
 $(GPU_SOURCE_BINARIES) $(GPU_OBJ) $(STREAM_OBJ): include/dungeoncraft/color.h
 $(GPU_OBJ): src/vulkan/mpm_activity_layout.h include/dungeoncraft/mpm_activity_layout.h
 build/contact_gpu.o: src/vulkan/contact_shader_contract.h $(CONTACT_SHADER)
-build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h
+build/fluid_gpu.o: src/vulkan/fluid_transport_limits.h include/dungeoncraft/fluid_aperture_layout.h
 
 build/fluid_transport_limits_tests: tests/vulkan/fluid_transport_limits_tests.c src/vulkan/fluid_transport_limits.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
@@ -1506,7 +1509,7 @@ MINIMAL_VK_TESTS = $(addprefix build/,component_dispatch_tests pixel_properties_
 $(MINIMAL_VK_TESTS): tools/diagnostics/vulkan_probe.c tools/diagnostics/shader_fixture.h
 test: build/mpm_compaction_tests
 test: build/fluid_transport_partial_tests
-build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/water_color.glsl
+build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/water_color.glsl include/dungeoncraft/fluid_aperture_layout.h
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE -DDC_TRANSPORT_CONSERVATIVE_COLOR_SYNC -o $@ $<
 	spirv-val --target-env vulkan1.3 $@
 build/fluid_color_sync_tests: tests/vulkan/fluid_transport_partial_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv
@@ -1730,7 +1733,7 @@ test: build/fluid_one_cell_scan_tests
 build/shaders/fluid_transport.comp.spv build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_color_reference.comp.spv: shaders/sim/fluid_one_cell.glsl Makefile
 
 # A literal group size keeps older Vulkan feature configurations supported.
-build/shaders/fluid_transport_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/fluid_one_cell.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl Makefile
+build/shaders/fluid_transport_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/fluid_one_cell.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl include/dungeoncraft/fluid_aperture_layout.h Makefile
 	@mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
 $(GPU_OBJ) build/diagnostics/quarter_app_frame_trace build/fluid_one_cell_scan_tests: build/shaders/fluid_transport_16.comp.spv
@@ -1755,7 +1758,7 @@ build/mpm_gather_tests: tests/vulkan/mpm_gather_tests.c $(GPU_OBJ) $(CHUNK_OBJ) 
 test: build/mpm_gather_tests
 
 # Profiled literal-size transport variants exercise the exact cooperative path.
-build/diagnostics/fluid_transport_profile_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_one_cell.glsl shaders/sim/fluid_aperture.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl Makefile
+build/diagnostics/fluid_transport_profile_16.comp.spv: shaders/sim/fluid_transport.comp shaders/sim/fluid_one_cell.glsl shaders/sim/fluid_aperture.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl include/dungeoncraft/fluid_aperture_layout.h Makefile
 	@mkdir -p build/diagnostics
 	$(GLSLANG) -V --target-env vulkan1.3 -DDC_TRANSPORT_PROFILE=1 -DDC_TRANSPORT_GROUP_SIZE=16 $< -o $@
 build/fluid_one_cell_scan_tests: build/diagnostics/fluid_transport_profile.comp.spv build/diagnostics/fluid_transport_profile_16.comp.spv
@@ -1910,7 +1913,7 @@ build/diagnostics/fluid_dry_line_profile.comp.spv: shaders/sim/fluid_transport.c
 build/fluid_dry_line_tests: tests/vulkan/fluid_dry_line_tests.c tests/vulkan/fluid_transport_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/diagnostics/fluid_dry_line_profile.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 test: build/fluid_dry_line_tests
-build/shaders/fluid_transport_recompute_16.comp.spv build/shaders/fluid_transport_recompute.comp.spv build/diagnostics/fluid_transport_recompute_profile.comp.spv: shaders/sim/fluid_aperture.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl
+build/shaders/fluid_transport_recompute_16.comp.spv build/shaders/fluid_transport_recompute.comp.spv build/diagnostics/fluid_transport_recompute_profile.comp.spv: shaders/sim/fluid_aperture.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl include/dungeoncraft/fluid_aperture_layout.h
 $(GPU_OBJ) $(PERFORMANCE_OBJ): build/shaders/fluid_transport_recompute_16.comp.spv build/shaders/fluid_transport_recompute.comp.spv
 
 build/shaders/mpm_commit.comp.spv: shaders/sim/mpm.comp $(wildcard shaders/sim/*.glsl)
@@ -2525,3 +2528,9 @@ build/component_world_tests build/diagnostics/body_support build/diagnostics/nat
 # Shared local gas/optical helpers for both reaction owners.
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/flame_gas.glsl
 build/shaders/combustion.comp.spv build/shaders/body_combustion.comp.spv: shaders/reactive/flame_radiation.glsl
+
+build/shaders/fluid_water_seam_16.comp.spv build/shaders/fluid_water_seam_recompute_16.comp.spv: SEAM_TRANSPORT_FLAGS += -DDC_TRANSPORT_GROUP_SIZE=16
+build/shaders/fluid_water_seam_recompute.comp.spv build/shaders/fluid_water_seam_recompute_16.comp.spv: SEAM_TRANSPORT_FLAGS += -DDC_RECOMPUTE_REQUESTS=1
+$(WATER_SEAM_SHADERS): shaders/sim/fluid_transport.comp shaders/sim/fluid_aperture.glsl shaders/sim/fluid_one_cell.glsl shaders/sim/fluid_short_run.glsl shaders/sim/hydraulic_face.glsl shaders/sim/water_color.glsl shaders/sim/bulk_phase.glsl include/dungeoncraft/liquid_seam_layout.h include/dungeoncraft/fluid_aperture_layout.h
+	@mkdir -p $(@D)
+	$(GLSLANG) -V --target-env vulkan1.3 -DDC_WATER_SEAM_PLAN=1 $(SEAM_TRANSPORT_FLAGS) $< -o $@

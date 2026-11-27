@@ -1,10 +1,11 @@
+#include "../../include/dungeoncraft/fluid_aperture_layout.h"
 float cached_path_aperture(ivec2 source,ivec2 direction,uint distance) {
     if(params.unused1==0u) return face_aperture(source,direction);
     bool vertical=direction.y!=0;
     int coordinate=vertical?source.y:source.x;
     int delta=vertical?direction.y:direction.x;
     uint low=uint(coordinate+(delta<0?-int(distance):0)),high=low+distance;
-    uint first=low/16u,last=(high-1u)/16u;
+    uint first=low/DC_FLUID_APERTURE_TILE_CELLS,last=(high-1u)/DC_FLUID_APERTURE_TILE_CELLS;
     if(first==last) {
         float minimum=1.;
         for(uint edge=0u;edge<distance;edge++)
@@ -16,7 +17,7 @@ float cached_path_aperture(ivec2 source,ivec2 direction,uint distance) {
     uint right=vertical?(high-1u)*params.width+line:line*params.width+high-1u;
     uint minimum=min(aperture_prefix[2u*left+1u],aperture_prefix[2u*right]);
     uint begin=params.unused1+first+1u,end=params.unused1+last;
-    uint base=16448u+line*2u*params.unused1;
+    uint base=DC_FLUID_APERTURE_TREE_BASE+line*2u*params.unused1;
     while(begin<end) {
         if((begin&1u)!=0u) minimum=min(minimum,aperture_tree[base+begin++]);
         if((end&1u)!=0u) minimum=min(minimum,aperture_tree[base+--end]);
