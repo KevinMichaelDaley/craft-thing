@@ -22,3 +22,7 @@ Exclusive native solver diagnostic on :93, half-native production scene. A longe
 **2026-11-27T15:41:26Z**
 
 A timestamped split by 64-column bands showed 78.685/78.638 ms in downward setup and under 0.4 ms total for all column updates. The compact vertical cache dispatch reduced setup to 15.574/15.333 ms on the same 1088x704 grid with rigid occupancy active. The near diagnostic mean/p95 moved from 134.133/184.979 to 94.141/127.061 ms. All four exact aperture/range cases (soil, holes, partial tiles) and all ten transport/reference cases passed with Vulkan synchronization validation. Full production benchmark comparison pending.
+
+**2026-11-27T15:47:50Z**
+
+The production half-native benchmark on hidden Xephyr :93 passed the simulation-time checks with 16 owners and two 60 Hz steps for each of 60 measured frames per band. Near/middle/far mean and p95 in ms: 97.241/126.275, 94.972/132.820, 98.886/134.871. The corresponding baseline pairs were 143.243/195.334, 135.919/191.281, 133.318/195.229. Both graphical regressions for heated-water return and saturated room-clock return passed with Vulkan synchronization validation.
