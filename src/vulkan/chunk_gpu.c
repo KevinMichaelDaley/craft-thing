@@ -279,6 +279,8 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
         chunk->marker_count > DC_MARKERS_PER_CHUNK ||
         chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return error(err, cap, "Invalid GPU chunk upload slot");
+    if (gpu->water_cycle_peer || dc_gpu_liquid_seam_pending(gpu))
+        return error(err, cap, "Cannot replace a chunk during a coupled water cycle");
     uint32_t particle_count = 0, missing_primary = 0;
     for (uint32_t i = 0; i < DC_MPM_PARTICLES_PER_CHUNK; ++i)
         particle_count += chunk->particles[i].mass_fp != 0u;
