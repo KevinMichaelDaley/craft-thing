@@ -1,6 +1,6 @@
 ---
 id: ctswc-xr49
-status: in_progress
+status: closed
 deps: [ctsct-a986, ctosd-silg, ctowa-0j6g]
 links: []
 created: 2026-11-27T01:29:57Z
@@ -27,3 +27,7 @@ Vulkan tests cover workspace creation and teardown, exact elapsed stepping witho
 **2026-11-27T01:55:00Z**
 
 The device lifetime prerequisite now supports independent contexts on one Vulkan device and queue. The foreground still uses a 64-slot default atlas or 70 slots in the quarter-native build. Before allocating offscreen rings, make workspace buffer bounds and dispatches use the workspace slot count and verify the foreground defaults against existing tests.
+
+**2026-11-27T02:35:54Z**
+
+RTX A2000 core and synchronization validation passed both isolated workspace regressions on the final source. A cold tile advanced 0.09375 simulated seconds in two bounded steps, kept exact water and oil stock, measured zero gas species drift, and restored heat, terrain color, and the original reactive parcel identity from the stream. Idle and unknown inputs submitted no work, stale generations were rejected, and an injected error after a real GPU submission blocked retries and publication until rebuilding from a confirmed snapshot. Both game binaries include the workspace. Forty focused host cases passed and 143 direct prerequisites of make test compiled. The full suite is queued. Camera routing, conservative boundary ownership and rigid handoff are tracked in ctoew-5swd.
