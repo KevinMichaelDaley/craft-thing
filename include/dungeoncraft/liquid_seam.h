@@ -52,18 +52,27 @@ typedef struct {
     uint32_t crossing_out_fp, crossing_in_fp;
 } dc_water_seam_cell_t;
 
+/** Expected and final carried water fields in one owner cell. */
+typedef struct {
+    float initial_color[4], final_color[4];
+    float initial_excess_heat, final_excess_heat;
+} dc_water_seam_payload_t;
+
 /** The scratch water sweep's write set, in original owner chunk order. */
 typedef struct {
     dc_liquid_seam_sample_t projection[DC_CHUNK_SIDE];
     int32_t crossing_fp[DC_CHUNK_SIDE];
     float pressure_work[DC_CHUNK_SIDE];
     dc_water_seam_cell_t cells[2][DC_CHUNK_CELLS];
+    dc_water_seam_payload_t payload[2][DC_CHUNK_CELLS];
+    bool thermal_enabled;
 } dc_water_seam_plan_t;
 
 /** Plan water transport at a common owner interval on the projected two-tile domain.
  * Signed flow is positive from first to second. Pressure work is the native
  * pressure difference times net volume in cells. Input owners remain live and
- * read-only. The plan is published on success.
+ * read-only. The plan is published on success. Expected and final heat
+ * contain zero in worlds with thermal simulation disabled.
  */
 bool dc_gpu_plan_water_seam(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,

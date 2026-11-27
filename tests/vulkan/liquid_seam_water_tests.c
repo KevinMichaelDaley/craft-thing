@@ -5,6 +5,8 @@
 
 #include "dungeoncraft/liquid_seam.h"
 #include "ferrum/fire/bulk_phase_gpu.h"
+#include "ferrum/fire/thermal_gpu.h"
+#include "ferrum/renderer/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/renderer_internal.h"
 
@@ -62,6 +64,25 @@ static bool upload(dc_gpu_t *gpu, uint32_t slot, uint32_t x, uint32_t y, const d
         dc_gpu_set_page(gpu, x, y, slot, g_err, sizeof(g_err));
 }
 
+static void seed_payload(const dc_chunk_t *chunk, unsigned owner,
+                         dc_chunk_colors_t *colors, float heat[DC_CHUNK_CELLS]) {
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        if (!chunk->cells[i].fluid_mass) continue;
+        colors->water[i][0] = owner ? 0.2f : 0.9f;
+        colors->water[i][1] = (float)(i % 7u) / 7.f;
+        colors->water[i][2] = owner ? 0.8f : 0.1f;
+        colors->water[i][3] = 1.f;
+        heat[i] = owner ? -1.f - (float)(i % 4u) : 3.f + (float)(i % 5u);
+    }
+}
+
+static bool upload_payload(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors, const float *heat, bool thermal) {
+    return fr_renderer_upload_chunk_colors(gpu, slot, colors, g_err, sizeof(g_err)) &&
+        (!thermal || (fr_thermal_gpu_enable(gpu, g_err, sizeof(g_err)) &&
+            fr_thermal_gpu_import_water_chunk(gpu, slot, chunk, heat, g_err, sizeof(g_err))));
+}
+
 static void seed_apertures(dc_gpu_t *gpu, bool y_axis, uint32_t x, uint32_t y) {
     uint32_t *plane = (uint32_t *)gpu->occupancy_mapped + (y_axis ? 4u : 3u) * gpu->width * gpu->height;
     const uint32_t base = y * gpu->width + x;
@@ -100,6 +121,10 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
     dc_water_seam_plan_t *plan = calloc(1, sizeof(*plan));
     dc_water_seam_plan_t *saved = malloc(sizeof(*saved));
+    dc_chunk_colors_t *colors = calloc(2, sizeof(*colors));
+    dc_chunk_colors_t *read_colors = calloc(1, sizeof(*read_colors));
+    float (*heat)[DC_CHUNK_CELLS] = calloc(2, sizeof(*heat));
+    float *read_heat = calloc(DC_CHUNK_CELLS, sizeof(*read_heat));
     dc_gpu_t device = {0}, *mono = NULL;
     dc_liquid_seam_endpoint_t owners[2] = {
         {.coord = {-2, 3}, .tile_x = 1, .slot = 1},
@@ -110,7 +135,7 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     void *mapped = NULL;
     g_err[0] = '\0';
 
-    ASSERT_TRUE(chunks[0] && chunks[1] && download && bulk && plan && saved);
+    ASSERT_TRUE(chunks[0] && chunks[1] && download && bulk && plan && saved && colors && read_colors && heat && read_heat);
     seed_basin(chunks[0], chunks[1], bulk, y_axis);
     ASSERT_TRUE(dc_gpu_initialize_device(&device, 3u * DC_CHUNK_CELLS * sizeof(dc_cell_t),
                                         0, 0, 0, g_err, sizeof(g_err)));
@@ -119,9 +144,11 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     for (unsigned owner = 0; owner < 2; ++owner) {
         dc_liquid_seam_endpoint_t ep = owners[owner];
         chunks[owner]->coord = ep.coord;
+        seed_payload(chunks[owner], owner, &colors[owner], heat[owner]);
         const dc_chunk_coord_t origin = {ep.coord.x - ep.tile_x, ep.coord.y - ep.tile_y};
         ASSERT_TRUE(dc_gpu_set_body_origin(ep.gpu, origin, g_err, sizeof(g_err)));
         ASSERT_TRUE(upload(ep.gpu, ep.slot, ep.tile_x, ep.tile_y, chunks[owner], owner ? bulk : NULL));
+        ASSERT_TRUE(upload_payload(ep.gpu, ep.slot, chunks[owner], &colors[owner], heat[owner], y_axis));
     }
     seed_apertures(owners[0].gpu, y_axis, DC_CHUNK_SIDE, 0);
     owners[0].gpu->rigid_occupancy_present = true;
@@ -150,6 +177,21 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     ASSERT_INT_EQ(plan->crossing_fp[BLOCKED], 0);
     ASSERT_INT_EQ(plan->crossing_fp[BACKPRESSURE], 0);
 
+    ASSERT_EQ(plan->thermal_enabled, y_axis);
+    float far_pigment = 0.f;
+    for (uint32_t i = 1; i < DC_CHUNK_SIDE; ++i) {
+        uint32_t index = index_on_line(y_axis, i, FORWARD, DC_CHUNK_SIDE);
+        if (plan->cells[1][index].crossing_in_fp) far_pigment += plan->payload[1][index].final_color[0];
+    }
+    ASSERT_TRUE(far_pigment > 0.f);
+    for (unsigned owner = 0; owner < 2; ++owner)
+        for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+            const dc_water_seam_payload_t *payload = &plan->payload[owner][i];
+            ASSERT_INT_EQ(memcmp(payload->initial_color, colors[owner].water[i],
+                                  sizeof(payload->initial_color)), 0);
+            ASSERT_EQ(payload->initial_excess_heat, y_axis ? heat[owner][i] : 0.f);
+        }
+
     memcpy(saved, plan, sizeof(*saved));
     ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
                                       plan, g_err, sizeof(g_err)));
@@ -165,6 +207,14 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         ASSERT_INT_EQ(memcmp(download->cells, chunks[owner]->cells, sizeof(download->cells)), 0);
         ASSERT_INT_EQ(memcmp(download->face_velocity, chunks[owner]->face_velocity,
                              sizeof(download->face_velocity)), 0);
+        ASSERT_TRUE(fr_renderer_download_chunk_colors(owners[owner].gpu, owners[owner].slot,
+                                                       read_colors, g_err, sizeof(g_err)));
+        ASSERT_INT_EQ(memcmp(read_colors->water, colors[owner].water, sizeof(read_colors->water)), 0);
+        if (y_axis) {
+            ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(owners[owner].gpu, owners[owner].slot,
+                read_heat, DC_CHUNK_CELLS, g_err, sizeof(g_err)));
+            ASSERT_INT_EQ(memcmp(read_heat, heat[owner], sizeof(*heat)), 0);
+        }
         dc_gpu_destroy(owners[owner].gpu);
         owners[owner].gpu = NULL;
     }
@@ -172,25 +222,40 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(dc_gpu_create_shared(&mono, &device, width, height, shader, g_err, sizeof(g_err)));
     ASSERT_TRUE(upload(mono, 0, 0, 0, chunks[0], NULL));
     ASSERT_TRUE(upload(mono, 1, !y_axis, y_axis, chunks[1], bulk));
+    for (unsigned owner = 0; owner < 2; ++owner)
+        ASSERT_TRUE(upload_payload(mono, owner, chunks[owner], &colors[owner], heat[owner], y_axis));
     seed_apertures(mono, y_axis, 0, 0);
     ASSERT_TRUE(dc_gpu_make_mapped_buffer(mono, 2u * DC_CHUNK_CELLS * sizeof(float),
                                          &readback, &memory, &mapped, g_err, sizeof(g_err)));
     ASSERT_TRUE(native_water_passes(mono, step_seconds, readback));
+    double total_heat_initial = 0., total_heat_final = 0.;
     int32_t stock_delta[2][DC_CHUNK_SIDE] = {{0}};
     int32_t crossing[2][DC_CHUNK_SIDE] = {{0}};
     for (unsigned owner = 0; owner < 2; ++owner) {
         ASSERT_TRUE(dc_gpu_download_chunk(mono, owner, download, g_err, sizeof(g_err)));
+        ASSERT_TRUE(fr_renderer_download_chunk_colors(mono, owner, read_colors, g_err, sizeof(g_err)));
+        if (y_axis)
+            ASSERT_TRUE(fr_thermal_gpu_read_water_chunk(mono, owner, read_heat, DC_CHUNK_CELLS,
+                                                        g_err, sizeof(g_err)));
         for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane)
             for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
                 uint32_t index = index_on_line(y_axis, i, lane, DC_CHUNK_SIDE);
                 dc_water_seam_cell_t cell = plan->cells[owner][index];
                 ASSERT_INT_EQ(cell.initial_fp, chunks[owner]->cells[index].fluid_mass);
                 ASSERT_INT_EQ(cell.final_fp, download->cells[index].fluid_mass);
+                const dc_water_seam_payload_t *payload = &plan->payload[owner][index];
+                for (unsigned component = 0; component < 4; ++component)
+                    ASSERT_TRUE(fabsf(payload->final_color[component] -
+                                      read_colors->water[index][component]) < 1e-5f);
+                ASSERT_TRUE(fabsf(payload->final_excess_heat - (y_axis ? read_heat[index] : 0.f)) < 1e-5f);
+                total_heat_initial += payload->initial_excess_heat;
+                total_heat_final += payload->final_excess_heat;
                 stock_delta[owner][lane] += (int32_t)cell.final_fp - (int32_t)cell.initial_fp;
                 crossing[owner][lane] += (int32_t)cell.crossing_in_fp - (int32_t)cell.crossing_out_fp;
             }
     }
 
+    ASSERT_TRUE(fabs(total_heat_initial - total_heat_final) < 1e-4);
     const float *pressure = mapped;
     for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane) {
         ASSERT_INT_EQ(stock_delta[0][lane], crossing[0][lane]);
@@ -214,6 +279,10 @@ cleanup:
     dc_gpu_destroy(owners[1].gpu);
     dc_gpu_destroy(owners[0].gpu);
     dc_gpu_release_device(&device);
+    free(read_heat);
+    free(heat);
+    free(read_colors);
+    free(colors);
     free(saved);
     free(plan);
     free(bulk);
