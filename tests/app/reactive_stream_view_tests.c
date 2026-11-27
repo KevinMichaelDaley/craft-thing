@@ -111,6 +111,87 @@ static bool structure_time_gpu(dc_gpu_t **gpu, char *err, uint32_t cap) {
     return dc_gpu_create(gpu, 64, 64, "build/shaders/pattern.comp.spv", err, cap);
 }
 
+static void test_structure_reopen_uses_its_own_gas_and_bulk(void) {
+    char directory[] = "build/structure_stock_XXXXXX", err[256] = {0};
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t view = {0};
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    fr_bulk_phase_chunk_t *bulk = calloc(1, sizeof(*bulk));
+    fr_gas_checkpoint_chunk_t *gas = calloc(1, sizeof(*gas));
+    ASSERT_TRUE(chunk && bulk && gas);
+    ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
+    snprintf(view.body_path, sizeof(view.body_path), "%s/%s", directory, DC_WORLD_BODY_RECORD);
+    const dc_chunk_coord_t coord = {-3, 7};
+    const unsigned cell = 17;
+    chunk->coord = coord;
+    chunk->cells[0].material = DC_MATERIAL_STONE;
+    chunk->cells[cell].fluid_mass = 5000;
+    bulk->oil_fp[cell] = 12000;
+    bulk->oil_retained_fp[cell] = 125;
+    gas->cells[cell][0] = .001f;
+    gas->cells[cell][5] = .197f;
+    gas->cells[cell][12] = .5f;
+    gas->gates[cell] = 1;
+    uint32_t slot = 0;
+    uint64_t generation = 0;
+    ASSERT_TRUE(dc_chunk_table_begin_load(&view.table, coord, &slot, &generation));
+    ASSERT_TRUE(dc_gpu_upload_chunk(view.gpu, slot, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_finish_load(&view.table, slot, generation));
+    ASSERT_TRUE(fr_bulk_phase_gpu_import_chunk(view.gpu, slot, chunk, bulk, err, sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_import_checkpoint(view.gpu, slot, gas, err, sizeof(err)));
+    view.table.slots[slot].time = (dc_chunk_time_t){.seconds = 5., .known = true};
+    view.gas_admitted[slot] = true;
+    ASSERT_TRUE(save_level_structure(&view, err, sizeof(err)));
+    dc_gpu_destroy(view.gpu);
+    dc_chunk_table_destroy(&view.table);
+
+    view.stream = dc_stream_create(directory, 42, 4);
+    ASSERT_TRUE(view.stream);
+    chunk->cells[0].material = DC_MATERIAL_AIR;
+    chunk->cells[cell].fluid_mass = 10000;
+    bulk->oil_fp[cell] = 28000;
+    gas->cells[cell][0] = .002f;
+    gas->gates[cell] = 2;
+    ASSERT_TRUE(dc_stream_request_save_snapshot(view.stream, chunk, NULL, NULL, NULL,
+                                                gas, bulk, (dc_chunk_time_t){9., true}, 1));
+    dc_stream_result_t result = {0};
+    ASSERT_TRUE(receive(view.stream, &result));
+    ASSERT_EQ(result.kind, DC_STREAM_SAVED);
+    dc_stream_result_release(&result);
+
+    view.gpu = NULL;
+    memset(view.gas_admitted, 0, sizeof(view.gas_admitted));
+    ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_configure_atmosphere(&view, err, sizeof(err)));
+    ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
+    ASSERT_TRUE(fr_gpu_load_structure(view.gpu, view.body_path, err, sizeof(err)));
+    ASSERT_TRUE(publish_timed_chunk(&view, coord, &slot, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(view.gpu, slot, chunk, err, sizeof(err)));
+    ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view.gpu, slot, bulk, err, sizeof(err)));
+    ASSERT_TRUE(fr_gas_gpu_export_checkpoint(view.gpu, slot, gas, err, sizeof(err)));
+    ASSERT_EQ(dc_gpu_validation_errors(view.gpu), 0u);
+    const bool gas_admitted = view.gas_admitted[slot];
+    const dc_chunk_time_t time = view.table.slots[slot].time;
+    dc_stream_destroy(view.stream);
+    dc_gpu_destroy(view.gpu);
+    dc_chunk_table_destroy(&view.table);
+
+    ASSERT_EQ(chunk->cells[0].material, DC_MATERIAL_STONE);
+    ASSERT_EQ(chunk->cells[cell].fluid_mass, 5000u);
+    ASSERT_TRUE(time.known && time.seconds == 5.);
+    ASSERT_EQ(bulk->oil_fp[cell], 12000u);
+    ASSERT_EQ(bulk->oil_retained_fp[cell], 125u);
+    ASSERT_TRUE(gas_admitted);
+    ASSERT_EQ(gas->cells[cell][0], .001f);
+    ASSERT_EQ(gas->gates[cell], 1u);
+    free(gas);
+    free(bulk);
+    free(chunk);
+    PASS();
+}
+
 static void test_staged_structure_reopen_retains_times_when_pending_slots_move(void) {
     char directory[] = "build/structure_level_time_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
@@ -206,5 +287,6 @@ int main(void) {
         RUN(test_level_save_and_load_restore_bulk_liquid_channel);
     }
     RUN(test_staged_structure_reopen_retains_times_when_pending_slots_move);
+    RUN(test_structure_reopen_uses_its_own_gas_and_bulk);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
