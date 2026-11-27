@@ -36,6 +36,9 @@ bool dc_offscreen_page_at(const dc_offscreen_t *workspace, dc_chunk_coord_t coor
 }
 
 static bool configure_physics(dc_gpu_t *gpu, const dc_gpu_t *parent, char *err, uint32_t cap) {
+    if (!dc_gpu_set_fluid_interval(gpu, parent->fluid_interval) ||
+        !dc_gpu_set_marker_correction(gpu, parent->marker_correction))
+        return error(err, cap, "Cannot configure workspace water simulation");
     if (fr_thermal_gpu_enabled(parent) && !fr_thermal_gpu_enable(gpu, err, cap)) return false;
     const struct fr_gas_gpu *gas = parent->gas;
     if (gas) {

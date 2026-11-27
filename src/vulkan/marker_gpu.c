@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "dungeoncraft/liquid_seam.h"
 #include "gpu_internal.h"
 
 _Static_assert(sizeof(dc_marker_t) == 16, "GPU marker layout must match GLSL");
@@ -109,7 +110,7 @@ void dc_gpu_record_markers(dc_gpu_t *gpu) {
 }
 
 bool dc_gpu_set_marker_correction(dc_gpu_t *gpu, bool enabled) {
-    if (!gpu) return false;
+    if (!gpu || (gpu->marker_correction != enabled && dc_gpu_liquid_owner_held(gpu))) return false;
     gpu->marker_correction = enabled;
     return true;
 }
