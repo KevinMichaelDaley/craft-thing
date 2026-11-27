@@ -1,6 +1,6 @@
 ---
 id: ctlrcc-1nhb
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T01:07:02Z
@@ -24,3 +24,7 @@ Persist a completed time with the exact embedded physical chunk and transfer it 
 **2026-11-27T01:07:03Z**
 
 This closes the known gap between worker-only cold return and the structure-checkpoint override used for ordinary world reopen. Bind the clock to the source that supplied physical stock.
+
+**2026-11-27T01:19:42Z**
+
+The RTX A2000 staged reopen passed with core and synchronization validation and no errors. The fixture committed deliberately conflicting stream records, chose embedded stock and its 15.5 s timestamp, then resaved while two chunks remained pending. A second reopen restored known zero, 15.5 s, and unknown alongside all three correct materials. Three clock encoding checks passed normally and under sanitizers; twelve level cases and four world-save cases passed. Version 8 and 9 clock absence remains explicit. The initial native test reported a duplicate color cleanup, which was removed before the passing rerun.

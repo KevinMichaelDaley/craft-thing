@@ -1,6 +1,6 @@
 ---
 id: ctsct-efcn
-status: in_progress
+status: closed
 deps: [ctsct-f96g, ctolt-po5m, ctlrcc-1nhb]
 links: []
 created: 2026-11-27T00:59:33Z
@@ -28,3 +28,7 @@ Use the immutable snapshot time in dc_stream_request_save_snapshot and the compl
 **2026-11-27T01:07:03Z**
 
 Host RED preserved the water cell while losing the timestamp. GREEN preserved 8.484375 s through a failed present, equal and mixed ticks, camera eviction, return and worker reopen. The fixture also checks stale worker generations, paused and loading frames, and a timed stream packet superseded by an untimed embedded structure snapshot. Twelve level, three chunk, eleven stream and four world-save cases passed. The application and native reactive stream test also built. Embedded structure time is still required for ordinary world reopen.
+
+**2026-11-27T01:19:42Z**
+
+The embedded clock channel now supplies the timestamp on ordinary staged structure reopen. Native staged replay preserved known zero and 15.5 seconds plus the unknown chunk through reordering and another checkpoint. World epoch initialization and new chunk admission remain separate under the parent.
