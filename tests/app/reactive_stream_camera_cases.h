@@ -176,8 +176,39 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
         }
         ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(dc_level_offscreen_owns(view, first));
-        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
-                    dc_level_view_tick(view, err, sizeof(err)));
+        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+        uint32_t older_slot = UINT32_MAX;
+        double older_start = 0.;
+        if (cycle == 2u) {
+            for (uint32_t i = 0; i < view->table.capacity; ++i) {
+                const dc_chunk_slot_t *s = &view->table.slots[i];
+                if (s->state == DC_SLOT_ACTIVE && s->time.known && s->time.seconds < view->world_seconds) {
+                    older_slot = i;
+                    older_start = s->time.seconds;
+                    break;
+                }
+            }
+            ASSERT_TRUE(older_slot != UINT32_MAX);
+            memset(chunk, 0, sizeof(*chunk));
+            camera_seal_room(chunk, view->table.slots[older_slot].coord);
+            chunk->cells[row+32u].fluid_mass = DC_FLUID_FULL;
+            chunk->face_velocity[row+32u].x = 5.f;
+            ASSERT_TRUE(dc_gpu_upload_chunk(view->gpu, older_slot, chunk, err, sizeof(err)));
+            uint32_t connected;
+            ASSERT_TRUE(dc_chunk_table_find(&view->table, (dc_chunk_coord_t){first.x+1,first.y}, &connected));
+            double start = view->world_seconds;
+            view->table.slots[connected].time.seconds = older_start;
+            ASSERT_TRUE(!dc_level_view_tick(view, err, sizeof(err)));
+            ASSERT_EQ(view->world_seconds, start);
+            ASSERT_EQ(view->table.slots[older_slot].time.seconds, older_start);
+            ASSERT_EQ(view->pending_steps, 1u);
+            view->table.slots[connected].time.seconds = start;
+        }
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+        if (older_slot != UINT32_MAX) {
+            ASSERT_EQ(view->table.slots[older_slot].time.seconds, older_start + elapsed);
+            ASSERT_TRUE(view->table.slots[older_slot].time.seconds < view->world_seconds);
+        }
         ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
         if (cycle == 2u) {
             const double start = view->world_seconds;
@@ -197,6 +228,11 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             ASSERT_TRUE(remote_time.known && remote_time.seconds == start && !writing);
             ASSERT_EQ(view->pending_steps, 1u);
             view->water_generations[slot] = pinned;
+            ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+            ASSERT_EQ(view->table.slots[older_slot].time.seconds, older_start + 2. * elapsed);
+            ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, older_slot, chunk, err, sizeof(err)));
+            ASSERT_EQ(camera_stock(chunk, NULL, false), DC_FLUID_FULL);
+            ASSERT_TRUE(chunk->cells[row+32u].fluid_mass < DC_FLUID_FULL);
         } else {
             ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
         }
