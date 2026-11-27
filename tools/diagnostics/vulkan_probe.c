@@ -31,6 +31,8 @@ typedef struct {
     VkPipeline pipeline;
     VkBuffer thermal_control;
     VkDeviceMemory thermal_control_memory;
+    VkBuffer empty_bulk;
+    VkDeviceMemory empty_bulk_memory;
 } probe_t;
 
 static int check(VkResult result, const char *stage) {

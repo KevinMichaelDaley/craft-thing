@@ -1,9 +1,14 @@
 #ifndef FERRUM_DIAGNOSTIC_SHADER_FIXTURE_H
 #define FERRUM_DIAGNOSTIC_SHADER_FIXTURE_H
 
+#include "ferrum/fire/bulk_phase.h"
 #include "../../src/vulkan/gpu_internal.h"
 
 static void fixture_release_pipeline(probe_t *p) {
+    if (p->empty_bulk) vkDestroyBuffer(p->device, p->empty_bulk, NULL);
+    if (p->empty_bulk_memory) vkFreeMemory(p->device, p->empty_bulk_memory, NULL);
+    p->empty_bulk = VK_NULL_HANDLE;
+    p->empty_bulk_memory = VK_NULL_HANDLE;
     if(p->thermal_control) vkDestroyBuffer(p->device,p->thermal_control,NULL);
     if(p->thermal_control_memory) vkFreeMemory(p->device,p->thermal_control_memory,NULL);
     p->thermal_control=VK_NULL_HANDLE;p->thermal_control_memory=VK_NULL_HANDLE;
@@ -23,9 +28,9 @@ static void fixture_release_pipeline(probe_t *p) {
     p->descriptor_pool = VK_NULL_HANDLE;
     p->descriptor_layout = VK_NULL_HANDLE;
 }
-static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
-                                 const char *path, const uint32_t *indices,
-                                 uint32_t count, uint32_t phase) {
+static int fixture_body_pipeline_with_bulk(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
+    const char *path, const uint32_t *indices, uint32_t count, uint32_t phase,
+    uint32_t bulk_slots) {
     char err[256];
     if (count > 32u)
         return 0;
@@ -35,6 +40,16 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
     void *control=NULL;
     if(!dc_gpu_make_mapped_buffer(gpu,128,&p->thermal_control,&p->thermal_control_memory,&control,err,sizeof(err))) return 0;
     memset(control,0,128);vkUnmapMemory(p->device,p->thermal_control_memory);
+    VkBuffer bulk = gpu->bulk_phase_buffer;
+    if (!bulk && bulk_slots) {
+        const VkDeviceSize bytes = (VkDeviceSize)bulk_slots * sizeof(fr_bulk_phase_chunk_t);
+        void *empty = NULL;
+        if (!dc_gpu_make_mapped_buffer(gpu, bytes, &p->empty_bulk, &p->empty_bulk_memory,
+                                       &empty, err, sizeof(err))) return 0;
+        memset(empty, 0, bytes);
+        vkUnmapMemory(p->device, p->empty_bulk_memory);
+        bulk = p->empty_bulk;
+    }
     printf("minimal pipeline %s phase%u\n", path, phase);
     if (!dc_gpu_load_shader_module(gpu, path, &p->shader, err, sizeof(err))) {
         printf("shader failure: %s\n", err);
@@ -112,14 +127,16 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
         return 0;
     VkDescriptorBufferInfo buffers[34];
     VkWriteDescriptorSet writes[34];
+    uint32_t write_count = 0;
     for (unsigned i = 0; i < count; i++) {
         bool is_body = indices[i] == 4u;
         buffers[i] = (VkDescriptorBufferInfo){
             is_body ? body : p->buffer, 0,
             is_body ? dc_gpu_body_storage_bytes(gpu) : 39u * sizeof(uint32_t)};
         if(indices[i]==36u) buffers[i]=(VkDescriptorBufferInfo){p->thermal_control,0,128};
-        if(indices[i]==37u) buffers[i]=(VkDescriptorBufferInfo){gpu->bulk_phase_buffer,0,VK_WHOLE_SIZE};
-        writes[i] = (VkWriteDescriptorSet){
+        if (indices[i] == 37u) buffers[i] = (VkDescriptorBufferInfo){bulk, 0, VK_WHOLE_SIZE};
+        if (!buffers[i].buffer) continue;
+        writes[write_count++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = p->descriptor,
             .dstBinding = indices[i],
@@ -127,7 +144,12 @@ static int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .pBufferInfo = &buffers[i]};
     }
-    vkUpdateDescriptorSets(p->device, count, writes, 0, NULL);
+    vkUpdateDescriptorSets(p->device, write_count, writes, 0, NULL);
     return 1;
+}
+
+static inline int fixture_body_pipeline(probe_t *p, dc_gpu_t *gpu, VkBuffer body,
+    const char *path, const uint32_t *indices, uint32_t count, uint32_t phase) {
+    return fixture_body_pipeline_with_bulk(p, gpu, body, path, indices, count, phase, 0);
 }
 #endif

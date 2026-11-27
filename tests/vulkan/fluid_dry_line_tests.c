@@ -15,7 +15,7 @@ static void test_dry_lines_skip_cache_setup_without_changing_inputs(void) {
     ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,32,&profile,&profile_memory,(void **)&counts,err,sizeof(err)));
     uint32_t indices[]={1,2,3,8,10,28,29,32,31};
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/diagnostics/fluid_dry_line_profile.comp.spv",indices,9,2));
+    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,"build/diagnostics/fluid_dry_line_profile.comp.spv",indices,9,2, CHUNKS));
     for(unsigned i=0;i<9;i++) {
         VkDescriptorBufferInfo buffer={i<8?f->buffers[i]:profile,0,i<8?sizes[i]*4u:32u};
         VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,

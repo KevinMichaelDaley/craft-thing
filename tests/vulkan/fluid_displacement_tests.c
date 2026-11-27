@@ -78,7 +78,7 @@ static void displacement_case(bool lateral,unsigned unknown) {
     *profile=0;indices[8]=31;descriptors=9;
     shader="build/diagnostics/fluid_displacement_profile.comp.spv";
 #endif
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,shader,indices,descriptors,lateral));
+    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,shader,indices,descriptors,lateral, CHUNKS));
     VkDescriptorBufferInfo info[9];VkWriteDescriptorSet writes[9];
     for(unsigned i=0;i<descriptors;i++) {
         if(i<8) info[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};

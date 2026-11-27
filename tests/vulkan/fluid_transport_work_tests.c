@@ -54,7 +54,7 @@ static void test_full_recipient_work_is_close_to_zero_velocity_work(void) {
     for(unsigned i=0;i<CHUNKS;i++) f->words[1][i]=i+1;
     for(unsigned i=0;i<CHUNKS*4096;i++) f->words[0][2*i+1]=FULL;
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,0));
+    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,0, CHUNKS));
     VkDescriptorBufferInfo buffers[8];VkWriteDescriptorSet writes[8];
     for(unsigned i=0;i<8;i++) {
         buffers[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};

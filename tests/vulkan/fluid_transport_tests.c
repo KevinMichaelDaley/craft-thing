@@ -137,7 +137,7 @@ static void run_case_scaled(unsigned mode,unsigned unknown,float velocity_scale)
             reference_move(f,vertical?(int)line:p,vertical?p:(int)line,vertical?0:positive?1:-1,vertical?positive?1:-1:0);
     }
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,mode));
+    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,"build/shaders/fluid_transport.comp.spv",bindings,8,mode, CHUNKS));
     VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
     for(unsigned i=0;i<8;i++) {
         info[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};

@@ -117,7 +117,7 @@ static void test_scan_matches_ordered_mass_and_pigment_for_every_direction(void)
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,28u,&profile,&profile_memory,(void **)&counts,err,sizeof(err)));
         memset(counts,0,28u);
         uint32_t descriptors[9];memcpy(descriptors,bindings,sizeof(bindings));descriptors[8]=31u;
-        ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,"build/diagnostics/fluid_transport_profile.comp.spv",descriptors,9,mode));
+        ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,"build/diagnostics/fluid_transport_profile.comp.spv",descriptors,9,mode, CHUNKS));
         VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
         for(unsigned i=0;i<9;i++) {
             buffers[i]=(VkDescriptorBufferInfo){i==8?profile:f->buffers[i],0,i==8?28u:sizes[i]*4};

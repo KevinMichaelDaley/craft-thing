@@ -67,8 +67,8 @@ static void partial_case(unsigned mode) {
     ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,PROFILE_WORDS*4,&profile_buffer,&profile_memory,(void **)&profile,err,sizeof(err)));
     const uint32_t profile_bindings[]={1,2,3,8,10,28,29,32,31};
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
-    ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,
-        g_profile_shader,profile_bindings,9,mode));
+    ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,
+        g_profile_shader,profile_bindings,9,mode, CHUNKS));
     VkDescriptorBufferInfo buffers[9];VkWriteDescriptorSet writes[9];
     for(unsigned i=0;i<9;i++) {
         buffers[i]=(VkDescriptorBufferInfo){i<8?f->buffers[i]:profile_buffer,0,i<8?sizes[i]*4:PROFILE_WORDS*4};
