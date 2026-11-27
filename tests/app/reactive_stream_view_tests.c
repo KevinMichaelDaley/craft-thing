@@ -368,6 +368,7 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--paired-seam") == 0) {
+        RUN(test_level_step_advances_admitted_water_owners_together);
         RUN(test_new_exchange_cannot_claim_an_earlier_receipt);
         RUN(test_level_seam_orders_owner_clocks_receipts_and_cold_publication);
         RUN(test_unreadable_seam_receipt_preserves_both_canonical_owners);
@@ -410,5 +411,6 @@ int main(int argc, char **argv) {
     RUN(test_level_seam_orders_owner_clocks_receipts_and_cold_publication);
     RUN(test_unreadable_seam_receipt_preserves_both_canonical_owners);
     RUN(test_new_exchange_cannot_claim_an_earlier_receipt);
+    RUN(test_level_step_advances_admitted_water_owners_together);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

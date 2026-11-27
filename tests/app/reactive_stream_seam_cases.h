@@ -106,6 +106,46 @@ static bool seam_water_matches(dc_level_view_t *view, uint32_t resident_slot,
     return okay;
 }
 
+static void test_level_step_advances_admitted_water_owners_together(void) {
+    char directory[] = "build/paired_water_tick_XXXXXX", err[256] = {0};
+    const uint32_t lane = 24u;
+    dc_level_liquid_exchange_t owners = {.resident = {5, -4}, .offscreen = {6, -4}, .begin_seconds = 2.};
+    ASSERT_TRUE(mkdtemp(directory) && save_seam_pockets(directory, &owners, lane, err, sizeof(err)));
+    dc_level_view_t *view = seam_test_view(directory, err, sizeof(err));
+    dc_offscreen_t *workspace = NULL;
+    uint32_t slot;
+    ASSERT_TRUE(view && admit_seam_owners(view, &owners, &slot, &workspace, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_set_fluid_interval(view, 2u));
+    const float elapsed = 1.f / 60.f;
+    for (unsigned step = 0; step < 2u; ++step) {
+        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+        ASSERT_TRUE(execute_level_steps(view, err, sizeof(err)));
+        ASSERT_EQ(view->world_seconds, 2. + (step + 1u) * (double)elapsed);
+        ASSERT_EQ(workspace->time.seconds, view->world_seconds);
+        ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
+        ASSERT_EQ(dc_gpu_liquid_owner_held(workspace->gpu), step == 0u);
+    }
+    dc_stream_result_t remote = {0};
+    ASSERT_TRUE(dc_offscreen_snapshot(workspace, owners.offscreen, owners.offscreen_generation, &remote,
+                                      err, sizeof(err)));
+    const uint32_t received = remote.chunk->cells[lane * DC_CHUNK_SIDE].fluid_mass;
+    dc_stream_result_release(&remote);
+    ASSERT_TRUE(received != 6000u && received <= 22000u);
+    ASSERT_TRUE(seam_water_matches(view, slot, &owners, workspace, lane, 22000u - received, received, err, sizeof(err)));
+    const double end = view->world_seconds;
+    ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    dc_offscreen_destroy(workspace);
+    view = seam_test_view(directory, err, sizeof(err));
+    workspace = NULL;
+    ASSERT_TRUE(view && admit_seam_owners(view, &owners, &slot, &workspace, err, sizeof(err)));
+    ASSERT_EQ(view->world_seconds, end);
+    ASSERT_EQ(workspace->time.seconds, end);
+    ASSERT_TRUE(seam_water_matches(view, slot, &owners, workspace, lane, 22000u - received, received, err, sizeof(err)));
+    dc_level_view_discard(view);
+    dc_offscreen_destroy(workspace);
+    PASS();
+}
+
 static void test_new_exchange_cannot_claim_an_earlier_receipt(void) {
     char directory[] = "build/paired_receipt_XXXXXX", err[256] = {0};
     const uint32_t lane = 24u;
