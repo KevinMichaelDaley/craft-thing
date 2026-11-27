@@ -26,6 +26,22 @@ typedef enum {
 bool dc_gpu_liquid_seam_mapped(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis);
 
+typedef struct {
+    float normal_velocity;
+    float first_pressure, second_pressure;
+    uint32_t aperture_fp;
+} dc_liquid_seam_sample_t;
+
+/** Sample the native liquid projection on the sealed domain of the two tiles.
+ * Results are indexed by the transverse coordinate. Positive velocity points
+ * toward the second tile. A supplied previous normal replaces the live
+ * normal on this face. The owner fields and failed results are unchanged.
+ */
+bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
+    const float previous_normal[DC_CHUNK_SIDE],
+    dc_liquid_seam_sample_t samples[DC_CHUNK_SIDE], char *err, uint32_t cap);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.

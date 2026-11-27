@@ -35,10 +35,6 @@ static bool error(char *buf, uint32_t cap, const char *message) {
     return false;
 }
 
-#ifndef DC_PRESSURE_SWEEPS
-#define DC_PRESSURE_SWEEPS 20u
-#endif
-
 enum { FLUID_DISPLACEMENT_MODE = 11u, FLUID_LATERAL_DISPLACEMENT_MODE = 12u };
 
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
@@ -264,7 +260,7 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
     return true;
 }
 
-static void record_projection_begin(dc_gpu_t *gpu) {
+void dc_gpu_record_projection_begin(dc_gpu_t *gpu) {
     uint32_t push[7] = { gpu->width, gpu->height, 0, 0, 0, 0, 0 };
     push[5] = dc_gpu_float_bits(gpu->fluid_step_scale);
     if (gpu->rigid_occupancy_present) {
@@ -321,7 +317,7 @@ static void record_pressure_stencil(dc_gpu_t *gpu) {
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
 }
 
-static void record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
+void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first,
                                     uint32_t stop) {
     if(first>=stop) return;
     if(gpu->pressure_work_enabled) dc_gpu_record_pressure_work(gpu);
@@ -489,16 +485,16 @@ void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase) {
     dc_gpu_fluid_uploads_invalidate(gpu);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
-    if (phase == 0u) record_projection_begin(gpu);
-    const uint32_t pressure_stop = 2u * DC_PRESSURE_SWEEPS + 2u;
-    if (phase == 0u) record_pressure_passes(gpu, 0u,
+    if (phase == 0u) dc_gpu_record_projection_begin(gpu);
+    const uint32_t pressure_stop = DC_PRESSURE_PASS_COUNT;
+    if (phase == 0u) dc_gpu_record_pressure_passes(gpu, 0u,
         pressure_stop < 10u ? pressure_stop : 10u);
-    else if (phase == 1u) record_pressure_passes(gpu, 10u,
+    else if (phase == 1u) dc_gpu_record_pressure_passes(gpu, 10u,
         pressure_stop < 25u ? pressure_stop : 25u);
-    else if (phase == 2u) record_pressure_passes(gpu, 25u,
+    else if (phase == 2u) dc_gpu_record_pressure_passes(gpu, 25u,
         pressure_stop < 40u ? pressure_stop : 40u);
     else if (phase == 3u) {
-        record_pressure_passes(gpu, 40u, pressure_stop);
+        dc_gpu_record_pressure_passes(gpu, 40u, pressure_stop);
         record_fluid_transport(gpu, 0u, 3u);
     } else if (phase == 4u) record_fluid_transport(gpu, 3u, 5u);
     else if (phase == 5u) record_fluid_correction(gpu);

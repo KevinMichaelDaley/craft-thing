@@ -1,7 +1,7 @@
 ---
 id: ctopo-yhkb
-status: open
-deps: [ctols-vhg9]
+status: in_progress
+deps: [ctols-vhg9, ctopp-fkir]
 links: []
 created: 2026-11-27T05:39:32Z
 type: task

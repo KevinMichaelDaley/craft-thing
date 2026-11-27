@@ -204,3 +204,12 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam submission was not confirmed");
     return complete_dispatch(gpu, seam, err, cap);
 }
+
+bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
+    dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
+    const float previous_normal[DC_CHUNK_SIDE],
+    dc_liquid_seam_sample_t samples[DC_CHUNK_SIDE], char *err, uint32_t cap) {
+    (void)first; (void)second; (void)axis; (void)seconds;
+    (void)previous_normal; (void)samples; (void)err; (void)cap;
+    return false;
+}

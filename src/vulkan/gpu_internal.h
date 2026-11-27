@@ -572,6 +572,13 @@ bool dc_gpu_pressure_work_init(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_pressure_work_destroy(dc_gpu_t *gpu);
 void dc_gpu_record_pressure_work(dc_gpu_t *gpu);
 void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
+#ifndef DC_PRESSURE_SWEEPS
+#define DC_PRESSURE_SWEEPS 20u
+#endif
+#define DC_PRESSURE_PASS_COUNT (2u * DC_PRESSURE_SWEEPS + 2u)
+
+void dc_gpu_record_projection_begin(dc_gpu_t *gpu);
+void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first, uint32_t stop);
 void dc_gpu_record_fluid(dc_gpu_t *gpu);
 void dc_gpu_record_fluid_phase(dc_gpu_t *gpu, uint32_t phase);
 void dc_gpu_record_fluid_phase_uncached(dc_gpu_t *gpu, uint32_t phase);
