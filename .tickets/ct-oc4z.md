@@ -21,3 +21,9 @@ Instrument GPU creation, pipeline compilation, scene upload, structural placemen
 
 A cold and warm catapult_demo on the actual RTX display render the first frame quickly, with measured setup phases and no blank desktop window for tens of seconds. Keep the 256x128 game resolution and full launch/ignition behavior; focused tests and full make test pass.
 
+
+## Notes
+
+**2026-11-27T00:32:27Z**
+
+The catapult executable now has a first-frame startup probe on its actual 256x128 load, fixed launch scene and lit presentation path. Run make test_catapult_startup with an X11 Vulkan-capable display, or run ./build/catapult_demo --startup-probe directly. DC_BONFIRE_STARTUP_TRACE=1 also exposes the existing device, shader-pipeline and swapchain milestones. Use DC_PIPELINE_CACHE_DIR and DC_PIPELINE_CACHE_TRACE=1 to compare a fresh and then warmed pipeline cache. The portable regression reproduces and verifies the launch marker on an unavailable display. RTX cold and warm first-present evidence and startup reduction remain open.

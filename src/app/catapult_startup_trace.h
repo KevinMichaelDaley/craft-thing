@@ -12,6 +12,7 @@ typedef struct dc_catapult_startup_trace {
 static inline void dc_catapult_startup_mark(dc_catapult_startup_trace_t *trace,
                                            const char *phase) {
     if (!trace) return;
+    /* Keep the intervals contiguous so they reconcile with the first-present total. */
     Uint64 now = SDL_GetPerformanceCounter();
     fprintf(stderr, "Catapult startup %s: %.3f ms\n", phase,
             (now - trace->last) * trace->milliseconds_per_tick);

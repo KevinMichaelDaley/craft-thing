@@ -99,24 +99,27 @@ static void test_startup_probe_profiles_through_first_present(void) {
             else total_ms = ms;
         }
         if (strstr(line, "256x128 game view ready")) ready++;
-        if (strstr(line, "Catapult demo: frame 1/")) {
+        unsigned frame, frames;
+        if (sscanf(line, "Catapult demo: frame %u/%u", &frame, &frames) == 2) {
             presented++;
-            if (phase != count) {
+            if (frame != 1u || frames != 1u || phase != count) {
                 kill(child, SIGTERM);
                 break;
             }
         }
-        if (strstr(line, "Catapult demo: frame 11/")) presented++;
     }
     fclose(log);
     int status;
     ASSERT_EQ(waitpid(child, &status, 0), child);
+    if (WIFSIGNALED(status))
+        printf("Catapult process ended with signal %d after %zu phases\n",
+               WTERMSIG(status), phase);
     ASSERT_EQ(phase, count);
     ASSERT_TRUE(trace_valid && WIFEXITED(status));
     ASSERT_INT_EQ(WEXITSTATUS(status), 0);
     ASSERT_INT_EQ(ready, 1);
     ASSERT_INT_EQ(presented, 1);
-    ASSERT_TRUE(total_ms > 0. && fabs(total_ms - sum_ms) < .02);
+    ASSERT_TRUE(total_ms > 0. && fabs(total_ms - sum_ms) < .001 * count);
     PASS();
 }
 
