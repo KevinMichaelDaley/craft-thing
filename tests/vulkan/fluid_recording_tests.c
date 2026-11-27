@@ -9,6 +9,8 @@ static VkPipeline bound;
 static uint32_t mode,seen;
 static bool correct;
 static uint32_t column_count, row_count;
+static VkPipeline correction_pipeline;
+static uint32_t correction_groups[10];
 void __wrap_vkCmdBindDescriptorSets(VkCommandBuffer c,VkPipelineBindPoint p,VkPipelineLayout l,uint32_t f,uint32_t n,const VkDescriptorSet *s,uint32_t d,const uint32_t *o) {(void)c;(void)p;(void)l;(void)f;(void)n;(void)s;(void)d;(void)o;}
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
@@ -21,6 +23,8 @@ void __wrap_vkCmdPushConstants(VkCommandBuffer c,VkPipelineLayout l,VkShaderStag
 }
 void __wrap_vkCmdDispatch(VkCommandBuffer c,uint32_t x,uint32_t y,uint32_t z) {
     (void)c;
+    if (correction_pipeline && bound == correction_pipeline && mode < 10u)
+        correction_groups[mode] = x;
     if(mode<4&&bound!=(VkPipeline)(uintptr_t)100u) {
         correct=correct&&bound==(VkPipeline)(uintptr_t)(mode+1u)&&x==(mode<2?column_count:row_count)&&y==1&&z==1;
         seen|=1u<<mode;
@@ -60,4 +64,32 @@ static void test_workspace_dispatches_only_mapped_transport_lines(void) {
     PASS();
 }
 
-int main(void) {RUN(test_body_free_transport_is_cooperative);RUN(test_workspace_dispatches_only_mapped_transport_lines);printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;}
+static void check_single_visit_correction(bool seam) {
+    dc_gpu_t gpu = {.width=128, .height=64, .workspace_slots=2, .marker_correction=true};
+    correction_pipeline = (VkPipeline)(uintptr_t)101u;
+    gpu.fluid_pipeline = correction_pipeline;
+    memset(correction_groups, 0, sizeof(correction_groups));
+    if (seam)
+        dc_gpu_record_water_seam_correction(&gpu, gpu.descriptor, correction_pipeline,
+                                            128, 64, 2, 1.f, 0, 0, 0);
+    else
+        dc_gpu_record_fluid_phase(&gpu, 5);
+    correction_pipeline = VK_NULL_HANDLE;
+    ASSERT_EQ(correction_groups[4], DC_CHUNK_CELLS / 64u);
+    ASSERT_EQ(correction_groups[5], DC_CHUNK_CELLS / 64u);
+    for (unsigned phase = 6; phase <= 9; ++phase)
+        ASSERT_EQ(correction_groups[phase], DC_CHUNK_CELLS / (2u * 64u));
+    PASS();
+}
+
+static void test_single_visit_resident_correction(void) { check_single_visit_correction(false); }
+static void test_single_visit_seam_correction(void) { check_single_visit_correction(true); }
+
+int main(void) {
+    RUN(test_body_free_transport_is_cooperative);
+    RUN(test_workspace_dispatches_only_mapped_transport_lines);
+    RUN(test_single_visit_resident_correction);
+    RUN(test_single_visit_seam_correction);
+    printf("%d passed, %d failed\n",g_pass,g_fail);
+    return g_fail!=0;
+}
