@@ -425,6 +425,11 @@ int main(int argc, char **argv) {
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--bond-contact") == 0) {
+        RUN(test_camera_preserves_completed_terrain_contacts_of_bonded_members);
+        printf("%d passed, %d failed\n", g_pass, g_fail);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera") == 0) {
         RUN(test_camera_eviction_keeps_the_published_owner_across_archive_rewrites);
         RUN(test_two_screen_camera_pan_advances_and_reopens_its_evicted_owner);
@@ -455,6 +460,7 @@ int main(int argc, char **argv) {
     RUN(test_camera_transfers_an_assembly_spanning_two_chunk_pages);
     RUN(test_close_retries_failed_bond_page_and_reopens_the_whole_group);
     RUN(test_both_bond_endpoints_identify_the_same_members_and_pages);
+    RUN(test_camera_preserves_completed_terrain_contacts_of_bonded_members);
     RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
     RUN(test_camera_heated_water_returns_with_its_energy);

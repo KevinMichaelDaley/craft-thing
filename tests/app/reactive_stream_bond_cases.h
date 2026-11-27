@@ -14,7 +14,19 @@ static bool camera_has_live_bond(dc_gpu_t *gpu, uint32_t first, uint32_t second)
     return false;
 }
 
-enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF, BOND_RETRY };
+enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF, BOND_RETRY, BOND_CONTACT };
+
+static bool read_bond_contacts(dc_gpu_t *gpu, uint32_t first, dc_gpu_contact_t *out, uint32_t *count,
+    char *err, uint32_t cap) {
+    dc_gpu_contact_t contacts[256];
+    dc_gpu_contact_stats_t stats;
+    if (!dc_gpu_read_contacts(gpu, &stats, contacts, 256u, err, cap) || stats.overflow) return false;
+    *count = 0;
+    for (unsigned i = 0; i < stats.count; ++i)
+        if (contacts[i].kind == DC_GPU_CONTACT_TERRAIN &&
+            (contacts[i].body_a == first || contacts[i].body_a == first + 1u)) out[(*count)++] = contacts[i];
+    return true;
+}
 static void check_camera_bonded_assembly(enum bond_check check) {
     char directory[] = "build/camera_bonded_pan_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
@@ -41,7 +53,8 @@ static void check_camera_bonded_assembly(enum bond_check check) {
         int x = DC_CHUNK_SIDE - 6 + 6 * (int)i;
         graph.nodes[i] = (fr_structural_gpu_node_t){.id = i + 1u, .generation = 3u,
             .chunk = {origin.x + x / DC_CHUNK_SIDE, origin.y},
-            .x_fp = (x % DC_CHUNK_SIDE) * DC_FLUID_FULL, .y_fp = 24 * DC_FLUID_FULL};
+            .x_fp = (x % DC_CHUNK_SIDE) * DC_FLUID_FULL,
+            .y_fp = (check == BOND_CONTACT ? 59 : 24) * DC_FLUID_FULL};
     }
     for (unsigned i = 0; i < 2; ++i)
         graph.members[i] = (fr_structural_gpu_member_t){.id = i + 1u, .generation = 3u,
@@ -80,7 +93,17 @@ static void check_camera_bonded_assembly(enum bond_check check) {
         ASSERT_TRUE(!(motion.flags & DC_GPU_BODY_KINEMATIC));
     }
     ASSERT_TRUE(dc_gpu_read_body_motion(view->gpu, first, &motion, err, sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_body_motion(view->gpu, first, motion.angle, .05f, 0, err, sizeof(err)));
+    dc_gpu_contact_t previous[256], next[256];
+    uint32_t previous_count = 0, next_count = 0;
+    if (check == BOND_CONTACT) {
+        for (unsigned i = 0; i < 60 && !previous_count; ++i) {
+            ASSERT_TRUE(dc_gpu_rigid_step(view->gpu, err, sizeof(err)));
+            ASSERT_TRUE(read_bond_contacts(view->gpu, first, previous, &previous_count, err, sizeof(err)));
+        }
+        ASSERT_TRUE(previous_count > 0);
+    } else {
+        ASSERT_TRUE(dc_gpu_set_body_motion(view->gpu, first, motion.angle, .05f, 0, err, sizeof(err)));
+    }
     if (check == BOND_HANDOFF) {
         dc_offscreen_t *workspace = dc_offscreen_create(view->gpu, origin, err, sizeof(err));
         ASSERT_TRUE(workspace);
@@ -133,6 +156,17 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     dc_gpu_t *remote = view->camera_offscreen.workspace->gpu;
     ASSERT_TRUE(camera_has_live_bond(remote, first, first + 1u));
     ASSERT_TRUE(!camera_has_live_bond(view->gpu, first, first + 1u));
+    if (check == BOND_CONTACT) {
+        ASSERT_TRUE(read_bond_contacts(view->gpu, first, next, &next_count, err, sizeof(err)));
+        ASSERT_EQ(next_count, 0u);
+        ASSERT_TRUE(read_bond_contacts(remote, first, next, &next_count, err, sizeof(err)));
+        ASSERT_EQ(next_count, previous_count);
+        for (unsigned i = 0; i < previous_count; ++i) {
+            unsigned j = 0;
+            while (j < next_count && memcmp(&previous[i], &next[j], sizeof(next[j]))) ++j;
+            ASSERT_TRUE(j < next_count);
+        }
+    }
     for (unsigned i = 0; i < 2; ++i) {
         ASSERT_TRUE(!dc_gpu_read_body_motion(view->gpu, first + i, &motion, NULL, 0));
         ASSERT_TRUE(dc_gpu_read_body_motion(remote, first + i, &motion, err, sizeof(err)));
@@ -140,7 +174,7 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(remote, first + 1u, &motion, err, sizeof(err)));
-    ASSERT_TRUE(fabsf(motion.angular_velocity) > .00001f);
+    if (check != BOND_CONTACT) ASSERT_TRUE(fabsf(motion.angular_velocity) > .00001f);
     dc_gpu_world_body_t confirmed[2], restored;
     for (unsigned i = 0; i < 2; ++i)
         ASSERT_TRUE(dc_gpu_read_world_body(remote, first + i, &confirmed[i], err, sizeof(err)));
@@ -210,5 +244,8 @@ static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
 }
 static void test_close_retries_failed_bond_page_and_reopens_the_whole_group(void) {
     check_camera_bonded_assembly(BOND_RETRY);
+}
+static void test_camera_preserves_completed_terrain_contacts_of_bonded_members(void) {
+    check_camera_bonded_assembly(BOND_CONTACT);
 }
 #endif
