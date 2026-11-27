@@ -784,6 +784,11 @@ build/generate.o: src/world/generate.c include/dungeoncraft/generate.h include/d
 build/gpu_tests: tests/vulkan/gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/vulkan/gpu_tests.c $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
+build/hydro_residency_tests: tests/vulkan/hydro_residency_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/gpu_tests
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkGetPhysicalDeviceMemoryProperties,--wrap=vkAllocateMemory
+
+test: build/hydro_residency_tests
+
 build/rigid_tests: tests/vulkan/rigid_tests.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
@@ -994,6 +999,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/quarter_native_fluid_tests
 	./build/native_scene_tests
 	./build/gpu_tests
+	./build/hydro_residency_tests
 	./build/halo_tests
 	./build/fluid_tests
 	./build/buoyancy_tests
