@@ -233,6 +233,57 @@ static void test_version_four_grain_radius_migrates(void) {
     PASS();
 }
 
+static bool write_chunk_clock_fixture(const char *path) {
+    const struct {
+        char magic[4];
+        uint32_t version;
+        int64_t x, y;
+        uint64_t seed;
+        uint32_t payload_version, reserved;
+        double completed_seconds;
+    } header = {.magic = {'D', 'C', 'C', '1'}, .version = 12, .seed = 98,
+                .payload_version = 5, .completed_seconds = 42.125};
+    dc_cell_t cells[DC_CHUNK_CELLS] = {0};
+    dc_face_velocity_t faces[DC_CHUNK_CELLS] = {0};
+    const uint32_t zero = 0;
+    cells[10].fluid_mass = DC_FLUID_FULL;
+    faces[10].x = 1.25f;
+    const void *parts[] = {&header, cells, &zero, faces, &zero};
+    const size_t sizes[] = {sizeof(header), sizeof(cells), sizeof(zero),
+                            sizeof(faces), sizeof(zero)};
+    FILE *file = fopen(path, "wb");
+    if (!file) return false;
+    bool okay = true;
+    uint64_t hash = UINT64_C(14695981039346656037);
+    for (unsigned i = 0; okay && i < sizeof(parts) / sizeof(parts[0]); ++i) {
+        hash = dc_color_hash(hash, parts[i], sizes[i]);
+        okay = fwrite(parts[i], sizes[i], 1, file) == 1;
+    }
+    okay = okay && fwrite(&hash, sizeof(hash), 1, file) == 1;
+    return fclose(file) == 0 && okay;
+}
+
+static void test_completed_time_fixture_loads_with_physical_state(void) {
+    char directory[] = "build/stream_clock_fixture_XXXXXX", path[256];
+    ASSERT_TRUE(mkdtemp(directory));
+    snprintf(path, sizeof(path), "%s/chunk_0000000000000000_0000000000000000.bin", directory);
+    ASSERT_TRUE(write_chunk_clock_fixture(path));
+    dc_streamer_t *stream = dc_stream_create(directory, 98, 2);
+    ASSERT_TRUE(stream);
+    dc_stream_result_t result = {0};
+    bool loaded = dc_stream_request_load(stream, (dc_chunk_coord_t){0, 0}, 1u) &&
+                  wait_result(stream, &result);
+    dc_stream_destroy(stream);
+    bool preserved = result.chunk && result.chunk->cells[10].fluid_mass == DC_FLUID_FULL &&
+                     result.chunk->face_velocity[10].x == 1.25f;
+    dc_stream_result_kind_t kind = result.kind;
+    dc_stream_result_release(&result);
+    ASSERT_TRUE(loaded);
+    ASSERT_EQ(kind, DC_STREAM_LOADED);
+    ASSERT_TRUE(preserved);
+    PASS();
+}
+
 static void test_color_chunk_roundtrip_and_corruption_rejection(void) {
     char directory[]="build/stream_color_XXXXXX";ASSERT_TRUE(mkdtemp(directory));
     dc_streamer_t *stream=dc_stream_create(directory,314,2);ASSERT_TRUE(stream);
@@ -336,6 +387,7 @@ int main(void) {
     RUN(test_worker_loads_procedural_basin);
     RUN(test_legacy_chunk_loads_with_zero_velocity);
     RUN(test_version_four_grain_radius_migrates);
+    RUN(test_completed_time_fixture_loads_with_physical_state);
     RUN(test_color_chunk_roundtrip_and_corruption_rejection);
     RUN(test_bulk_liquid_chunk_roundtrip_keeps_water_and_distinct_oil_slime);
     RUN(test_staged_chunk_reload_prefers_the_current_world_edit);
