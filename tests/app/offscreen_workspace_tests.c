@@ -339,6 +339,10 @@ void __wrap_dc_gpu_record_mpm(dc_gpu_t *gpu) {
     __real_dc_gpu_record_mpm(gpu);
 }
 
+static int marker_record_order(const void *left, const void *right) {
+    return memcmp(left, right, sizeof(dc_marker_t));
+}
+
 static void test_mixed_grain_batch_matches_serial_after_new_admission(void) {
     dc_gpu_t *parent = make_parent();
     dc_offscreen_t *rooms[2], *serial[2];
@@ -389,6 +393,8 @@ static void test_mixed_grain_batch_matches_serial_after_new_admission(void) {
                 ASSERT_EQ(batch.chunk->particle_count, ref.chunk->particle_count);
                 ASSERT_EQ(memcmp(batch.chunk->cells, ref.chunk->cells, sizeof(chunk->cells)), 0);
                 ASSERT_EQ(memcmp(batch.chunk->face_velocity, ref.chunk->face_velocity, sizeof(chunk->face_velocity)), 0);
+                qsort(batch.chunk->markers, batch.chunk->marker_count, sizeof(dc_marker_t), marker_record_order);
+                qsort(ref.chunk->markers, ref.chunk->marker_count, sizeof(dc_marker_t), marker_record_order);
                 ASSERT_EQ(memcmp(batch.chunk->markers, ref.chunk->markers,
                                  batch.chunk->marker_count * sizeof(*chunk->markers)), 0);
                 ASSERT_EQ(memcmp(batch.chunk->particles, ref.chunk->particles, sizeof(chunk->particles)), 0);
