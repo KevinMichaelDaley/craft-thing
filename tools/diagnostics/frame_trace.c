@@ -50,7 +50,8 @@ static uint32_t pushed_mode,pushed_reactive_mode;
 
 VkResult __real_vkBeginCommandBuffer(VkCommandBuffer,
                                      const VkCommandBufferBeginInfo *);
-bool __real_dc_gpu_present_chunks_steps(dc_gpu_t *, uint32_t, char *, uint32_t);
+bool __real_dc_gpu_present_chunks_steps_progress(dc_gpu_t *, uint32_t, uint32_t *,
+                                                 char *, uint32_t);
 void __real_dc_gpu_record_rigid(dc_gpu_t *);
 void __real_dc_gpu_record_fluid_phase(dc_gpu_t *, uint32_t);
 void __real_dc_gpu_record_mpm(dc_gpu_t *);
@@ -377,12 +378,13 @@ void __wrap_vkCmdDispatchIndirect(VkCommandBuffer command, VkBuffer buffer,
     hydro_end(command, at);
 }
 
-bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
-                                       char *err, uint32_t cap) {
+static bool trace_present(dc_gpu_t *gpu, uint32_t steps, uint32_t *completed,
+                          char *err, uint32_t cap) {
+    if (completed) *completed = 0;
     if(getenv("DC_FRAME_TRACE_API_ONLY")) {
         coarse=true;
         double began=seconds();
-        bool okay=__real_dc_gpu_present_chunks_steps(gpu,steps,err,cap);
+        bool okay=__real_dc_gpu_present_chunks_steps_progress(gpu,steps,completed,err,cap);
         printf("present-api,%u,wall%.3f,steps%u\n",frame,(seconds()-began)*1000.,steps);
         frame_api_print(frame++);return okay;
     }
@@ -396,7 +398,7 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
     component_detail=getenv("DC_FRAME_TRACE_COMPONENTS")!=NULL;
     overflow = false;
     double began = seconds();
-    bool okay = __real_dc_gpu_present_chunks_steps(gpu, steps, err, cap);
+    bool okay = __real_dc_gpu_present_chunks_steps_progress(gpu, steps, completed, err, cap);
     double wall_ms = (seconds() - began) * 1000.;
     traced = NULL;
     uint64_t times[QUERY_CAPACITY];
@@ -454,4 +456,15 @@ bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
         okay = profile_contact_pairs(gpu);
     vkDestroyQueryPool(gpu->device, pool, NULL);
     return okay && !overflow;
+}
+
+bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
+                                       char *err, uint32_t cap) {
+    return trace_present(gpu, steps, NULL, err, cap);
+}
+
+bool __wrap_dc_gpu_present_chunks_steps_progress(dc_gpu_t *gpu, uint32_t steps,
+                                                 uint32_t *completed,
+                                                 char *err, uint32_t cap) {
+    return trace_present(gpu, steps, completed, err, cap);
 }

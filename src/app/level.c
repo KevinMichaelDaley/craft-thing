@@ -674,7 +674,16 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
         return error(err, cap, "Invalid elapsed simulation time");
     }
     if (view->players && !dc_players_present(view,err,cap)) return false;
-    if (!dc_gpu_present_chunks_steps(view->gpu, ready_steps, err, cap)) return false;
+    uint32_t completed;
+    bool presented = dc_gpu_present_chunks_steps_progress(view->gpu, ready_steps,
+                                                          &completed, err, cap);
+    if (completed) {
+        dc_level_step_run_t *run = &pending_runs(view)[view->first_run];
+        run->count -= completed;
+        view->pending_steps -= completed;
+        if (!run->count) ++view->first_run;
+    }
+    if (!presented) return false;
     view->pending_steps = 0;
     view->first_run = view->end_run = 0;
     return true;

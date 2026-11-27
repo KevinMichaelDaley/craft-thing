@@ -361,7 +361,7 @@ build/renderer_performance_tests: $(PERFORMANCE_OBJ)
 build/renderer_visual_tests: $(PERFORMANCE_OBJ)
 QUARTER_APP_OBJ = $(patsubst %.c,build/performance/%.o,$(filter-out $(GPU_SRC) src/world/chunk.c,$(NATIVE_SRC)))
 -include $(QUARTER_APP_OBJ:.o=.d)
-FRAME_TRACE_LINK = -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=fr_renderer_record
+FRAME_TRACE_LINK = -Wl,--wrap=dc_gpu_present_chunks_steps -Wl,--wrap=dc_gpu_present_chunks_steps_progress -Wl,--wrap=vkBeginCommandBuffer -Wl,--wrap=dc_gpu_record_rigid -Wl,--wrap=dc_gpu_record_fluid_phase -Wl,--wrap=dc_gpu_record_mpm -Wl,--wrap=dc_gpu_record_contacts -Wl,--wrap=vkCmdBindPipeline -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=fr_renderer_record
 FRAME_TRACE_LINK += -Wl,--wrap=vkCmdPushConstants -Wl,--wrap=dc_gpu_record_component_extraction -Wl,--wrap=dc_gpu_record_broadphase -Wl,--wrap=dc_gpu_record_solver
 FRAME_TRACE_LINK += -Wl,--wrap=vkCreateComputePipelines -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkAcquireNextImageKHR -Wl,--wrap=vkQueuePresentKHR -Wl,--wrap=vkWaitForFences -Wl,--wrap=vkQueueWaitIdle -Wl,--wrap=vkDeviceWaitIdle -Wl,--wrap=dc_gpu_runtime_bodies_service
 FRAME_TRACE_LINK += -rdynamic
@@ -756,7 +756,7 @@ build/dungeoncraft: build/shutdown.o src/app/structural_demo.c src/app/structura
 build/controls_tests: tests/app/controls_tests.c src/app/level.c src/app/level.h src/app/session.c src/app/session.h $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/app/controls_tests.c src/app/level.c $(PLAYER_RUNTIME_SRC) src/app/session.c $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS)
 
-LEVEL_TICK_CALLS = dc_gpu_set_page dc_gpu_set_body_origin dc_gpu_prepare_body_origin dc_gpu_set_tick_water_source dc_gpu_set_tick_seconds dc_gpu_tick_step dc_gpu_present_chunks_steps
+LEVEL_TICK_CALLS = dc_gpu_set_page dc_gpu_set_body_origin dc_gpu_prepare_body_origin dc_gpu_set_tick_water_source dc_gpu_set_tick_seconds dc_gpu_tick_step dc_gpu_present_chunks_steps_progress
 LEVEL_TICK_CALLS += dc_players_prepare_view dc_players_present dc_players_step
 build/level_ticks_tests: tests/app/level_ticks_tests.c src/app/level.c src/app/level.h src/app/level_internal.h src/app/view_config.h src/app/player_session_internal.h $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/level.c $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(LEVEL_TICK_CALLS),-Xlinker --wrap=$(fn))

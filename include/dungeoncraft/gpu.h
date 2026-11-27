@@ -408,9 +408,16 @@ bool dc_gpu_present(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 /** Render resident chunks and present them in one GPU submission. */
 bool dc_gpu_present_chunks(dc_gpu_t *gpu, char *err_buf, uint32_t err_cap);
 
-/** Execute pending physics ticks, render chunks, and present in one submission. */
+/** Execute physics ticks, render the chunks, and present the frame. */
 bool dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
                                  char *err_buf, uint32_t err_cap);
+
+/** Present a frame and optionally report the number of requested ticks whose
+ * execution completed, including when presentation fails. The output starts
+ * at zero on every call. The return value reports frame success. */
+bool dc_gpu_present_chunks_steps_progress(dc_gpu_t *gpu, uint32_t steps,
+                                          uint32_t *completed,
+                                          char *err_buf, uint32_t err_cap);
 
 /** Copy completed GPU cell values into caller-owned memory. */
 bool dc_gpu_readback(dc_gpu_t *gpu, uint32_t *cells, uint32_t cell_count,

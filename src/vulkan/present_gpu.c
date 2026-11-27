@@ -104,13 +104,17 @@ static void record_composed_readback(dc_gpu_t *gpu, VkImage composed, VkBuffer c
 }
 
 static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkBuffer capture,
-                          char *err, uint32_t cap) {
+                          uint32_t *completed, char *err, uint32_t cap) {
+    if (completed) *completed = 0;
     if (!gpu || !gpu->swapchain) return error(err, cap, "GPU window is not initialized");
     const char *trace_setting=getenv("DC_FRAME_TIMINGS");
     bool trace_waits=trace_setting&&strcmp(trace_setting,"0")!=0;
     uint64_t setup_begin=trace_waits?SDL_GetPerformanceCounter():0;
     if(gpu->gas) {
-        for(uint32_t i=0;i<steps;i++) if(!dc_gpu_tick_step(gpu,err,cap)) return false;
+        for (uint32_t i = 0; i < steps; ++i) {
+            if (!dc_gpu_tick_step(gpu, err, cap)) return false;
+            if (completed) ++*completed;
+        }
         steps=0;
     }
     uint64_t tick_done=trace_waits?SDL_GetPerformanceCounter():0;
@@ -254,6 +258,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
     /* Wait for command and host-visible physics completion, not compositor display. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
+    if (completed) *completed += steps;
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         return error(err, cap, "Vulkan swapchain presentation failed");
     if (render_chunks) fr_renderer_fire_coverage_presented(gpu);
@@ -269,16 +274,22 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
 }
 
 bool dc_gpu_present(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return present_frame(gpu, false, 0, VK_NULL_HANDLE, err, cap);
+    return present_frame(gpu, false, 0, VK_NULL_HANDLE, NULL, err, cap);
 }
 
 bool dc_gpu_present_chunks(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    return present_frame(gpu, true, 0, VK_NULL_HANDLE, err, cap);
+    return present_frame(gpu, true, 0, VK_NULL_HANDLE, NULL, err, cap);
 }
 
 bool dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
                                  char *err, uint32_t cap) {
-    return present_frame(gpu, true, steps, VK_NULL_HANDLE, err, cap);
+    return dc_gpu_present_chunks_steps_progress(gpu, steps, NULL, err, cap);
+}
+
+bool dc_gpu_present_chunks_steps_progress(dc_gpu_t *gpu, uint32_t steps,
+                                          uint32_t *completed,
+                                          char *err, uint32_t cap) {
+    return present_frame(gpu, true, steps, VK_NULL_HANDLE, completed, err, cap);
 }
 
 bool dc_gpu_capture_present(dc_gpu_t *gpu, uint32_t *pixels, size_t count,
@@ -297,7 +308,7 @@ bool dc_gpu_capture_present(dc_gpu_t *gpu, uint32_t *pixels, size_t count,
     dc_gpu_address_buffer_t staging = {0};
     if (!dc_gpu_address_buffer_create(gpu, pixel_count * sizeof(*pixels), true, &staging, err, cap))
         return false;
-    bool okay = present_frame(gpu, false, 0, staging.buffer, err, cap);
+    bool okay = present_frame(gpu, false, 0, staging.buffer, NULL, err, cap);
     if (okay) {
         const uint8_t *sample = staging.mapped;
         for (size_t i = 0; i < (size_t)pixel_count; ++i, sample += 4u) {

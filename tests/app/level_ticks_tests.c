@@ -80,12 +80,16 @@ bool __wrap_dc_players_step(dc_level_view_t *view, float seconds, char *err, uin
     return true;
 }
 
-bool __wrap_dc_gpu_present_chunks_steps(dc_gpu_t *gpu, uint32_t steps,
-                                        char *err, uint32_t cap) {
+bool __wrap_dc_gpu_present_chunks_steps_progress(dc_gpu_t *gpu, uint32_t steps,
+                                                 uint32_t *completed,
+                                                 char *err, uint32_t cap) {
+    *completed = 0;
     ++g_frame.presents;
     g_frame.presented_steps += steps;
-    for (uint32_t i = 0; i < steps; ++i)
+    for (uint32_t i = 0; i < steps; ++i) {
         if (!__wrap_dc_gpu_tick_step(gpu, err, cap)) return false;
+        ++*completed;
+    }
     return !g_frame.reject_present;
 }
 
