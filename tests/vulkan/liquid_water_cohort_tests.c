@@ -5,6 +5,8 @@
 
 #include "dungeoncraft/liquid_seam.h"
 #include "ferrum/fire/bulk_phase_gpu.h"
+#include "ferrum/fire/gpu.h"
+#include "ferrum/fire/material_profile.h"
 #include "ferrum/fire/thermal_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
@@ -745,6 +747,7 @@ static void test_grains_cross_the_owner_face_in_both_directions(void) {
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *expected = calloc(1, sizeof(*expected));
     dc_liquid_seam_endpoint_t tiles[2] = {0};
     uint32_t ids[2][2];
+    fr_reactive_state_t states[2];
     ASSERT_TRUE(chunk && expected && dc_gpu_create(&owner[0], 64, 64, shader, g_err, sizeof(g_err)) &&
         dc_gpu_create_shared(&owner[1], owner[0], 64, 64, shader, g_err, sizeof(g_err)) &&
         dc_gpu_create(&mono, 128, 64, shader, g_err, sizeof(g_err)));
@@ -763,6 +766,10 @@ static void test_grains_cross_the_owner_face_in_both_directions(void) {
             dc_gpu_set_page(owner[i], 0, 0, 0, g_err, sizeof(g_err)) &&
             dc_gpu_upload_chunk(mono, i, chunk, g_err, sizeof(g_err)) &&
             dc_gpu_set_page(mono, i, 0, i, g_err, sizeof(g_err)));
+        ASSERT_TRUE(fr_reactive_state_from_particle(&chunk->particles[cell], 500.f + i * 75.f, 901u+i,
+            &states[i], g_err, sizeof(g_err)) &&
+            fr_gpu_reactive_seed_particle(owner[i],cell,&states[i],g_err,sizeof(g_err)) &&
+            fr_gpu_reactive_seed_particle(mono,i*DC_MPM_PARTICLES_PER_CHUNK+cell,&states[i],g_err,sizeof(g_err)));
     }
     const float dt = 1.f / 60.f;
     ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, dt) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
@@ -776,6 +783,14 @@ static void test_grains_cross_the_owner_face_in_both_directions(void) {
             dc_mpm_particle_t *particle = &expected->particles[j];
             crossed |= particle->mass_fp && particle->id_lo == ids[1u-i][0] &&
                 particle->id_hi == ids[1u-i][1];
+        }
+        for (unsigned j=0;j<DC_MPM_PARTICLES_PER_CHUNK;j++) if (expected->particles[j].mass_fp) {
+            fr_reactive_record_t actual, reference;
+            bool present=false, native_present=false;
+            ASSERT_TRUE(fr_gpu_reactive_read_particle(mono,i*DC_MPM_PARTICLES_PER_CHUNK+j,
+                &reference,&native_present,g_err,sizeof(g_err)) && native_present);
+            ASSERT_TRUE(fr_gpu_reactive_read_particle(owner[i],j,&actual,&present,g_err,sizeof(g_err)) && present);
+            ASSERT_EQ(memcmp(&reference,&actual,sizeof(actual)),0);
         }
         ASSERT_TRUE(crossed);
         ASSERT_EQ(chunk->particle_count, expected->particle_count);
