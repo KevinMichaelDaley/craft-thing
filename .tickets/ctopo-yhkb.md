@@ -1,6 +1,6 @@
 ---
 id: ctopo-yhkb
-status: in_progress
+status: closed
 deps: [ctols-vhg9, ctopp-fkir, ctopp-2c14, ctowpe-3271]
 links: []
 created: 2026-11-27T05:39:32Z
@@ -32,3 +32,7 @@ The durable owner binder expects both endpoints at the same completed interval a
 **2026-11-27T06:02:05Z**
 
 The pressure checkpoint uses the native projection on a sealed two-tile domain. ctopp-2c14 covers extracting and applying water transport. This parent retains the coupled oil and slime planner, larger resident pressure neighborhoods, and scheduling both owners at the same transport interval.
+
+**2026-11-27T13:35:59Z**
+
+Verified the pressure and aperture oracle in both face orientations, signed native water sweeps and rejection/recovery, shared multi-tile cadence, and oil/slime momentum and thermal transport. The parent ctcdo-rcs9 retains gas and the normal camera grain transfer.
