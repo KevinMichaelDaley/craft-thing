@@ -35,6 +35,7 @@ static void water_case(bool soil,bool displacement,bool distant) {
     f->p.buffer=f->buffers[5];f->p.mapped=f->words[5];
     ASSERT_TRUE(fixture_body_pipeline(&f->p,&f->gpu,VK_NULL_HANDLE,displacement?
         "build/shaders/fluid_displacement.comp.spv":"build/shaders/fluid_transport.comp.spv",color_bindings,8,0));
+    ASSERT_TRUE(f->p.empty_bulk);
     VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
     for(unsigned i=0;i<8;i++) {
         info[i]=(VkDescriptorBufferInfo){i<7?f->buffers[i]:pigment,0,i<7?sizes[i]*4:pigment_bytes};

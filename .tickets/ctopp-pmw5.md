@@ -1,6 +1,6 @@
 ---
 id: ctopp-pmw5
-status: closed
+status: in_progress
 deps: []
 links: [ctvfb-5v03]
 created: 2026-11-27T06:05:51Z
