@@ -630,6 +630,8 @@ bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap);
 void dc_gpu_record_tick_step(dc_gpu_t *gpu);
 
 enum { DC_GPU_TICK_BATCH_LIMIT = 16u };
+/** Whether this owner can advance without separate gas or coupled-owner submissions. */
+bool dc_gpu_can_batch_independent_tick(const dc_gpu_t *gpu);
 /** Advance independent sealed owners on one queue and wait for the entire submission. */
 bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char *err, uint32_t cap);
 /** Submit both owners' source and rigid stages before shared water, or their remaining physics after it. */

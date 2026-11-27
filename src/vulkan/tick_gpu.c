@@ -243,6 +243,21 @@ static bool tick_record(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture,
     return true;
 }
 
+static bool submit_commands(dc_gpu_t *gpu, const VkCommandBuffer *commands, uint32_t count,
+                            char *err, uint32_t cap) {
+    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = count, .pCommandBuffers = commands };
+    if (vkResetFences(gpu->device, 1, &gpu->tick_fence) != VK_SUCCESS ||
+        vkQueueSubmit(gpu->queue, 1, &submit, gpu->tick_fence) != VK_SUCCESS ||
+        vkWaitForFences(gpu->device, 1, &gpu->tick_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+        return error(err, cap, "GPU tick submission failed");
+    return true;
+}
+
+bool dc_gpu_can_batch_independent_tick(const dc_gpu_t *gpu) {
+    return dc_gpu_chunk_physics_isolated(gpu) && !gpu->gas && !dc_gpu_liquid_owner_held(gpu);
+}
+
 bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char *err, uint32_t cap) {
     if (!owners || !count || count > DC_GPU_TICK_BATCH_LIMIT || !owners[0])
         return error(err, cap, "Invalid independent tick batch");
@@ -250,7 +265,7 @@ bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char
     VkCommandBuffer commands[DC_GPU_TICK_BATCH_LIMIT];
     for (uint32_t i = 0; i < count; ++i) {
         dc_gpu_t *gpu = owners[i];
-        if (!dc_gpu_chunk_physics_isolated(gpu) || gpu->gas || dc_gpu_liquid_owner_held(gpu) ||
+        if (!dc_gpu_can_batch_independent_tick(gpu) ||
             gpu->device != first->device || gpu->queue != first->queue)
             return error(err, cap, "Independent ticks require isolated owners on the same queue");
         for (uint32_t j = 0; j < i; ++j)
@@ -260,23 +275,12 @@ bool dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char
         if (!tick_record(owners[i], NULL, err, cap)) return false;
         commands[i] = owners[i]->command;
     }
-    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = count, .pCommandBuffers = commands };
-    if (vkResetFences(first->device, 1, &first->tick_fence) != VK_SUCCESS ||
-        vkQueueSubmit(first->queue, 1, &submit, first->tick_fence) != VK_SUCCESS ||
-        vkWaitForFences(first->device, 1, &first->tick_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
-        return error(err, cap, "Cannot confirm independent owner ticks");
-    return true;
+    return submit_commands(first, commands, count, err, cap);
 }
 
 static bool tick_submit(dc_gpu_t *gpu, dc_gpu_tick_capture_t *capture, char *err, uint32_t cap) {
-    if (!tick_record(gpu, capture, err, cap)) return false;
-    VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
-    if (vkResetFences(gpu->device,1,&gpu->tick_fence)!=VK_SUCCESS||
-        vkQueueSubmit(gpu->queue, 1, &submit, gpu->tick_fence) != VK_SUCCESS ||
-        vkWaitForFences(gpu->device,1,&gpu->tick_fence,VK_TRUE,UINT64_MAX) != VK_SUCCESS)
-        return error(err, cap, "GPU tick submission failed");
+    if (!tick_record(gpu, capture, err, cap) || !submit_commands(gpu, &gpu->command, 1, err, cap))
+        return false;
     if (!capture) return true;
     uint64_t timestamps[4] = {0};
     if (vkGetQueryPoolResults(gpu->device, gpu->timestamp_pool, 0, 4,

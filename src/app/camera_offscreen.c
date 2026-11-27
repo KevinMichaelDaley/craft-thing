@@ -13,6 +13,8 @@
 #include "offscreen_internal.h"
 
 enum { CAMERA_WORKSPACE_STEPS_PER_TICK = 2u };
+_Static_assert((unsigned)DC_CAMERA_WORKSPACE_LIMIT <= (unsigned)DC_GPU_TICK_BATCH_LIMIT,
+               "Every selected camera workspace must fit in one submission");
 
 static bool same_coord(dc_chunk_coord_t a, dc_chunk_coord_t b) {
     return a.x == b.x && a.y == b.y;
@@ -422,18 +424,17 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
     if (needed || view->world_seconds - time.seconds >= period / 60.)
         camera->workspace->due_seconds = view->world_seconds;
     dc_offscreen_t *workspace = camera->workspace;
-    if (!closing && !needed && independent && time.seconds < workspace->due_seconds &&
-        workspace->references == 1u && !workspace->failed && !workspace->held_writes &&
-        !workspace->water_coupled && !dc_gpu_liquid_owner_held(workspace->gpu) &&
-        !workspace->gpu->gas && dc_gpu_chunk_physics_isolated(workspace->gpu)) {
-        due->rooms[due->count++] = camera;
-        return true;
-    }
-    if (!closing && independent && time.seconds < camera->workspace->due_seconds &&
-        !dc_offscreen_advance(camera->workspace, camera->workspace->due_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
-        if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
-            dc_camera_offscreen_release(camera);
-        return false;
+    if (!closing && independent && time.seconds < workspace->due_seconds) {
+        if (!needed && workspace->references == 1u && !workspace->failed && !workspace->held_writes &&
+            !workspace->water_coupled && dc_gpu_can_batch_independent_tick(workspace->gpu)) {
+            due->rooms[due->count++] = camera;
+            return true;
+        }
+        if (!dc_offscreen_advance(workspace, workspace->due_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
+            if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
+                dc_camera_offscreen_release(camera);
+            return false;
+        }
     }
     dc_level_offscreen_progress(view, camera->coord, camera->generation, &time, &writing);
     if (closing || !independent || (needed && time.seconds >= view->world_seconds))

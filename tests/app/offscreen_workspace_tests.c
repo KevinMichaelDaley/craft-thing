@@ -291,7 +291,46 @@ static void test_partial_water_cycle_holds_the_workspace_until_both_owners_finis
     PASS();
 }
 
+static unsigned replay_submissions, fail_replay_submission;
+
+bool __real_dc_gpu_tick_independent_batch(dc_gpu_t *const *, uint32_t, char *, uint32_t);
+bool __wrap_dc_gpu_tick_independent_batch(dc_gpu_t *const *owners, uint32_t count, char *err, uint32_t cap) {
+    bool completed = __real_dc_gpu_tick_independent_batch(owners, count, err, cap);
+    return completed && ++replay_submissions != fail_replay_submission;
+}
+
+static void test_failed_group_commits_only_confirmed_owner_steps(void) {
+    dc_gpu_t *parent = make_parent();
+    ASSERT_TRUE(parent);
+    dc_offscreen_t *rooms[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        dc_chunk_coord_t coord = {(int64_t)i * 3, 0};
+        dc_chunk_t chunk = {.coord = coord};
+        dc_stream_result_t source = {.kind = DC_STREAM_LOADED, .coord = coord, .chunk = &chunk,
+            .generation = 1, .time = {.seconds = 2., .known = true}};
+        rooms[i] = dc_offscreen_create(parent, coord, g_err, sizeof(g_err));
+        ASSERT_TRUE(rooms[i] && dc_offscreen_admit(rooms[i], &source, 1, g_err, sizeof(g_err)));
+        rooms[i]->due_seconds = i == 2 ? 2.03125 : 2.09375;
+    }
+    replay_submissions = 0;
+    fail_replay_submission = 2;
+    ASSERT_TRUE(!dc_offscreen_advance_due_group(rooms, 3, 2, g_err, sizeof(g_err)));
+    fail_replay_submission = 0;
+    ASSERT_INT_EQ(replay_submissions, 2);
+    for (unsigned i = 0; i < 2; ++i) {
+        ASSERT_TRUE(rooms[i]->failed);
+        ASSERT_EQ(rooms[i]->time.seconds, 2. + (double)nextafterf(.05f, 0.f));
+        ASSERT_TRUE(!dc_offscreen_advance(rooms[i], 2.09375, 2, g_err, sizeof(g_err)));
+    }
+    ASSERT_TRUE(!rooms[2]->failed);
+    ASSERT_EQ(rooms[2]->time.seconds, rooms[2]->due_seconds);
+    for (unsigned i = 0; i < 3; ++i) dc_offscreen_destroy(rooms[i]);
+    dc_gpu_destroy(parent);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_failed_group_commits_only_confirmed_owner_steps);
     RUN(test_partial_water_cycle_holds_the_workspace_until_both_owners_finish);
     RUN(test_isolated_tile_advances_and_returns_through_cold_storage);
     RUN(test_absolute_target_budget_and_failed_owner_cannot_publish);
