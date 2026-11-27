@@ -176,7 +176,9 @@ build/authored_request.o: src/structural/authoring.c include/ferrum/structural/a
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-GPU_OBJ += build/pressure_work_gpu.o
+GPU_OBJ += build/pressure_work_gpu.o build/projection_gpu.o
+build/projection_gpu.o: src/vulkan/projection_gpu.c src/vulkan/renderer_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/pressure_work_gpu.o: src/vulkan/pressure_work_gpu.c src/vulkan/gpu_internal.h build/shaders/pressure_work.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp

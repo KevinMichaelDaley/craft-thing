@@ -34,6 +34,7 @@ static const struct {
     [VELOCITY] = {0, 10, SEAM_CELLS * sizeof(dc_face_velocity_t)},
     [PRESSURE] = {0, 11, SEAM_CELLS * sizeof(float)},
     [SLOT_PAGES] = {0, 17, SEAM_TILES * sizeof(uint32_t)},
+    /* Dense dispatch uses neither sparse input, but the native layout binds both. */
     [PRESSURE_WORK] = {1, 0, sizeof(uint32_t)},
     [PRESSURE_STENCIL] = {1, 1, sizeof(uint32_t)}
 };
@@ -133,30 +134,25 @@ static void copy_projection_tile(VkCommandBuffer command, const struct dc_gpu_se
 
     const uint32_t x = axis == DC_LIQUID_SEAM_X ? tile * DC_CHUNK_SIDE : 0u;
     const uint32_t y = axis == DC_LIQUID_SEAM_Y ? tile * DC_CHUNK_SIDE : 0u;
-    VkBufferCopy rows[DC_CHUNK_SIDE];
+    VkBufferCopy velocity[DC_CHUNK_SIDE], occupancy[DC_CHUNK_SIDE];
     for (uint32_t row = 0; row < DC_CHUNK_SIDE; ++row) {
         const VkDeviceSize from = (endpoint.tile_y * DC_CHUNK_SIDE + row) *
                                   (VkDeviceSize)source->width + endpoint.tile_x * DC_CHUNK_SIDE;
         const VkDeviceSize to = (y + row) * width + x;
-        rows[row] = (VkBufferCopy){from * sizeof(dc_face_velocity_t),
+        velocity[row] = (VkBufferCopy){from * sizeof(dc_face_velocity_t),
             scratch->offset[VELOCITY] + to * sizeof(dc_face_velocity_t),
             DC_CHUNK_SIDE * sizeof(dc_face_velocity_t)};
-    }
-    vkCmdCopyBuffer(command, source->velocity_buffer, scratch->buffer, DC_CHUNK_SIDE, rows);
-    const VkDeviceSize source_plane = (VkDeviceSize)source->width * source->height * sizeof(uint32_t);
-    const VkDeviceSize target_plane = SEAM_CELLS * sizeof(uint32_t);
-    for (uint32_t row = 0; row < DC_CHUNK_SIDE; ++row) {
-        const VkDeviceSize from = (endpoint.tile_y * DC_CHUNK_SIDE + row) *
-                                  (VkDeviceSize)source->width + endpoint.tile_x * DC_CHUNK_SIDE;
-        const VkDeviceSize to = (y + row) * width + x;
-        rows[row] = (VkBufferCopy){from * sizeof(uint32_t),
+        occupancy[row] = (VkBufferCopy){from * sizeof(uint32_t),
             scratch->offset[OCCUPANCY] + to * sizeof(uint32_t), DC_CHUNK_SIDE * sizeof(uint32_t)};
     }
+    vkCmdCopyBuffer(command, source->velocity_buffer, scratch->buffer, DC_CHUNK_SIDE, velocity);
+    const VkDeviceSize source_plane = (VkDeviceSize)source->width * source->height * sizeof(uint32_t);
+    const VkDeviceSize target_plane = SEAM_CELLS * sizeof(uint32_t);
     for (uint32_t plane = 0; plane < OCCUPANCY_PLANES; ++plane) {
-        vkCmdCopyBuffer(command, source->occupancy_buffer, scratch->buffer, DC_CHUNK_SIDE, rows);
+        vkCmdCopyBuffer(command, source->occupancy_buffer, scratch->buffer, DC_CHUNK_SIDE, occupancy);
         for (uint32_t row = 0; row < DC_CHUNK_SIDE; ++row) {
-            rows[row].srcOffset += source_plane;
-            rows[row].dstOffset += target_plane;
+            occupancy[row].srcOffset += source_plane;
+            occupancy[row].dstOffset += target_plane;
         }
     }
 }
@@ -226,8 +222,10 @@ bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
     const uint32_t height = SEAM_CELLS / width;
     const VkCommandBuffer command = gpu->command;
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
-        VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     copy_projection_tile(command, scratch, first, 0, axis, width);
     copy_projection_tile(command, scratch, second, 1, axis, width);
     if (previous_normal) override_normal(gpu, axis, width, previous_normal);

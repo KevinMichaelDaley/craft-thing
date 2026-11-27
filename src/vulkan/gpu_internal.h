@@ -579,6 +579,7 @@ void dc_gpu_fluid_destroy(dc_gpu_t *gpu);
 #define DC_PRESSURE_PASS_COUNT (2u * DC_PRESSURE_SWEEPS + 2u)
 
 void dc_gpu_record_projection_begin(dc_gpu_t *gpu);
+void dc_gpu_record_projection_fields(dc_gpu_t *gpu);
 void dc_gpu_record_dense_projection(dc_gpu_t *gpu, const VkDescriptorSet sets[2],
                                      uint32_t width, uint32_t height, float step_scale);
 void dc_gpu_record_pressure_passes(dc_gpu_t *gpu, uint32_t first, uint32_t stop);

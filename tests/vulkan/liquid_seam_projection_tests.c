@@ -18,7 +18,8 @@ static char g_err[256];
 #define ASSERT_INT_EQ(a, b) ASSERT_EQ((int)(a), (int)(b))
 #define PASS() ++g_pass
 
-enum { FORWARD = 20, REVERSE = 21, BLOCKED = 23, WALL = 25 };
+enum { FORWARD = 20, REVERSE = 21, BLOCKED = 23, WALL = 25, RECEIVING_BODY = 27 };
+static const uint32_t shallow_aperture = DC_FLUID_FULL / 4u;
 static const float step_seconds = 1.f / 120.f;
 static const float initial_normal = 0.6f;
 
@@ -29,8 +30,9 @@ static uint32_t cell_index(bool y_axis, uint32_t normal, uint32_t lane, uint32_t
 static void seed_basin(dc_chunk_t *a, dc_chunk_t *b, bool y_axis) {
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
         a->cells[i].material = b->cells[i].material = DC_MATERIAL_STONE;
-    for (uint32_t lane = FORWARD; lane <= WALL; ++lane) {
-        if (lane != FORWARD && lane != REVERSE && lane != BLOCKED && lane != WALL) continue;
+    const uint32_t open_lanes[] = {FORWARD, REVERSE, BLOCKED, WALL, RECEIVING_BODY};
+    for (size_t l = 0; l < sizeof(open_lanes) / sizeof(open_lanes[0]); ++l) {
+        uint32_t lane = open_lanes[l];
         uint32_t i = cell_index(y_axis, DC_CHUNK_SIDE - 1u, lane, DC_CHUNK_SIDE);
         uint32_t j = cell_index(y_axis, 0, lane, DC_CHUNK_SIDE);
         a->cells[i] = (dc_cell_t){.fluid_mass = DC_FLUID_FULL / 2u};
@@ -60,8 +62,14 @@ static void seed_apertures(dc_gpu_t *gpu, bool y_axis, uint32_t base_x, uint32_t
     uint32_t *plane = (uint32_t *)gpu->occupancy_mapped +
                       (y_axis ? 4u : 3u) * gpu->width * gpu->height;
     uint32_t offset = base_y * gpu->width + base_x;
-    plane[offset + cell_index(y_axis, DC_CHUNK_SIDE - 1u, REVERSE, gpu->width)] = DC_FLUID_FULL / 2u;
+    plane[offset + cell_index(y_axis, DC_CHUNK_SIDE - 1u, REVERSE, gpu->width)] =
+        DC_FLUID_FULL - shallow_aperture;
     plane[offset + cell_index(y_axis, DC_CHUNK_SIDE - 1u, BLOCKED, gpu->width)] = DC_FLUID_FULL;
+}
+
+static uint32_t *receiver_coverage(dc_gpu_t *gpu, bool y_axis, uint32_t base_x, uint32_t base_y) {
+    uint32_t *plane = (uint32_t *)gpu->occupancy_mapped + 2u * gpu->width * gpu->height;
+    return plane + base_y * gpu->width + base_x + cell_index(y_axis, 0, RECEIVING_BODY, gpu->width);
 }
 
 static bool native_projection(dc_gpu_t *gpu, VkBuffer readback) {
@@ -97,6 +105,7 @@ static void compare_projection(dc_liquid_seam_axis_t axis) {
     VkDeviceMemory memory = VK_NULL_HANDLE;
     void *mapped = NULL;
     dc_liquid_seam_sample_t samples[DC_CHUNK_SIDE] = {0};
+    dc_liquid_seam_sample_t saved[DC_CHUNK_SIDE];
     float previous_normal[DC_CHUNK_SIDE] = {0};
     g_err[0] = '\0';
 
@@ -114,6 +123,7 @@ static void compare_projection(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(upload(first.gpu, first.slot, first.tile_x, first.tile_y, a));
     ASSERT_TRUE(upload(second.gpu, second.slot, second.tile_x, second.tile_y, b));
     seed_apertures(first.gpu, y_axis, DC_CHUNK_SIDE, 0);
+    *receiver_coverage(second.gpu, y_axis, 0, 2u * DC_CHUNK_SIDE) = DC_FLUID_FULL;
     ASSERT_TRUE(dc_gpu_download_chunk(first.gpu, first.slot, before, g_err, sizeof(g_err)));
 
     ASSERT_TRUE(dc_gpu_project_liquid_seam(first, second, axis, step_seconds, NULL,
@@ -121,10 +131,15 @@ static void compare_projection(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(dc_gpu_download_chunk(first.gpu, first.slot, after, g_err, sizeof(g_err)));
     ASSERT_EQ(memcmp(before->cells, after->cells, sizeof(before->cells)), 0);
     ASSERT_EQ(memcmp(before->face_velocity, after->face_velocity, sizeof(before->face_velocity)), 0);
+    ASSERT_TRUE(dc_gpu_download_chunk(second.gpu, second.slot, after, g_err, sizeof(g_err)));
+    ASSERT_EQ(memcmp(b->cells, after->cells, sizeof(b->cells)), 0);
+    ASSERT_EQ(memcmp(b->face_velocity, after->face_velocity, sizeof(b->face_velocity)), 0);
+    ASSERT_INT_EQ(*receiver_coverage(second.gpu, y_axis, 0, 2u * DC_CHUNK_SIDE), DC_FLUID_FULL);
 
     ASSERT_TRUE(dc_gpu_create_shared(&mono, first.gpu, width, height, shader, g_err, sizeof(g_err)));
     ASSERT_TRUE(upload(mono, 0, 0, 0, a) && upload(mono, 1, !y_axis, y_axis, b));
     seed_apertures(mono, y_axis, 0, 0);
+    *receiver_coverage(mono, y_axis, !y_axis * DC_CHUNK_SIDE, y_axis * DC_CHUNK_SIDE) = DC_FLUID_FULL;
     ASSERT_TRUE(dc_gpu_make_mapped_buffer(mono, 2u * DC_CHUNK_CELLS * sizeof(float), &readback,
                                         &memory, &mapped, g_err, sizeof(g_err)));
     ASSERT_TRUE(native_projection(mono, readback));
@@ -141,11 +156,13 @@ static void compare_projection(dc_liquid_seam_axis_t axis) {
     ASSERT_TRUE(samples[FORWARD].normal_velocity > 0.1f);
     ASSERT_TRUE(samples[REVERSE].normal_velocity < -0.1f);
     ASSERT_INT_EQ(samples[FORWARD].aperture_fp, DC_FLUID_FULL);
-    ASSERT_INT_EQ(samples[REVERSE].aperture_fp, DC_FLUID_FULL / 2u);
+    ASSERT_INT_EQ(samples[REVERSE].aperture_fp, shallow_aperture);
     ASSERT_INT_EQ(samples[BLOCKED].aperture_fp, 0u);
     ASSERT_INT_EQ(samples[WALL].aperture_fp, 0u);
+    ASSERT_INT_EQ(samples[RECEIVING_BODY].aperture_fp, 0u);
     ASSERT_EQ(samples[BLOCKED].normal_velocity, 0.f);
     ASSERT_EQ(samples[WALL].normal_velocity, 0.f);
+    ASSERT_EQ(samples[RECEIVING_BODY].normal_velocity, 0.f);
 
     previous_normal[FORWARD] = -5.f;
     previous_normal[REVERSE] = 5.f;
@@ -153,14 +170,18 @@ static void compare_projection(dc_liquid_seam_axis_t axis) {
                                           samples, g_err, sizeof(g_err)));
     ASSERT_TRUE(samples[FORWARD].normal_velocity < -0.1f);
     ASSERT_TRUE(samples[REVERSE].normal_velocity > 0.1f);
-    const float saved = samples[FORWARD].normal_velocity;
+    memcpy(saved, samples, sizeof(saved));
     ASSERT_TRUE(!dc_gpu_project_liquid_seam(first, second, axis, NAN, NULL,
                                            samples, g_err, sizeof(g_err)));
-    ASSERT_EQ(samples[FORWARD].normal_velocity, saved);
+    ASSERT_INT_EQ(memcmp(saved, samples, sizeof(saved)), 0);
+    previous_normal[REVERSE] = INFINITY;
+    ASSERT_TRUE(!dc_gpu_project_liquid_seam(first, second, axis, step_seconds, previous_normal,
+                                           samples, g_err, sizeof(g_err)));
+    ASSERT_INT_EQ(memcmp(saved, samples, sizeof(saved)), 0);
     second.slot = 2u;
     ASSERT_TRUE(!dc_gpu_project_liquid_seam(first, second, axis, step_seconds, NULL,
                                            samples, g_err, sizeof(g_err)));
-    ASSERT_EQ(samples[FORWARD].normal_velocity, saved);
+    ASSERT_INT_EQ(memcmp(saved, samples, sizeof(saved)), 0);
     ASSERT_INT_EQ(dc_gpu_validation_errors(first.gpu), 0u);
     PASS();
 

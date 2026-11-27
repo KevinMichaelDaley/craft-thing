@@ -1,7 +1,7 @@
 ---
 id: ctopo-yhkb
 status: in_progress
-deps: [ctols-vhg9, ctopp-fkir]
+deps: [ctols-vhg9, ctopp-fkir, ctopp-2c14]
 links: []
 created: 2026-11-27T05:39:32Z
 type: task
@@ -28,3 +28,7 @@ Compare split and monolithic basins across horizontal and vertical faces with fo
 **2026-11-27T05:39:32Z**
 
 The durable owner binder expects both endpoints at the same completed interval and closes paired edits through the existing world transaction. The parent retains gas species and pressure energy, grain coupling and repeated camera admission.
+
+**2026-11-27T06:02:05Z**
+
+The pressure checkpoint uses the native projection on a sealed two-tile domain. ctopp-2c14 covers extracting and applying water transport. This parent retains the coupled oil and slime planner, larger resident pressure neighborhoods, and scheduling both owners at the same transport interval.

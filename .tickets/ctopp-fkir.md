@@ -1,6 +1,6 @@
 ---
 id: ctopp-fkir
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T05:49:25Z
@@ -20,3 +20,9 @@ Stitch mapped neighboring tiles into a sealed joint projection domain and reuse 
 
 Compare horizontal and vertical sampled face normals and endpoint pressures with the native monolithic projection. Exercise positive and negative flow, full and fractional apertures, blocked faces, and invalid owners.
 
+
+## Notes
+
+**2026-11-27T06:06:02Z**
+
+Both RTX axes match the native monolithic pressure and projected normal with generic and specialized kernels under synchronization validation. Tests cover both directions, a quarter-aperture, closed faces, a wall, a fully occupied receiver, prior-normal reuse, untouched owner cells and velocity, and rejected inputs.

@@ -26,6 +26,8 @@ typedef enum {
 bool dc_gpu_liquid_seam_mapped(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis);
 
+/** Projected normal speed in cells per reference tick, native pressure at
+ * each cell, and the open fraction of the whole face in Q16. */
 typedef struct {
     float normal_velocity;
     float first_pressure, second_pressure;
@@ -33,9 +35,11 @@ typedef struct {
 } dc_liquid_seam_sample_t;
 
 /** Sample the native liquid projection on the sealed domain of the two tiles.
- * Results are indexed by the transverse coordinate. Positive velocity points
- * toward the second tile. A supplied previous normal replaces the live
- * normal on this face. The owner fields and failed results are unchanged.
+ * Take the snapshot at a common owner interval with current cells, occupancy and
+ * face speeds. The caller holds both mapped owners for the duration of the call.
+ * Results are indexed by the transverse coordinate, with positive velocity toward
+ * the second tile. Pass a previous normal to carry the shared speed between samples.
+ * Only the scratch projection advances and samples are written on completion.
  */
 bool dc_gpu_project_liquid_seam(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis, float seconds,
