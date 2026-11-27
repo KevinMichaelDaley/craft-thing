@@ -329,7 +329,91 @@ static void test_failed_group_commits_only_confirmed_owner_steps(void) {
     PASS();
 }
 
-int main(void) {
+static dc_gpu_t *watched_grain_owners[2];
+static unsigned grain_records[2];
+
+void __real_dc_gpu_record_mpm(dc_gpu_t *gpu);
+void __wrap_dc_gpu_record_mpm(dc_gpu_t *gpu) {
+    for (unsigned i = 0; i < 2; ++i)
+        if (gpu == watched_grain_owners[i]) ++grain_records[i];
+    __real_dc_gpu_record_mpm(gpu);
+}
+
+static void test_mixed_grain_batch_matches_serial_after_new_admission(void) {
+    dc_gpu_t *parent = make_parent();
+    dc_offscreen_t *rooms[2], *serial[2];
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(parent && chunk);
+    for (unsigned i = 0; i < 2; ++i) {
+        chunk->coord = (dc_chunk_coord_t){4 * i, 0};
+        chunk->cells[1000].fluid_mass = DC_FLUID_FULL;
+        chunk->marker_count = 1;
+        chunk->markers[0] = (dc_marker_t){40 * DC_FLUID_FULL, 15 * DC_FLUID_FULL, 501u + i, DC_MARKER_INSIDE};
+        if (i) {
+            chunk->cells[1100].material = DC_MATERIAL_SAND;
+            dc_chunk_seed_particles(chunk);
+        }
+        dc_stream_result_t source = {.kind = DC_STREAM_LOADED, .coord = chunk->coord,
+            .chunk = chunk, .generation = 1, .time = {.seconds = 1., .known = true}};
+        rooms[i] = dc_offscreen_create(parent, source.coord, g_err, sizeof(g_err));
+        serial[i] = dc_offscreen_create(parent, source.coord, g_err, sizeof(g_err));
+        ASSERT_TRUE(rooms[i] && serial[i]);
+        ASSERT_TRUE(dc_offscreen_admit(rooms[i], &source, 1, g_err, sizeof(g_err)));
+        ASSERT_TRUE(dc_offscreen_admit(serial[i], &source, 1, g_err, sizeof(g_err)));
+        watched_grain_owners[i] = rooms[i]->gpu;
+    }
+    bool stages_match = true;
+    for (unsigned step = 0; step < 2; ++step) {
+        if (step) {
+            chunk->coord = (dc_chunk_coord_t){1, 0};
+            dc_stream_result_t source = {.kind = DC_STREAM_LOADED, .coord = chunk->coord,
+                .chunk = chunk, .generation = 2, .time = rooms[0]->time};
+            ASSERT_TRUE(dc_offscreen_admit(rooms[0], &source, 2, g_err, sizeof(g_err)));
+            ASSERT_TRUE(dc_offscreen_admit(serial[0], &source, 2, g_err, sizeof(g_err)));
+        }
+        double target = 1. + (step + 1) / 32.;
+        rooms[0]->due_seconds = rooms[1]->due_seconds = target;
+        memset(grain_records, 0, sizeof(grain_records));
+        ASSERT_TRUE(dc_offscreen_advance_due_group(rooms, 2, 1, g_err, sizeof(g_err)));
+        stages_match &= grain_records[0] == step && grain_records[1] == 1;
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_TRUE(dc_offscreen_advance(serial[i], target, 1, g_err, sizeof(g_err)));
+            for (unsigned page = 0; page <= (i == 0 ? step : 0); ++page) {
+                dc_chunk_coord_t coord = {4 * i + page, 0};
+                dc_stream_result_t batch = {0}, ref = {0};
+                ASSERT_TRUE(dc_offscreen_snapshot(rooms[i], coord, page + 1, &batch, g_err, sizeof(g_err)));
+                ASSERT_TRUE(dc_offscreen_snapshot(serial[i], coord, page + 1, &ref, g_err, sizeof(g_err)));
+                ASSERT_EQ(batch.time.seconds, target);
+                ASSERT_EQ(ref.time.seconds, target);
+                ASSERT_EQ(batch.chunk->marker_count, ref.chunk->marker_count);
+                ASSERT_EQ(batch.chunk->particle_count, ref.chunk->particle_count);
+                ASSERT_EQ(memcmp(batch.chunk->cells, ref.chunk->cells, sizeof(chunk->cells)), 0);
+                ASSERT_EQ(memcmp(batch.chunk->face_velocity, ref.chunk->face_velocity, sizeof(chunk->face_velocity)), 0);
+                ASSERT_EQ(memcmp(batch.chunk->markers, ref.chunk->markers,
+                                 batch.chunk->marker_count * sizeof(*chunk->markers)), 0);
+                ASSERT_EQ(memcmp(batch.chunk->particles, ref.chunk->particles, sizeof(chunk->particles)), 0);
+                ASSERT_EQ(memcmp(batch.colors, ref.colors, sizeof(*batch.colors)), 0);
+                ASSERT_EQ(memcmp(batch.bulk, ref.bulk, sizeof(*batch.bulk)), 0);
+                dc_stream_result_release(&batch);
+                dc_stream_result_release(&ref);
+            }
+        }
+    }
+    for (unsigned i = 0; i < 2; ++i) {
+        watched_grain_owners[i] = NULL;
+        dc_offscreen_destroy(rooms[i]);
+        dc_offscreen_destroy(serial[i]);
+    }
+    free(chunk);
+    ASSERT_EQ(dc_gpu_validation_errors(parent), 0u);
+    dc_gpu_destroy(parent);
+    ASSERT_TRUE(stages_match);
+    PASS();
+}
+
+int main(int argc, char **argv) {
+    RUN(test_mixed_grain_batch_matches_serial_after_new_admission);
+    if (argc == 2 && !strcmp(argv[1], "--mixed-grains")) return g_fail != 0;
     RUN(test_failed_group_commits_only_confirmed_owner_steps);
     RUN(test_partial_water_cycle_holds_the_workspace_until_both_owners_finish);
     RUN(test_isolated_tile_advances_and_returns_through_cold_storage);
