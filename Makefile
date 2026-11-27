@@ -103,7 +103,9 @@ GPU_OBJ += build/runtime_body_gpu.o build/runtime_geometry_gpu.o build/body_addr
 GPU_OBJ += build/mpm_swap_gpu.o build/reactive_gpu.o build/reactive_arena_gpu.o build/reactive_chunk_gpu.o
 GPU_OBJ += build/thermal_gpu.o build/thermal_feedback_gpu.o build/constructed_thermal_gpu.o build/thermal_model.o
 GPU_OBJ += build/gas_gpu.o build/gas_audit_gpu.o build/gas_feedback_gpu.o build/gas_acoustic_gpu.o build/gas_acoustic_trace_gpu.o build/gas_checkpoint_gpu.o build/gas_model.o
-GPU_OBJ += build/bulk_phase_gpu.o
+GPU_OBJ += build/bulk_phase_gpu.o build/liquid_seam_gpu.o
+build/liquid_seam_gpu.o: src/vulkan/liquid_seam_gpu.c include/dungeoncraft/liquid_seam.h src/vulkan/gpu_internal.h src/vulkan/renderer_internal.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/reactive_checkpoint_gpu.o build/structural_store_channels.o build/reactive_archive_model.o build/thermal_checkpoint_model.o
 GPU_OBJ += build/structural_store_fluids.o
 build/reactive_arena_gpu.o: src/vulkan/reactive_arena_gpu.c src/vulkan/reactive_arena_gpu.h include/dungeoncraft/reactive_arena_layout.h include/dungeoncraft/reactive_state_layout.h
@@ -790,6 +792,13 @@ build/offscreen_workspace_tests: tests/app/offscreen_workspace_tests.c $(OFFSCRE
 test_offscreen_workspace: build/offscreen_workspace_tests
 	./build/offscreen_workspace_tests
 test: test_offscreen_workspace
+
+build/liquid_seam_tests: tests/vulkan/liquid_seam_tests.c include/dungeoncraft/liquid_seam.h $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+.PHONY: test_liquid_seam
+test_liquid_seam: build/liquid_seam_tests
+	./build/liquid_seam_tests
+test: test_liquid_seam
 
 test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests build/convex_body_tests build/broadphase_tests build/world_body_tests build/rigid_tests build/quarter_native_config_tests build/quarter_native_fluid_tests build/native_scene_tests build/gpu_tests build/halo_tests build/fluid_tests build/particle_tests build/marker_slot_tests build/chunk_tests build/generate_tests build/stream_tests build/component_admission_tests
 	./build/thermal_tests
