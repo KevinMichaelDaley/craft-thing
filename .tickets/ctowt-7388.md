@@ -26,3 +26,7 @@ The live split and monolithic water basins conserve stock and the carried state 
 **2026-11-27T07:05:09Z**
 
 The atomic GPU publication operation is available after settled rigid displacement. The level still needs to reserve the connected owner cohort at one interval start, provide the correct native pre-transport and post-transport phases, and publish its completed timestamps through the staged save. The existing explicit face-transfer entry point binds owners at a completed interval and cannot substitute for this schedule.
+
+**2026-11-27T07:36:58Z**
+
+Paired publication now includes native marker advection, correction and velocity damping. The detached cycle leaves both context clocks and their active bank selectors with their owners. Rigid displacement is tracked by ctowtb-kz7x; generation reservation and interval scheduling for the connected set of owners remain part of this ticket.
