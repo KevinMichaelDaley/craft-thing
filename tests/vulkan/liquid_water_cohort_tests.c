@@ -739,6 +739,58 @@ static void test_grain_owner_can_submit_first(void) {
     check_peer_grain_contact(true);
 }
 
+static void test_grains_cross_the_owner_face_in_both_directions(void) {
+    const char *shader = "build/shaders/pattern.comp.spv";
+    dc_gpu_t *owner[2] = {0}, *mono = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk)), *expected = calloc(1, sizeof(*expected));
+    dc_liquid_seam_endpoint_t tiles[2] = {0};
+    uint32_t ids[2][2];
+    ASSERT_TRUE(chunk && expected && dc_gpu_create(&owner[0], 64, 64, shader, g_err, sizeof(g_err)) &&
+        dc_gpu_create_shared(&owner[1], owner[0], 64, 64, shader, g_err, sizeof(g_err)) &&
+        dc_gpu_create(&mono, 128, 64, shader, g_err, sizeof(g_err)));
+    for (unsigned i = 0; i < 2; ++i) {
+        memset(chunk, 0, sizeof(*chunk));
+        chunk->coord.x = i;
+        unsigned cell = i ? 40u * 64u : 20u * 64u + 63u;
+        chunk->cells[cell].material = DC_MATERIAL_SAND;
+        dc_chunk_seed_particles(chunk);
+        chunk->particles[cell].vx_fp = (i ? -2 : 2) * DC_FLUID_FULL;
+        ids[i][0] = chunk->particles[cell].id_lo;
+        ids[i][1] = chunk->particles[cell].id_hi;
+        tiles[i] = (dc_liquid_seam_endpoint_t){.gpu = owner[i], .coord = chunk->coord};
+        ASSERT_TRUE(dc_gpu_set_body_origin(owner[i], chunk->coord, g_err, sizeof(g_err)) &&
+            dc_gpu_upload_chunk(owner[i], 0, chunk, g_err, sizeof(g_err)) &&
+            dc_gpu_set_page(owner[i], 0, 0, 0, g_err, sizeof(g_err)) &&
+            dc_gpu_upload_chunk(mono, i, chunk, g_err, sizeof(g_err)) &&
+            dc_gpu_set_page(mono, i, 0, i, g_err, sizeof(g_err)));
+    }
+    const float dt = 1.f / 60.f;
+    ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, dt) && dc_gpu_tick_step(mono, g_err, sizeof(g_err)));
+    ASSERT_EQ(dc_gpu_tick_water_cohort(tiles, 2, dt, g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+    for (unsigned i = 0; i < 2; ++i) {
+        ASSERT_TRUE(dc_gpu_download_chunk(mono, i, expected, g_err, sizeof(g_err)) &&
+            dc_gpu_download_chunk(owner[i], 0, chunk, g_err, sizeof(g_err)));
+        ASSERT_EQ(expected->particle_count, 1u);
+        bool crossed = false;
+        for (unsigned j = 0; j < DC_MPM_PARTICLES_PER_CHUNK; ++j) {
+            dc_mpm_particle_t *particle = &expected->particles[j];
+            crossed |= particle->mass_fp && particle->id_lo == ids[1u-i][0] &&
+                particle->id_hi == ids[1u-i][1];
+        }
+        ASSERT_TRUE(crossed);
+        ASSERT_EQ(chunk->particle_count, expected->particle_count);
+        ASSERT_EQ(memcmp(chunk->particles, expected->particles, sizeof(chunk->particles)), 0);
+        ASSERT_EQ(memcmp(chunk->cells, expected->cells, sizeof(chunk->cells)), 0);
+    }
+    PASS();
+cleanup:
+    dc_gpu_destroy(mono);
+    dc_gpu_destroy(owner[1]);
+    dc_gpu_destroy(owner[0]);
+    free(chunk);
+    free(expected);
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cadence") == 0) {
         RUN(test_coupled_water_matches_every_native_tick_and_recovers_once);
@@ -753,7 +805,10 @@ int main(int argc, char **argv) {
     } else if (argc == 2 && strcmp(argv[1], "--peer-grain") == 0) {
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
         RUN(test_grain_owner_can_submit_first);
+    } else if (argc == 2 && strcmp(argv[1], "--grain-crossing") == 0) {
+        RUN(test_grains_cross_the_owner_face_in_both_directions);
     } else if (argc == 1) {
+        RUN(test_grains_cross_the_owner_face_in_both_directions);
         RUN(test_rigid_contact_transfers_momentum_to_the_neighboring_grain);
         RUN(test_grain_owner_can_submit_first);
         RUN(test_moving_body_receives_shared_liquid_feedback);
