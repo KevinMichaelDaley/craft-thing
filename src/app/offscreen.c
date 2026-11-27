@@ -353,8 +353,10 @@ static bool accept_source(dc_level_view_t *view, dc_level_offscreen_handoff_t *h
     if (handoff->disk_source) {
         const dc_camera_offscreen_t *camera = &view->camera_offscreen;
         bool coupled = camera->water_face && camera->workspace == handoff->workspace;
+        const dc_camera_offscreen_t *room = dc_camera_find_room(view, result->coord);
         if (!dc_chunk_owner_equal(result->replaces_owner, handoff->owner) || !result->time.known ||
             result->time.seconds < handoff->source_time.seconds ||
+            (room && room->restored_record && result->time.seconds != handoff->source_time.seconds) ||
             (coupled ? result->time.seconds != view->world_seconds ||
                 dc_camera_offscreen_water_face(view, result) != camera->water_face :
                 !dc_camera_offscreen_isolated(view, result)))
@@ -406,10 +408,10 @@ dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
             return DC_LEVEL_OFFSCREEN_HANDLED;
         }
         if (accept_source(view, handoff, result, err, cap)) return DC_LEVEL_OFFSCREEN_HANDLED;
-        bool retry_camera = (view->camera_offscreen.water_face || view->camera_offscreen.rigid_group) &&
-                            handoff->workspace == view->camera_offscreen.workspace;
+        dc_camera_offscreen_t *room = dc_camera_find_room(view, result->coord);
+        bool retry_camera = room && room->workspace == handoff->workspace;
         remove_handoff(link);
-        if (retry_camera) dc_camera_offscreen_retry(&view->camera_offscreen);
+        if (retry_camera) dc_camera_offscreen_retry(room);
         return DC_LEVEL_OFFSCREEN_FAILED;
     }
     if (!handoff->write_generation || handoff->write_generation != result->generation)

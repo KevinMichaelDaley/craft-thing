@@ -642,6 +642,7 @@ dc_level_view_t *dc_level_view_create_ground(const char *directory, uint64_t see
             view->origin.x - HALO_CHUNKS, view->origin.y - HALO_CHUNKS }, err, cap) ||
         !fr_gpu_load_structure(view->gpu, view->body_path, err, cap) ||
         !dc_gpu_enable_automatic_components(view->gpu)) goto fail;
+    if (!dc_camera_catalog_load(view, err, cap)) goto fail;
     bonfire_startup_trace("base level ready",started);
     return view;
 fail:
@@ -1128,10 +1129,12 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
-    bool staged = dc_world_save_directory(view->save, true) != NULL;
     bool okay = !view->liquid_seam_failed || error(err, cap, "Cannot close an unconfirmed liquid seam");
     if (okay && view->pending_steps && view->gpu && view->gpu->water_cycle_peer)
         okay = execute_level_steps(view, err, cap);
+    bool catalog = dc_camera_catalog_active(view);
+    if (okay && catalog) okay = dc_level_view_stage_world_save(view, err, cap);
+    bool staged = dc_world_save_directory(view->save, true) != NULL;
     if (okay) okay = dc_level_stage_water_checkpoint(view, err, cap);
     if (okay) okay = dc_camera_offscreen_service(view, true, err, cap) &&
         dc_level_offscreen_flush_pairs(view, err, cap);
@@ -1179,6 +1182,7 @@ bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
         }
         SDL_Delay(1);
     }
+    if (okay && catalog) okay = dc_camera_catalog_stage(view, err, cap);
     if(okay&&!view->closing_structure_saved)
         okay = save_level_structure(view, err, cap);
     dc_stream_destroy(view->stream);

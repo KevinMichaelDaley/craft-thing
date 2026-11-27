@@ -57,6 +57,7 @@ static bool valid_file(const char *name, bool discard) {
     if ((length == sizeof(DC_WORLD_BODY_RECORD) - 1 && strncmp(name, DC_WORLD_BODY_RECORD, length) == 0) ||
         (length == sizeof(DC_WORLD_CLOCK_RECORD) - 1 && strncmp(name, DC_WORLD_CLOCK_RECORD, length) == 0) ||
         (length == sizeof(DC_WORLD_WATER_CYCLE_RECORD) - 1 && strncmp(name, DC_WORLD_WATER_CYCLE_RECORD, length) == 0) ||
+        (length == sizeof(DC_WORLD_ROOM_RECORD) - 1 && strncmp(name, DC_WORLD_ROOM_RECORD, length) == 0) ||
         (length == sizeof(DC_WORLD_PLAYER_RECORD) - 1 && strncmp(name, DC_WORLD_PLAYER_RECORD, length) == 0))
         return true;
     if (length != CHUNK_NAME_LENGTH || strncmp(name, "chunk_", CHUNK_PREFIX_LENGTH) != 0 ||

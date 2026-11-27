@@ -222,11 +222,19 @@ bool dc_camera_offscreen_reserve(dc_level_view_t *view) {
     return true;
 }
 
+dc_camera_offscreen_t *dc_camera_find_room(dc_level_view_t *view, dc_chunk_coord_t coord) {
+    for (size_t i = 0; i <= view->sealed_capacity; ++i) {
+        dc_camera_offscreen_t *room = i ? view->sealed_rooms + i - 1u : &view->camera_offscreen;
+        if (room->phase != DC_CAMERA_OFFSCREEN_IDLE && same_coord(room->coord, coord)) return room;
+    }
+    return NULL;
+}
+
 bool dc_camera_offscreen_pending(const dc_level_view_t *view, dc_chunk_coord_t coord) {
     for (size_t i = 0; i <= view->sealed_capacity; ++i) {
         const dc_camera_offscreen_t *room = i ? view->sealed_rooms + i - 1u : &view->camera_offscreen;
         if (room->phase == DC_CAMERA_OFFSCREEN_STORED && same_coord(room->coord, coord) &&
-            room->time.seconds < view->world_seconds) return true;
+            (room->restored_record || room->time.seconds < view->world_seconds)) return true;
     }
     return false;
 }
@@ -354,8 +362,9 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
         camera->parking = false;
     }
     if (camera->phase == DC_CAMERA_OFFSCREEN_STORED) {
+        if (closing && !coupled && !camera->rigid_group) return true;
         if (closing || (coupled ? !attached : !independent) || dc_chunk_table_find(&view->table, camera->coord, NULL) ||
-            (needed && camera->time.seconds >= view->world_seconds)) {
+            (needed && !camera->restored_record && camera->time.seconds >= view->world_seconds)) {
             dc_camera_offscreen_release(camera);
             return true;
         }
@@ -383,6 +392,7 @@ static bool service_room(dc_level_view_t *view, dc_camera_offscreen_t *camera, b
         dc_camera_offscreen_release(camera);
         return true;
     }
+    if (closing && time.known) camera->time = time;
     if (!time.known || writing) return true;
     if (camera->workspace->references > 1u)
         for (const dc_level_offscreen_handoff_t *lease = view->offscreen_handoffs; lease; lease = lease->next)

@@ -21,10 +21,18 @@ typedef struct {
     dc_chunk_time_t time;
     uint64_t generation;
     unsigned water_face;
-    bool rigid_group, parking;
+    bool rigid_group, parking, restored_record;
     dc_camera_offscreen_phase_t phase;
 } dc_camera_offscreen_t;
 
+/** Inspect sealed owners that require a coordinated catalog write on close. */
+bool dc_camera_catalog_active(const dc_level_view_t *view);
+/** Stage confirmed room receipts after the chunk writes finish. */
+bool dc_camera_catalog_stage(dc_level_view_t *view, char *err, uint32_t cap);
+/** Restore sealed room elections and protect the canonical catalog during play. */
+bool dc_camera_catalog_load(dc_level_view_t *view, char *err, uint32_t cap);
+/** Find a tracked camera room by coordinate. */
+dc_camera_offscreen_t *dc_camera_find_room(dc_level_view_t *view, dc_chunk_coord_t coord);
 /** Verify that the current physics can treat the saved tile as an isolated island. */
 bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_result_t *snapshot);
 /** Identify the single open water face of an otherwise closed camera eviction. */

@@ -49,6 +49,7 @@ struct dc_level_view {
     bool gas_admitted[DC_GPU_CHUNK_SLOTS];
     dc_camera_offscreen_t *sealed_rooms;
     size_t sealed_capacity;
+    bool room_catalog_loaded;
 };
 
 /** Test whether a chunk is required by the current camera and its solver halo. */
