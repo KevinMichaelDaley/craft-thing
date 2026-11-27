@@ -1,7 +1,7 @@
 ---
 id: ctoew-5swd
-status: open
-deps: [ctswc-xr49]
+status: in_progress
+deps: [ctswc-xr49, ctost-pneh]
 links: []
 created: 2026-11-27T02:31:49Z
 type: task

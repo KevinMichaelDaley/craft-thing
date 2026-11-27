@@ -1,9 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <SDL.h>
 
@@ -27,11 +30,49 @@ static int g_pass, g_fail;
 
 static struct {
     float elapsed[24], player_elapsed[24], seconds;
-    unsigned steps, player_steps, presents, presented_steps, reject_step;
+    unsigned steps, player_steps, presents, presented_steps, reject_step, shifts;
     bool reject_present, restore_first_from_checkpoint;
+    bool reject_next_load, reject_next_save, hold_replies, inject_reply;
+    dc_chunk_coord_t requested_load;
+    dc_stream_result_t injected_reply;
+    uint64_t requested_save;
     uint16_t material[DC_GPU_CHUNK_SLOTS];
     unsigned uploads[DC_GPU_CHUNK_SLOTS];
 } g_frame;
+
+bool __real_dc_stream_request_load(dc_streamer_t *stream, dc_chunk_coord_t coord, uint64_t generation);
+bool __wrap_dc_stream_request_load(dc_streamer_t *stream, dc_chunk_coord_t coord, uint64_t generation) {
+    if (!g_frame.reject_next_load) return __real_dc_stream_request_load(stream, coord, generation);
+    g_frame.reject_next_load = false;
+    g_frame.requested_load = coord;
+    return false;
+}
+
+bool __real_dc_stream_request_save_snapshot(dc_streamer_t *, const dc_chunk_t *,
+    const dc_chunk_colors_t *, const fr_reactive_chunk_t *, const float *,
+    const fr_gas_checkpoint_chunk_t *, const fr_bulk_phase_chunk_t *, dc_stream_chunk_time_t, uint64_t);
+bool __wrap_dc_stream_request_save_snapshot(dc_streamer_t *stream, const dc_chunk_t *chunk,
+    const dc_chunk_colors_t *colors, const fr_reactive_chunk_t *reactive, const float *water,
+    const fr_gas_checkpoint_chunk_t *gas, const fr_bulk_phase_chunk_t *bulk,
+    dc_stream_chunk_time_t time, uint64_t generation) {
+    g_frame.requested_save = generation;
+    if (g_frame.reject_next_save) {
+        g_frame.reject_next_save = false;
+        return false;
+    }
+    return __real_dc_stream_request_save_snapshot(stream, chunk, colors, reactive, water, gas, bulk,
+                                                  time, generation);
+}
+
+bool __real_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out);
+bool __wrap_dc_stream_poll(dc_streamer_t *stream, dc_stream_result_t *out) {
+    if (g_frame.inject_reply) {
+        *out = g_frame.injected_reply;
+        g_frame.inject_reply = false;
+        return true;
+    }
+    return !g_frame.hold_replies && __real_dc_stream_poll(stream, out);
+}
 
 bool __wrap_fr_gpu_upload_structure_chunk_with_time(dc_gpu_t *gpu, uint32_t slot,
     const dc_chunk_t *chunk, bool *restored, dc_chunk_time_t *time, char *err, uint32_t cap) {
@@ -53,6 +94,7 @@ bool __wrap_dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chun
 bool __wrap_dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t dx, int32_t dy,
                                   char *err, uint32_t cap) {
     (void)gpu; (void)dx; (void)dy; (void)err; (void)cap;
+    ++g_frame.shifts;
     return true;
 }
 
@@ -495,6 +537,141 @@ static void test_generated_chunks_start_at_confirmed_world_time(void) {
     PASS();
 }
 
+static bool load_saved_chunk(const char *directory, dc_chunk_coord_t coord, dc_stream_result_t *out) {
+    dc_streamer_t *stream = dc_stream_create(directory, 42, 2);
+    if (!stream) return false;
+    bool received = false;
+    if (dc_stream_request_load(stream, coord, 1u)) {
+        uint64_t deadline = SDL_GetTicks64() + 3000u;
+        do {
+            received = dc_stream_poll(stream, out);
+            if (!received) SDL_Delay(1);
+        } while (!received && SDL_GetTicks64() < deadline);
+    }
+    dc_stream_destroy(stream);
+    return received && out->kind == DC_STREAM_LOADED;
+}
+
+static bool wait_worker_error(dc_level_view_t *view, char *err, uint32_t cap) {
+    uint64_t deadline = SDL_GetTicks64() + 3000u;
+    do {
+        if (!dc_level_view_tick(view, err, cap)) return true;
+        SDL_Delay(1);
+    } while (SDL_GetTicks64() < deadline);
+    return false;
+}
+
+static void test_camera_retries_a_rejected_worker_load(void) {
+    char directory[] = "build/retry_load_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view && (view->stream = dc_stream_create(directory, 42, 64)));
+    g_frame.reject_next_load = true;
+    ASSERT_TRUE(dc_level_view_move(view, 1, 0));
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    const dc_chunk_coord_t coord = g_frame.requested_load;
+    ASSERT_TRUE(!dc_chunk_table_find(&view->table, coord, NULL));
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 3000, NULL, 0));
+    ASSERT_EQ(g_frame.shifts, 1u);
+    uint32_t index;
+    ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, &index));
+    ASSERT_EQ(g_frame.uploads[index], 1u);
+    dc_level_view_discard(view);
+    PASS();
+}
+
+static void test_camera_retries_a_rejected_save_and_ignores_its_old_reply(void) {
+    char directory[] = "build/retry_save_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view && (view->stream = dc_stream_create(directory, 42, 64)));
+    dc_chunk_slot_t *slot = &view->table.slots[0];
+    const dc_chunk_coord_t coord = slot->coord;
+    const uint64_t owner = slot->generation;
+    slot->time = (dc_chunk_time_t){.seconds = 7.5, .known = true};
+    g_frame.material[0] = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, 0u));
+    ASSERT_TRUE(dc_level_view_move(view, 1, 0));
+    g_frame.reject_next_save = true;
+    ASSERT_TRUE(!dc_level_view_tick(view, NULL, 0));
+    const uint64_t rejected = g_frame.requested_save;
+    ASSERT_TRUE(slot->state == DC_SLOT_SLEEPING && slot->dirty && slot->generation == owner);
+
+    g_frame.hold_replies = true;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(slot->state == DC_SLOT_SAVING && slot->dirty && slot->generation == owner);
+    ASSERT_TRUE(g_frame.requested_save != owner && g_frame.requested_save != rejected);
+    g_frame.injected_reply = (dc_stream_result_t){.kind = DC_STREAM_SAVED, .coord = coord, .generation = rejected};
+    g_frame.inject_reply = true;
+    ASSERT_TRUE(dc_level_view_tick(view, NULL, 0));
+    ASSERT_TRUE(slot->state == DC_SLOT_SAVING && slot->dirty);
+    g_frame.hold_replies = false;
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 3000, NULL, 0));
+    dc_level_view_discard(view);
+
+    dc_stream_result_t saved = {0};
+    ASSERT_TRUE(load_saved_chunk(directory, coord, &saved));
+    ASSERT_TRUE(saved.time.known && saved.time.seconds == 7.5 && saved.chunk->cells[0].material == DC_MATERIAL_STONE);
+    dc_stream_result_release(&saved);
+    PASS();
+}
+
+static void test_failed_disk_write_preserves_the_previous_file_and_dirty_owner(void) {
+    char directory[] = "build/retry_disk_save_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view);
+    dc_chunk_slot_t *slot = &view->table.slots[0];
+    const uint64_t owner = slot->generation;
+    const dc_chunk_coord_t coord = slot->coord;
+    ASSERT_TRUE(write_timed_chunk(directory, coord));
+    ASSERT_TRUE(view->stream = dc_stream_create(directory, 42, 64));
+    char path[128], error[96];
+    int length = snprintf(path, sizeof(path), "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin.tmp",
+        directory, (uint64_t)coord.x, (uint64_t)coord.y);
+    ASSERT_TRUE(length > 0 && (size_t)length < sizeof(path) && mkdir(path, 0700) == 0);
+    slot->time = (dc_chunk_time_t){.seconds = 9., .known = true};
+    g_frame.material[0] = DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, 0u) && dc_level_view_move(view, 1, 0));
+    ASSERT_TRUE(wait_worker_error(view, error, sizeof(error)));
+    ASSERT_EQ(strcmp(error, "Chunk worker load or save failed"), 0);
+    ASSERT_TRUE(slot->state == DC_SLOT_SLEEPING && slot->generation == owner && slot->dirty);
+
+    dc_stream_result_t saved = {0};
+    ASSERT_TRUE(load_saved_chunk(directory, coord, &saved));
+    ASSERT_TRUE(saved.time.known && saved.time.seconds == 8. && saved.chunk->cells[0].material == DC_MATERIAL_WATER);
+    dc_stream_result_release(&saved);
+    ASSERT_EQ(rmdir(path), 0);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 3000, NULL, 0));
+    dc_level_view_discard(view);
+    ASSERT_TRUE(load_saved_chunk(directory, coord, &saved));
+    ASSERT_TRUE(saved.time.known && saved.time.seconds == 9. && saved.chunk->cells[0].material == DC_MATERIAL_STONE);
+    dc_stream_result_release(&saved);
+    PASS();
+}
+
+static void test_corrupt_disk_load_allows_camera_retry_after_repair(void) {
+    char directory[] = "build/retry_disk_load_XXXXXX";
+    ASSERT_TRUE(mkdtemp(directory));
+    dc_level_view_t *view = ready_view(false);
+    ASSERT_TRUE(view && (view->stream = dc_stream_create(directory, 42, 64)));
+    const dc_chunk_coord_t coord = {VIEW_CHUNKS_X + HALO_CHUNKS, -HALO_CHUNKS};
+    char path[128], error[96];
+    int length = snprintf(path, sizeof(path), "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin",
+        directory, (uint64_t)coord.x, (uint64_t)coord.y);
+    ASSERT_TRUE(length > 0 && (size_t)length < sizeof(path));
+    FILE *file = fopen(path, "wb");
+    ASSERT_TRUE(file && fputs("broken", file) >= 0 && fclose(file) == 0);
+    ASSERT_TRUE(dc_level_view_move(view, 1, 0) && wait_worker_error(view, error, sizeof(error)));
+    ASSERT_EQ(strcmp(error, "Chunk worker load or save failed"), 0);
+    ASSERT_TRUE(!dc_chunk_table_find(&view->table, coord, NULL));
+    ASSERT_EQ(unlink(path), 0);
+    ASSERT_TRUE(dc_level_view_wait_visible(view, 3000, NULL, 0));
+    ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, NULL));
+    dc_level_view_discard(view);
+    PASS();
+}
+
 int main(void) {
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
@@ -509,6 +686,10 @@ int main(void) {
     RUN(test_timed_chunk_retains_confirmed_ticks_across_pan_and_worker_reopen);
     RUN(test_untimed_structure_checkpoint_does_not_inherit_stream_time);
     RUN(test_generated_chunks_start_at_confirmed_world_time);
+    RUN(test_camera_retries_a_rejected_worker_load);
+    RUN(test_camera_retries_a_rejected_save_and_ignores_its_old_reply);
+    RUN(test_failed_disk_write_preserves_the_previous_file_and_dirty_owner);
+    RUN(test_corrupt_disk_load_allows_camera_retry_after_repair);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }

@@ -38,6 +38,7 @@ static void test_slot_reuse_waits_for_save_and_gpu(void) {
     uint32_t index = UINT32_MAX;
     uint64_t token = 0;
     ASSERT_TRUE(dc_chunk_table_begin_load(&table, a, &index, &token));
+    const uint64_t loaded_owner = token;
     ASSERT_EQ(index, 0u);
     ASSERT_TRUE(dc_chunk_table_finish_load(&table, index, token));
     ASSERT_TRUE(dc_chunk_table_mark_dirty(&table, index));
@@ -46,6 +47,7 @@ static void test_slot_reuse_waits_for_save_and_gpu(void) {
     table.slots[index].time = (dc_chunk_time_t){.seconds = 15.5, .known = true};
     ASSERT_TRUE(!dc_chunk_table_evict(&table, index, 10));
     ASSERT_TRUE(dc_chunk_table_begin_save(&table, index, &token));
+    ASSERT_TRUE(token != loaded_owner && table.slots[index].generation == loaded_owner);
     ASSERT_TRUE(!dc_chunk_table_set_active(&table, index, true));
     ASSERT_TRUE(dc_chunk_table_finish_save(&table, index, token));
     ASSERT_TRUE(table.slots[index].time.known && table.slots[index].time.seconds == 15.5);

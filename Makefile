@@ -771,6 +771,7 @@ LEVEL_TICK_CALLS += fr_gpu_upload_structure_chunk_with_time dc_gpu_download_chun
 LEVEL_TICK_CALLS += fr_renderer_upload_chunk_colors fr_renderer_download_chunk_colors
 LEVEL_TICK_CALLS += fr_gpu_reactive_import_chunk fr_gpu_reactive_export_chunk
 LEVEL_TICK_CALLS += fr_bulk_phase_gpu_import_chunk fr_bulk_phase_gpu_export_chunk
+LEVEL_TICK_CALLS += dc_stream_request_load dc_stream_request_save_snapshot dc_stream_poll
 build/level_ticks_tests: tests/app/level_ticks_tests.c src/app/level.c src/app/level.h src/app/level_internal.h src/app/view_config.h src/app/player_session_internal.h $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/level.c $(PLAYER_RUNTIME_SRC) $(THERMAL_BENCH_SRC) $(GPU_OBJ) $(CHUNK_OBJ) $(STREAM_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) $(foreach fn,$(LEVEL_TICK_CALLS),-Xlinker --wrap=$(fn))
 .PHONY: test_level_ticks
