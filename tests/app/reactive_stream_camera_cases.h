@@ -98,7 +98,31 @@ static int camera_marker_order(const void *left, const void *right) {
     return memcmp(left, right, sizeof(dc_marker_t));
 }
 
-static void check_camera_water_returns(bool heated, bool bulk_liquid, bool restart, bool grains) {
+enum { CAMERA_HEAT=1u, CAMERA_BULK=2u, CAMERA_REOPEN=4u, CAMERA_GRAINS=8u, CAMERA_GAS=16u };
+
+static bool camera_gas_enable(dc_gpu_t *gpu,char *err,uint32_t cap) {
+    const fr_gas_model_t model={.gas_constant={1,1,1,1,0},.heat_capacity_cv={2.5,2.5,2.5,2.5,1},.kinetic_scale=1};
+    return fr_gas_gpu_enable(gpu,&model,1.f,300.f,err,cap);
+}
+static bool camera_seed_gas(dc_gpu_t *gpu,uint32_t slot,const dc_chunk_t *chunk,bool donor,char *err,uint32_t cap) {
+    fr_gas_state_t *states=calloc(DC_CHUNK_CELLS,sizeof(*states));
+    double *volume=calloc(DC_CHUNK_CELLS,sizeof(*volume));
+    bool okay=states && volume;
+    for(unsigned i=0;okay && i<DC_CHUNK_CELLS;i++) {
+        if (chunk->cells[i].material==DC_MATERIAL_STONE) continue;
+        double v=1.-chunk->cells[i].fluid_mass/(double)DC_FLUID_FULL;
+        volume[i]=v;
+        states[i]=(fr_gas_state_t){.species={.2*v,.8*v,donor?.125*v:0.,0.,0.},
+            .energy=(donor?1.125:1.)*v*2.5*300.,.pigment={donor?.05*v:0.,0.,0.}};
+    }
+    if (okay) okay=fr_gas_gpu_seed_chunk(gpu,slot,states,volume,DC_CHUNK_CELLS,err,cap);
+    free(volume); free(states);
+    return okay;
+}
+
+static void check_camera_water_returns(unsigned channels) {
+    bool heated=channels&CAMERA_HEAT,bulk_liquid=channels&CAMERA_BULK,restart=channels&CAMERA_REOPEN;
+    bool grains=channels&CAMERA_GRAINS,gas=channels&CAMERA_GAS;
     char directory[] = "build/camera_water_basin_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -115,6 +139,10 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
     float heat[DC_CHUNK_CELLS] = {0}, expected_heat[DC_CHUNK_CELLS];
     fr_bulk_phase_chunk_t *phase = calloc(1, sizeof(*phase)), *expected_phase = calloc(1, sizeof(*expected_phase));
     ASSERT_TRUE(phase && expected_phase);
+    if (gas) {
+        ASSERT_TRUE(camera_gas_enable(view->gpu,err,sizeof(err)) && camera_gas_enable(reference,err,sizeof(err)));
+        view->stream_ambient_gas=true;
+    }
     if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(view->gpu, err, sizeof(err)) &&
                             fr_thermal_gpu_enable(reference, err, sizeof(err)));
     for (unsigned tile = 0; tile < 2u; ++tile) {
@@ -166,6 +194,11 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
             dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
             fr_renderer_upload_chunk_colors(view->gpu, slot, &colors, err, sizeof(err)) &&
             dc_chunk_table_finish_load(&view->table, slot, generation));
+        if (gas) {
+            ASSERT_TRUE(camera_seed_gas(view->gpu,slot,chunk,!tile,err,sizeof(err)) &&
+                camera_seed_gas(reference,tile,chunk,!tile,err,sizeof(err)));
+            view->gas_admitted[slot]=true;
+        }
         if (grains && !tile) {
             const unsigned index=10u*64u+59u;
             fr_reactive_state_t state;
@@ -264,6 +297,10 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
             view = dc_level_view_create(directory, 42, err, sizeof(err));
             ASSERT_TRUE(view && view->origin.x == saved_origin.x && view->origin.y == saved_origin.y);
             ASSERT_EQ(view->world_seconds, saved_time);
+            if (gas) {
+                ASSERT_TRUE(camera_gas_enable(view->gpu,err,sizeof(err)));
+                view->stream_ambient_gas=true;
+            }
             if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(view->gpu, err, sizeof(err)));
             ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
             ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
@@ -310,6 +347,17 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
             stock[tile] = camera_stock(chunk, NULL, false);
             dc_chunk_t expected;
             ASSERT_TRUE(dc_gpu_download_chunk(reference, tile, &expected, err, sizeof(err)));
+            if (gas) {
+                fr_gas_checkpoint_chunk_t *actual=malloc(sizeof(*actual)),*native=malloc(sizeof(*native));
+                ASSERT_TRUE(actual && native && fr_gas_gpu_export_checkpoint(view->gpu,slot,actual,err,sizeof(err)) &&
+                    fr_gas_gpu_export_checkpoint(reference,tile,native,err,sizeof(err)));
+                ASSERT_EQ(memcmp(actual->cells,native->cells,sizeof(actual->cells)),0);
+                ASSERT_EQ(memcmp(actual->carrier_tail,native->carrier_tail,sizeof(actual->carrier_tail)),0);
+                ASSERT_EQ(memcmp(actual->gates,native->gates,sizeof(actual->gates)),0);
+                ASSERT_EQ(actual->clock.advanced_seconds,native->clock.advanced_seconds);
+                if (tile) ASSERT_TRUE(native->cells[row][FR_GAS_EXHAUST]>0.f);
+                free(native); free(actual);
+            }
             if (grains) {
                 ASSERT_EQ(chunk->particle_count,expected.particle_count);
                 ASSERT_EQ(memcmp(chunk->particles,expected.particles,sizeof(chunk->particles)),0);
@@ -358,14 +406,18 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
     PASS();
 }
 
-static void test_camera_reopens_grains_after_they_cross_the_owner_face(void) {
-    check_camera_water_returns(false,false,true,true);
+static void test_camera_reopens_shared_gas_stock_and_pressure(void) {
+    check_camera_water_returns(CAMERA_GAS|CAMERA_REOPEN);
 }
 
-static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(false, false, false, false); }
-static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(true, false, false, false); }
-static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(false, true, false, false); }
-static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(true, true, true, false); }
+static void test_camera_reopens_grains_after_they_cross_the_owner_face(void) {
+    check_camera_water_returns(CAMERA_GRAINS|CAMERA_REOPEN);
+}
+
+static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(0u); }
+static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(CAMERA_HEAT); }
+static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(CAMERA_BULK); }
+static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(CAMERA_HEAT|CAMERA_BULK|CAMERA_REOPEN); }
 
 static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
