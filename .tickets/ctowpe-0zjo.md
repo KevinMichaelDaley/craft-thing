@@ -1,6 +1,6 @@
 ---
 id: ctowpe-0zjo
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T15:30:30Z
@@ -26,3 +26,7 @@ A timestamped split by 64-column bands showed 78.685/78.638 ms in downward setup
 **2026-11-27T15:47:50Z**
 
 The production half-native benchmark on hidden Xephyr :93 passed the simulation-time checks with 16 owners and two 60 Hz steps for each of 60 measured frames per band. Near/middle/far mean and p95 in ms: 97.241/126.275, 94.972/132.820, 98.886/134.871. The corresponding baseline pairs were 143.243/195.334, 135.919/191.281, 133.318/195.229. Both graphical regressions for heated-water return and saturated room-clock return passed with Vulkan synchronization validation.
+
+**2026-11-27T15:54:40Z**
+
+The production 1920x1080 repeat on Xephyr :93 completed all three distance bands. At 608 resident slots, 16 owners, 12 warmups and 60 samples per band, near/middle/far mean and p95 in ms were 173.744/218.655, 167.248/212.237 and 175.243/219.521. Corresponding baseline pairs were 390.953/964.926, 417.056/1103.494 and 420.001/1014.992. Each band advanced the intended 2.000000104 seconds. This closes the measured downward-sweep spike reduction. Parent ctowpe-vtlh retains the unmet 33.333 ms presented-frame gate.
