@@ -98,6 +98,13 @@ static int camera_marker_order(const void *left, const void *right) {
     return memcmp(left, right, sizeof(dc_marker_t));
 }
 
+static bool camera_markers_match(dc_chunk_t *actual, dc_chunk_t *expected) {
+    if (actual->marker_count != expected->marker_count) return false;
+    qsort(actual->markers, actual->marker_count, sizeof(dc_marker_t), camera_marker_order);
+    qsort(expected->markers, expected->marker_count, sizeof(dc_marker_t), camera_marker_order);
+    return !memcmp(actual->markers, expected->markers, actual->marker_count * sizeof(dc_marker_t));
+}
+
 enum { CAMERA_HEAT=1u, CAMERA_BULK=2u, CAMERA_REOPEN=4u, CAMERA_GRAINS=8u, CAMERA_GAS=16u };
 
 static bool camera_gas_enable(dc_gpu_t *gpu,char *err,uint32_t cap) {

@@ -255,8 +255,8 @@ static void check_two_evicted_sealed_rooms(bool sleep_and_prefetch, bool check_c
                 }
             }
             ASSERT_EQ(memcmp(expected.chunk->face_velocity, chunk->face_velocity, sizeof(chunk->face_velocity)), 0);
-            ASSERT_EQ(expected.chunk->marker_count, chunk->marker_count);
-            ASSERT_EQ(memcmp(expected.chunk->markers, chunk->markers, chunk->marker_count*sizeof(dc_marker_t)), 0);
+            ASSERT_TRUE(camera_markers_match(chunk, expected.chunk));
+            ASSERT_TRUE(camera_markers_match(published.chunk, expected.chunk));
             ASSERT_EQ(expected.chunk->particle_count, chunk->particle_count);
             ASSERT_TRUE(published.bulk && published.colors);
             ASSERT_EQ(memcmp(expected.bulk, published.bulk, sizeof(*expected.bulk)), 0);

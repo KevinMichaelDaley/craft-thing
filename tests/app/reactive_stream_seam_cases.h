@@ -120,15 +120,14 @@ static bool seam_water_matches(dc_level_view_t *view, uint32_t resident_slot,
     return okay;
 }
 
-static bool same_water_chunk(const dc_chunk_t *actual, const dc_chunk_t *expected) {
+static bool same_water_chunk(dc_chunk_t *actual, dc_chunk_t *expected) {
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         if (actual->cells[i].material != expected->cells[i].material ||
             actual->cells[i].fluid_mass != expected->cells[i].fluid_mass ||
             fabsf(actual->face_velocity[i].x - expected->face_velocity[i].x) > 1e-5f ||
             fabsf(actual->face_velocity[i].y - expected->face_velocity[i].y) > 1e-5f) return false;
     }
-    return actual->marker_count == expected->marker_count &&
-        !memcmp(actual->markers, expected->markers, actual->marker_count * sizeof(dc_marker_t));
+    return camera_markers_match(actual, expected);
 }
 
 static void test_water_comparison_preserves_complete_marker_records(void) {
