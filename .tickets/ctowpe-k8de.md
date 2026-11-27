@@ -1,6 +1,6 @@
 ---
 id: ctowpe-k8de
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T14:16:32Z
@@ -19,3 +19,9 @@ Persist the coordinates, owner tokens and confirmed source epochs needed to pref
 ## Acceptance Criteria
 
 Evict several active rooms, park them outside four screen widths, advance time, close and reopen, then return. Each room must catch up exactly once from its saved epoch with its conserved stock and complete state. Reject a stale owner and recover an interrupted staged write.
+
+## Notes
+
+**2026-11-27T14:37:10Z**
+
+Synchronization-validated native reopen passed with two parked rooms, interrupted publication, a stale owner receipt, exact independent replay, and a subsequent clean reopen. Level timing and journal suites passed 24 and 8 cases.
