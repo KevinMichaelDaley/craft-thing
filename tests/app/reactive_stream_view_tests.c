@@ -382,6 +382,10 @@ int main(int argc, char **argv) {
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
+    if (argc == 2 && strcmp(argv[1], "--camera-restart") == 0) {
+        RUN(test_camera_reopens_its_confirmed_partial_cycle);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--partial-restart") == 0) {
         RUN(test_quit_resumes_confirmed_partial_water_cycle);
         return g_fail != 0;
@@ -435,5 +439,6 @@ int main(int argc, char **argv) {
     RUN(test_new_exchange_cannot_claim_an_earlier_receipt);
     RUN(test_level_step_advances_admitted_water_owners_together);
     RUN(test_quit_resumes_confirmed_partial_water_cycle);
+    RUN(test_camera_reopens_its_confirmed_partial_cycle);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
