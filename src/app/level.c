@@ -586,6 +586,14 @@ bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t 
     return true;
 }
 
+static void consume_level_steps(dc_level_view_t *view, uint32_t count) {
+    if (!count) return;
+    dc_level_step_run_t *run = &pending_runs(view)[view->first_run];
+    run->count -= count;
+    view->pending_steps -= count;
+    if (!run->count) ++view->first_run;
+}
+
 static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) {
     dc_level_step_run_t *runs = pending_runs(view);
     while (view->first_run < view->end_run) {
@@ -595,10 +603,8 @@ static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) 
         while (run->count) {
             if (view->players && !dc_players_step(view, run->seconds, err, cap)) return false;
             if (!dc_gpu_tick_step(view->gpu, err, cap)) return false;
-            --run->count;
-            --view->pending_steps;
+            consume_level_steps(view, 1u);
         }
-        ++view->first_run;
     }
     return true;
 }
@@ -677,12 +683,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     uint32_t completed;
     bool presented = dc_gpu_present_chunks_steps_progress(view->gpu, ready_steps,
                                                           &completed, err, cap);
-    if (completed) {
-        dc_level_step_run_t *run = &pending_runs(view)[view->first_run];
-        run->count -= completed;
-        view->pending_steps -= completed;
-        if (!run->count) ++view->first_run;
-    }
+    consume_level_steps(view, completed);
     if (!presented) return false;
     view->pending_steps = 0;
     view->first_run = view->end_run = 0;

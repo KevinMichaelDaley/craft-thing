@@ -255,7 +255,7 @@ static bool present_frame(dc_gpu_t *gpu, bool render_chunks, uint32_t steps, VkB
     uint64_t present_begin=trace_waits?SDL_GetPerformanceCounter():0;
     result = vkQueuePresentKHR(gpu->queue, &present);
     uint64_t present_done=trace_waits?SDL_GetPerformanceCounter():0;
-    /* Wait for command and host-visible physics completion, not compositor display. */
+    /* The render fence also commits any ticks recorded in the frame command. */
     if (vkWaitForFences(gpu->device, 1, &gpu->render_fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
         return error(err, cap, "Vulkan present wait failed");
     if (completed) *completed += steps;

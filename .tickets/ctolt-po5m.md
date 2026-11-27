@@ -17,3 +17,9 @@ The equal-duration level fast path still calls dc_gpu_present_chunks_steps, whic
 ## Acceptance Criteria
 
 Report the count of completed ticks independently from presentation success. Exercise failure before simulation, failure after completed ticks, and successful combined rendering. Keep the existing one-presentation batch for equal-duration requests.
+
+## Notes
+
+**2026-11-27T00:48:45Z**
+
+RED on the live level entry point executed four ticks after two were requested and replayed the completed prefix after a partial equal batch. The production Vulkan API now reports each finished gas tick before image acquisition and publishes combined ticks after the render fence. The level deducts those completions even if presentation fails, and the ten host cases pass. The affected frame tracer and native fault-injection fixtures build. Native tests cover a real acquire timeout before recording, a returned presentation failure after real fenced work, and a gas clock that stays unchanged across a render-only retry. Record native results before closing.

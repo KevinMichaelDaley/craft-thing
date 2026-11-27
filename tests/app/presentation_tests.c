@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "ferrum/fire/gas_gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../test_window.h"
 
@@ -21,6 +22,8 @@ static dc_gpu_t *window_gpu;
 static VkImage acquired_image;
 static bool acquire_dependency;
 static bool present_dependency;
+static bool reject_next_acquire, reject_next_present;
+static unsigned present_calls;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #e); ++g_fail; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -34,6 +37,10 @@ VkResult __wrap_vkCreateSwapchainKHR(VkDevice d, const VkSwapchainCreateInfoKHR 
 }
 VkResult __real_vkAcquireNextImageKHR(VkDevice, VkSwapchainKHR, uint64_t, VkSemaphore, VkFence, uint32_t *);
 VkResult __wrap_vkAcquireNextImageKHR(VkDevice d,VkSwapchainKHR s,uint64_t t,VkSemaphore sem,VkFence f,uint32_t *i) {
+    if (reject_next_acquire) {
+        reject_next_acquire = false;
+        return VK_TIMEOUT;
+    }
     finite_acquire=finite_acquire && t!=UINT64_MAX;
     uint64_t start=SDL_GetPerformanceCounter();
     VkResult result=__real_vkAcquireNextImageKHR(d,s,t,sem,f,i);
@@ -58,6 +65,7 @@ void __wrap_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo
 }
 VkResult __real_vkQueuePresentKHR(VkQueue, const VkPresentInfoKHR *);
 VkResult __wrap_vkQueuePresentKHR(VkQueue q,const VkPresentInfoKHR *p) {
+    ++present_calls;
     uint32_t image=p->pImageIndices[0]; VkSemaphore sem=p->pWaitSemaphores[0];
     if(image>=32) image_sems_safe=false;
     else {
@@ -68,6 +76,12 @@ VkResult __wrap_vkQueuePresentKHR(VkQueue q,const VkPresentInfoKHR *p) {
     uint64_t start=SDL_GetPerformanceCounter();
     VkResult result=__real_vkQueuePresentKHR(q,p);
     enqueue_ms+=(SDL_GetPerformanceCounter()-start)*1000.0/SDL_GetPerformanceFrequency();
+    if (reject_next_present) {
+        /* Complete the real queue operation so the test can use this swapchain again. */
+        reject_next_present = false;
+        if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
+            return VK_ERROR_OUT_OF_DATE_KHR;
+    }
     return result;
 }
 VkResult __real_vkWaitForFences(VkDevice,uint32_t,const VkFence *,VkBool32,uint64_t);
@@ -157,7 +171,109 @@ static void test_recreated_hidden_windows_keep_presenting_within_deadline(void) 
     }
     ASSERT_EQ(waited,child); ASSERT_TRUE(WIFEXITED(status)); ASSERT_INT_EQ(WEXITSTATUS(status),0); PASS();
 }
+
+static dc_gpu_t *progress_window(char *err, uint32_t cap) {
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    if (!chunk) return NULL;
+    bool ready = dc_test_create_window(&gpu, 64, 64, 256, 256,
+                        "build/shaders/pattern.comp.spv", err, cap) &&
+                 dc_gpu_upload_chunk(gpu, 0, chunk, err, cap) &&
+                 dc_gpu_set_page(gpu, 0, 0, 0, err, cap);
+    free(chunk);
+    if (ready) return gpu;
+    fprintf(stderr, "Presentation fixture: %s\n", err);
+    dc_gpu_destroy(gpu);
+    return NULL;
+}
+
+static void test_combined_tick_progress_follows_fence_completion(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = progress_window(err, sizeof(err));
+    ASSERT_TRUE(gpu);
+    dc_gpu_body_t body = {.id=1, .active=1, .x_fp=10*65536, .y_fp=10*65536,
+                         .vx_fp=4096, .width=4, .height=4};
+    int32_t initial_x = body.x_fp, velocity = body.vx_fp;
+    bool okay = dc_gpu_set_rigid_solver(gpu, true) &&
+                dc_gpu_spawn_body(gpu, body, err, sizeof(err)) &&
+                dc_gpu_set_body_motion(gpu, 1, 0, 0,
+                    DC_GPU_BODY_KINEMATIC | DC_GPU_BODY_LOCK_ROTATION, err, sizeof(err));
+    uint32_t before = UINT32_MAX, completed = UINT32_MAX, retry = UINT32_MAX;
+    uint32_t success = UINT32_MAX;
+    int32_t before_x = 0, completed_x = 0, retried_x = 0, success_x = 0;
+    present_calls = 0;
+    reject_next_acquire = okay;
+    okay = okay && !dc_gpu_present_chunks_steps_progress(gpu, 2, &before, err, sizeof(err)) &&
+           dc_gpu_read_body_id(gpu, 1, &body, err, sizeof(err));
+    before_x = body.x_fp;
+    reject_next_present = okay;
+    okay = okay && !dc_gpu_present_chunks_steps_progress(gpu, 2, &completed, err, sizeof(err)) &&
+           dc_gpu_read_body_id(gpu, 1, &body, err, sizeof(err));
+    completed_x = body.x_fp;
+    okay = okay && dc_gpu_present_chunks_steps_progress(gpu, 0, &retry, err, sizeof(err)) &&
+           dc_gpu_read_body_id(gpu, 1, &body, err, sizeof(err));
+    retried_x = body.x_fp;
+    okay = okay && dc_gpu_present_chunks_steps_progress(gpu, 2, &success, err, sizeof(err)) &&
+           dc_gpu_read_body_id(gpu, 1, &body, err, sizeof(err));
+    success_x = body.x_fp;
+    uint32_t validation_errors = dc_gpu_validation_errors(gpu);
+    dc_gpu_destroy(gpu);
+    reject_next_acquire = reject_next_present = false;
+    if (!okay) fprintf(stderr, "Combined frame: %s\n", err);
+    ASSERT_TRUE(okay);
+    printf("Combined progress before acquire %u, after failed present %u, retry %u, success %u\n",
+           before, completed, retry, success);
+    ASSERT_EQ(before, 0u);
+    ASSERT_EQ(completed, 2u);
+    ASSERT_EQ(retry, 0u);
+    ASSERT_EQ(success, 2u);
+    ASSERT_EQ(present_calls, 3u);
+    ASSERT_EQ(before_x, initial_x);
+    ASSERT_EQ(completed_x, initial_x + 2 * velocity);
+    ASSERT_EQ(retried_x, completed_x);
+    ASSERT_EQ(success_x, initial_x + 4 * velocity);
+    ASSERT_EQ(validation_errors, 0u);
+    PASS();
+}
+
+static void test_gas_tick_progress_survives_acquire_timeout(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = progress_window(err, sizeof(err));
+    ASSERT_TRUE(gpu);
+    const fr_gas_model_t gas = {.gas_constant = {.25984, .29680, .18892, .46152, 0},
+        .heat_capacity_cv = {.65816, .74320, .65508, 1.40248, .71},
+        .kinetic_scale = 1. / 512.};
+    fr_gas_gpu_clock_t before, after, paused;
+    bool okay = fr_gas_gpu_enable(gpu, &gas, .0012f, 293.15f, err, sizeof(err)) &&
+                dc_gpu_set_tick_seconds(gpu, 1.f / 60.f) && fr_gas_gpu_clock(gpu, &before);
+    uint32_t completed = UINT32_MAX, retry = UINT32_MAX;
+    present_calls = 0;
+    reject_next_acquire = okay;
+    okay = okay && !dc_gpu_present_chunks_steps_progress(gpu, 2, &completed, err, sizeof(err)) &&
+           fr_gas_gpu_clock(gpu, &after) &&
+           dc_gpu_present_chunks_steps_progress(gpu, 0, &retry, err, sizeof(err)) &&
+           fr_gas_gpu_clock(gpu, &paused);
+    uint32_t validation_errors = dc_gpu_validation_errors(gpu);
+    dc_gpu_destroy(gpu);
+    reject_next_acquire = false;
+    if (!okay) fprintf(stderr, "Gas frame: %s\n", err);
+    ASSERT_TRUE(okay);
+    printf("Gas acquire timeout completed %u ticks, retry completed %u\n", completed, retry);
+    ASSERT_EQ(completed, 2u);
+    ASSERT_EQ(retry, 0u);
+    ASSERT_EQ(after.physical_steps - before.physical_steps, 2u);
+    ASSERT_EQ(paused.physical_steps, after.physical_steps);
+    ASSERT_EQ(paused.advanced_seconds, after.advanced_seconds);
+    ASSERT_EQ(present_calls, 1u);
+    ASSERT_EQ(validation_errors, 0u);
+    PASS();
+}
+
 int main(void) {
-    RUN(test_recreated_hidden_windows_keep_presenting_within_deadline);
+    RUN(test_combined_tick_progress_follows_fence_completion);
+    RUN(test_gas_tick_progress_survives_acquire_timeout);
+    if (!getenv("DC_TEST_PRESENT_PROGRESS_ONLY")) {
+        RUN(test_recreated_hidden_windows_keep_presenting_within_deadline);
+    }
     printf("%d passed, %d failed\n",g_pass,g_fail); return g_fail ? 1 : 0;
 }
