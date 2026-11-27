@@ -79,8 +79,9 @@ bool dc_camera_catalog_stage(dc_level_view_t *view, char *err, uint32_t cap) {
         if (!sealed(r)) continue;
         uint32_t slot;
         if (dc_chunk_table_find(&view->table, r->coord, &slot)) {
-            if (dc_level_chunk_visible(view, r->coord)) continue;
             const dc_chunk_slot_t *resident = view->table.slots + slot;
+            if (dc_level_chunk_visible(view, r->coord) && resident->time.known &&
+                resident->time.seconds == view->world_seconds) continue;
             if (resident->state != DC_SLOT_SLEEPING || resident->dirty || !resident->time.known ||
                 resident->time.seconds != r->time.seconds || !dc_chunk_owner_equal(resident->checkpoint_owner, r->owner)) {
                 okay = false;
