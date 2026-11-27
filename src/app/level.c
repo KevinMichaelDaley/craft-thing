@@ -722,8 +722,11 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!bind_transfer_destination(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
         dc_chunk_slot_t *slot = &view->table.slots[i];
-        if (slot->state == DC_SLOT_ACTIVE || slot->state == DC_SLOT_SLEEPING)
-            dc_chunk_table_set_active(&view->table, i, dc_level_chunk_visible(view, slot->coord));
+        if (slot->state != DC_SLOT_ACTIVE && slot->state != DC_SLOT_SLEEPING) continue;
+        bool visible = dc_level_chunk_visible(view, slot->coord);
+        if (visible && slot->state == DC_SLOT_SLEEPING && !slot->dirty && !slot->pinned &&
+            dc_camera_offscreen_pending(view, slot->coord)) continue;
+        dc_chunk_table_set_active(&view->table, i, visible);
     }
     if (!schedule_saves(view, err, cap)) return false;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
