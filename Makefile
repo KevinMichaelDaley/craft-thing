@@ -677,7 +677,7 @@ build/rigid_gpu.o: src/vulkan/rigid_gpu.c src/vulkan/gpu_internal.h include/dung
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/tick_gpu.o: src/vulkan/tick_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h include/dungeoncraft/liquid_seam.h
+build/tick_gpu.o: src/vulkan/tick_gpu.c src/vulkan/gpu_internal.h src/vulkan/fluid_schedule.h include/dungeoncraft/gpu.h include/dungeoncraft/liquid_seam.h
 	@mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
