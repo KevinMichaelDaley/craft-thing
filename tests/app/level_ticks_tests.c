@@ -809,11 +809,11 @@ static void test_level_water_settings_change_all_owners_together(void) {
     PASS();
 }
 
-static void test_parked_receipt_survives_close_before_slot_eviction(void) {
+static void check_close_before_slot_eviction(bool move_back) {
     char directory[] = "build/room_close_pending_evict_XXXXXX", path[256], err[128] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t view = {.world_seconds = 2.};
-    const dc_chunk_coord_t coord = {-40, 3};
+    const dc_chunk_coord_t coord = {-HALO_CHUNKS-1, 3};
     dc_chunk_owner_t owner = {13, 7};
     uint32_t slot;
     uint64_t generation;
@@ -825,6 +825,11 @@ static void test_parked_receipt_survives_close_before_slot_eviction(void) {
     view.table.slots[slot].time = (dc_chunk_time_t){1., true};
     view.camera_offscreen = (dc_camera_offscreen_t){.coord=coord,.owner=owner,
         .phase=DC_CAMERA_OFFSCREEN_STORED,.time={1.,true}};
+    ASSERT_TRUE(!dc_level_chunk_visible(&view, coord));
+    if (move_back) {
+        ASSERT_TRUE(dc_level_view_move(&view, -1, 0));
+        ASSERT_TRUE(dc_level_chunk_visible(&view, coord));
+    }
     view.save = dc_world_save_open(directory, err, sizeof(err));
     ASSERT_TRUE(view.save && dc_world_save_begin(view.save, err, sizeof(err)) &&
         dc_camera_catalog_stage(&view, err, sizeof(err)) &&
@@ -843,6 +848,14 @@ static void test_parked_receipt_survives_close_before_slot_eviction(void) {
     dc_camera_offscreen_discard(&view);
     dc_world_save_close(view.save);
     PASS();
+}
+
+static void test_parked_receipt_survives_close_before_slot_eviction(void) {
+    check_close_before_slot_eviction(false);
+}
+
+static void test_camera_move_before_shutdown_preserves_sleeping_owner(void) {
+    check_close_before_slot_eviction(true);
 }
 
 static void test_truncated_room_catalog_cannot_install_an_owner(void) {
@@ -883,6 +896,7 @@ int main(void) {
     RUN(test_duplicate_load_reply_cannot_overwrite_a_live_slot);
     RUN(test_transfer_releases_rejected_request_and_rebinds_failed_worker_destination);
     RUN(test_camera_workspace_requires_a_closed_stationary_rim);
+    RUN(test_camera_move_before_shutdown_preserves_sleeping_owner);
     RUN(test_truncated_room_catalog_cannot_install_an_owner);
     RUN(test_parked_receipt_survives_close_before_slot_eviction);
     RUN(test_empty_camera_eviction_leaves_the_workspace_for_oil_stock);
