@@ -185,6 +185,11 @@ bool dc_gpu_run_grain_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tile
     bool parcels=false;
     for(unsigned i=0;i<2;i++) parcels |= owners[i]->reactive && owners[i]->reactive->particles.buffer;
     if(parcels && !prepare_parcels(gpu,d,owners,err,cap)) return false;
+    uint32_t *work=mapped(d,WORK);
+    const uint32_t dispatch_size[3]={d->width/16u,d->height/16u,1u};
+    memcpy(work,dispatch_size,sizeof(dispatch_size));
+    work[3u+2u*d->groups]=0;
+    memcpy(work+4u+2u*d->groups,dispatch_size,sizeof(dispatch_size));
     memset(mapped(d,PAGE),0,d->field[PAGE].range);
     memset(mapped(d,DIRTY),0,d->field[DIRTY].range);
     memset(mapped(d,OCC),0,d->field[OCC].range);
@@ -201,12 +206,13 @@ bool dc_gpu_run_grain_domain(dc_gpu_t *gpu,const dc_liquid_seam_endpoint_t *tile
         transfer_tile(gpu->command,d,tiles[i].gpu,l,i,owners[1u-l->context]->body_count!=0u,false);
     }
     fr_renderer_barrier(gpu->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
-        VK_ACCESS_2_TRANSFER_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    dispatch(gpu,d,&d->component,0u,false);
-    for (uint64_t cells=(uint64_t)d->width*d->height;cells;cells/=2u)
-        for (unsigned mode=1;mode<=3;mode++) dispatch(gpu,d,&d->component,mode,false);
-    dispatch(gpu,d,&d->component,4u,false);
+        VK_ACCESS_2_TRANSFER_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+    vkCmdBindDescriptorSets(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,d->component.pipeline_layout,
+        0,1,&d->component.descriptor,0,NULL);
+    dc_gpu_record_mpm_component_graph(gpu,d->width,d->height,false,d->component.pipeline,
+        d->component.pipeline_layout,d->storage.buffer,d->field[WORK].offset);
     dispatch(gpu,d,&d->mpm,7u,false);
     for (unsigned step=0;step<2;step++)
         for (unsigned mode=0;mode<6;mode++) {

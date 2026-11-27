@@ -665,6 +665,8 @@ bool dc_gpu_window_init(dc_gpu_t *gpu, uint32_t width, uint32_t height,
 bool dc_gpu_capture_present(dc_gpu_t *gpu, uint32_t *pixels, size_t count,
                             char *err, uint32_t cap);
 
+void dc_gpu_record_mpm_component_graph(dc_gpu_t *gpu,uint32_t width,uint32_t height,bool rigid,
+    VkPipeline pipeline,VkPipelineLayout layout,VkBuffer activity,VkDeviceSize offset);
 void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid);
 void dc_gpu_record_component_extraction(dc_gpu_t *gpu);
 bool dc_gpu_colors_init(dc_gpu_t *gpu,char *err,uint32_t cap);

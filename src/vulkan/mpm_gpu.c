@@ -322,35 +322,29 @@ static void mpm_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 target_stage,
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
-void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
-    dc_gpu_record_mpm_activity(gpu,rigid);
-    uint32_t push[7] = {gpu->width, gpu->height, 0u, rigid ? 1u : 0u,
-                        0u,         0u,          0u};
-    vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      gpu->mpm_component_pipeline);
-    VkDeviceSize component_indirect =
-        (VkDeviceSize)(4u + 2u * ((gpu->width + 15u) / 16u) *
-                                ((gpu->height + 15u) / 16u)) *
-        sizeof(uint32_t);
-    uint32_t rounds = component_round_limit(gpu->width, gpu->height);
+void dc_gpu_record_mpm_component_graph(dc_gpu_t *gpu, uint32_t width, uint32_t height, bool rigid,
+    VkPipeline pipeline,VkPipelineLayout layout,VkBuffer activity,VkDeviceSize offset) {
+    uint32_t push[7] = {width,height,0u,rigid,0u,0u,0u};
+    vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline);
+    VkDeviceSize component_indirect=(4u+2u*((width+15u)/16u)*((height+15u)/16u))*sizeof(uint32_t);
+    uint32_t rounds=component_round_limit(width,height);
     for (uint32_t round = 0; round < rounds + 2u; ++round) {
         uint32_t first = round == 0u ? 0u : round == rounds + 1u ? 4u : 1u;
         uint32_t last = round == 0u ? 0u : round == rounds + 1u ? 4u : 3u;
         for (uint32_t mode = first; mode <= last; ++mode) {
             push[2] = mode;
-            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            vkCmdPushConstants(gpu->command, layout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push),
                                push);
-            vkCmdDispatchIndirect(gpu->command, gpu->mpm_activity_buffer,
-                                  mode >= 1u && mode <= 3u ? component_indirect
-                                                           : 0);
+            vkCmdDispatchIndirect(gpu->command, activity,
+                                  offset + (mode >= 1u && mode <= 3u ? component_indirect : 0));
             mpm_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                         VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         }
         if (round > 0u && round <= rounds) {
             push[2] = 5u;
-            vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
+            vkCmdPushConstants(gpu->command, layout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push),
                                push);
             vkCmdDispatch(gpu->command, 1u, 1u, 1u);
@@ -361,6 +355,12 @@ void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
                             VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
         }
     }
+}
+
+void dc_gpu_record_components(dc_gpu_t *gpu, bool rigid) {
+    dc_gpu_record_mpm_activity(gpu,rigid);
+    dc_gpu_record_mpm_component_graph(gpu,gpu->width,gpu->height,rigid,gpu->mpm_component_pipeline,
+        gpu->pipeline_layout,gpu->mpm_activity_buffer,0u);
 }
 
 static void bind_mpm_phase(dc_gpu_t *gpu,uint32_t phase,VkPipeline *bound) {
