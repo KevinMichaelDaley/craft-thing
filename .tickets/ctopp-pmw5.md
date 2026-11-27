@@ -1,8 +1,8 @@
 ---
 id: ctopp-pmw5
-status: in_progress
+status: closed
 deps: []
-links: []
+links: [ctvfb-5v03]
 created: 2026-11-27T06:05:51Z
 type: bug
 priority: 2
@@ -25,3 +25,7 @@ Run the hydro-head and fluid-aperture probes with synchronization validation and
 **2026-11-27T06:05:51Z**
 
 Reproduced nine null-storage-descriptor messages on both the previous paired-owner revision 122c4fbe and the projection refactor. Their six numerical assertions passed on both revisions.
+
+**2026-11-27T06:14:07Z**
+
+RED caught three null bulk writes in the normal hydro-head suite. The fix preserves sparse binding indices, leaves unused descriptors unwritten, and gives every transport or displacement probe that reads bulk a correctly sized zero-stock buffer. All 56 correctness checks passed under synchronization validation after GREEN. The final hydro-head variations and aperture probes pass without validation messages. Optional transport timing remains tracked in ctvfb-5v03.

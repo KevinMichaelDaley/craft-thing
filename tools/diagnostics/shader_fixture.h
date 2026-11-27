@@ -4,6 +4,14 @@
 #include "ferrum/fire/bulk_phase.h"
 #include "../../src/vulkan/gpu_internal.h"
 
+enum {
+    FIXTURE_BASE_BINDINGS = 32,
+    FIXTURE_BINDINGS = FIXTURE_BASE_BINDINGS + 2,
+    FIXTURE_THERMAL_BINDING = 36,
+    FIXTURE_BULK_BINDING = 37,
+    FIXTURE_THERMAL_BYTES = 128
+};
+
 static void fixture_release_pipeline(probe_t *p) {
     if (p->empty_bulk) vkDestroyBuffer(p->device, p->empty_bulk, NULL);
     if (p->empty_bulk_memory) vkFreeMemory(p->device, p->empty_bulk_memory, NULL);
@@ -32,14 +40,20 @@ static int fixture_body_pipeline_with_bulk(probe_t *p, dc_gpu_t *gpu, VkBuffer b
     const char *path, const uint32_t *indices, uint32_t count, uint32_t phase,
     uint32_t bulk_slots) {
     char err[256];
-    if (count > 32u)
+    if (count > FIXTURE_BASE_BINDINGS)
         return 0;
     fixture_release_pipeline(p);
-    uint32_t extended[34];memcpy(extended,indices,count*sizeof(*indices));
-    extended[count++]=36u;extended[count++]=37u;indices=extended;
-    void *control=NULL;
-    if(!dc_gpu_make_mapped_buffer(gpu,128,&p->thermal_control,&p->thermal_control_memory,&control,err,sizeof(err))) return 0;
-    memset(control,0,128);vkUnmapMemory(p->device,p->thermal_control_memory);
+    uint32_t extended[FIXTURE_BINDINGS];
+    memcpy(extended, indices, count * sizeof(*indices));
+    extended[count++] = FIXTURE_THERMAL_BINDING;
+    extended[count++] = FIXTURE_BULK_BINDING;
+    indices = extended;
+    void *control = NULL;
+    if (!dc_gpu_make_mapped_buffer(gpu, FIXTURE_THERMAL_BYTES, &p->thermal_control,
+                                   &p->thermal_control_memory, &control, err, sizeof(err)))
+        return 0;
+    memset(control, 0, FIXTURE_THERMAL_BYTES);
+    vkUnmapMemory(p->device, p->thermal_control_memory);
     VkBuffer bulk = gpu->bulk_phase_buffer;
     if (!bulk && bulk_slots) {
         const VkDeviceSize bytes = (VkDeviceSize)bulk_slots * sizeof(fr_bulk_phase_chunk_t);
@@ -55,7 +69,7 @@ static int fixture_body_pipeline_with_bulk(probe_t *p, dc_gpu_t *gpu, VkBuffer b
         printf("shader failure: %s\n", err);
         return 0;
     }
-    VkDescriptorSetLayoutBinding bindings[34] = {0};
+    VkDescriptorSetLayoutBinding bindings[FIXTURE_BINDINGS] = {0};
     for (unsigned i = 0; i < count; i++)
         bindings[i] = (VkDescriptorSetLayoutBinding){
             .binding = indices[i],
@@ -125,16 +139,18 @@ static int fixture_body_pipeline_with_bulk(probe_t *p, dc_gpu_t *gpu, VkBuffer b
     if (!check(vkAllocateDescriptorSets(p->device, &allocation, &p->descriptor),
                "descriptor allocate"))
         return 0;
-    VkDescriptorBufferInfo buffers[34];
-    VkWriteDescriptorSet writes[34];
+    VkDescriptorBufferInfo buffers[FIXTURE_BINDINGS];
+    VkWriteDescriptorSet writes[FIXTURE_BINDINGS];
     uint32_t write_count = 0;
     for (unsigned i = 0; i < count; i++) {
         bool is_body = indices[i] == 4u;
         buffers[i] = (VkDescriptorBufferInfo){
             is_body ? body : p->buffer, 0,
             is_body ? dc_gpu_body_storage_bytes(gpu) : 39u * sizeof(uint32_t)};
-        if(indices[i]==36u) buffers[i]=(VkDescriptorBufferInfo){p->thermal_control,0,128};
-        if (indices[i] == 37u) buffers[i] = (VkDescriptorBufferInfo){bulk, 0, VK_WHOLE_SIZE};
+        if (indices[i] == FIXTURE_THERMAL_BINDING)
+            buffers[i] = (VkDescriptorBufferInfo){p->thermal_control, 0, FIXTURE_THERMAL_BYTES};
+        if (indices[i] == FIXTURE_BULK_BINDING)
+            buffers[i] = (VkDescriptorBufferInfo){bulk, 0, VK_WHOLE_SIZE};
         if (!buffers[i].buffer) continue;
         writes[write_count++] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
