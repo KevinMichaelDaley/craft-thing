@@ -14,7 +14,8 @@ static bool camera_has_live_bond(dc_gpu_t *gpu, uint32_t first, uint32_t second)
     return false;
 }
 
-static void check_camera_bonded_assembly(bool inspect_group) {
+enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF };
+static void check_camera_bonded_assembly(enum bond_check check) {
     char directory[] = "build/camera_bonded_pan_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -50,7 +51,7 @@ static void check_camera_bonded_assembly(bool inspect_group) {
     for (unsigned i = 0; i < 90; ++i) ASSERT_TRUE(dc_gpu_rigid_step(view->gpu, err, sizeof(err)));
     const uint32_t first = FR_STRUCTURAL_BODY_ID_BASE + 1u;
     ASSERT_TRUE(camera_has_live_bond(view->gpu, first, first + 1u));
-    if (inspect_group) {
+    if (check == BOND_COVERAGE) {
         for (unsigned seed = 0; seed < 2; ++seed) {
             dc_offscreen_bond_group_t group = {0};
             ASSERT_TRUE(dc_offscreen_collect_bond_group(view->gpu, first + seed, &group));
@@ -80,6 +81,52 @@ static void check_camera_bonded_assembly(bool inspect_group) {
     }
     ASSERT_TRUE(dc_gpu_read_body_motion(view->gpu, first, &motion, err, sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_motion(view->gpu, first, motion.angle, .05f, 0, err, sizeof(err)));
+    if (check == BOND_HANDOFF) {
+        dc_offscreen_t *workspace = dc_offscreen_create(view->gpu, origin, err, sizeof(err));
+        ASSERT_TRUE(workspace);
+        dc_gpu_t *remote = workspace->gpu;
+        dc_offscreen_bond_group_t group;
+        ASSERT_TRUE(dc_offscreen_collect_bond_group(view->gpu, first, &group));
+        for (unsigned i = 0; i < group.page_count; ++i) {
+            uint32_t slot;
+            dc_chunk_t chunk = {.coord = group.pages[i]};
+            ASSERT_TRUE(dc_chunk_table_find(&view->table, group.pages[i], &slot));
+            ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &chunk, err, sizeof(err)));
+            dc_stream_result_t source = {.kind = DC_STREAM_LOADED, .coord = chunk.coord, .chunk = &chunk,
+                .generation = 9u, .time = {.known = true, .seconds = view->world_seconds}};
+            ASSERT_TRUE(dc_offscreen_admit(workspace, &source, 9u, err, sizeof(err)));
+        }
+        dc_gpu_world_body_t unrelated = {.chunk = origin, .body = {.active = 1u, .id = 77,
+            .width = 2, .height = 2, .x_fp = 4 * DC_FLUID_FULL, .y_fp = 5 * DC_FLUID_FULL}};
+        ASSERT_TRUE(dc_gpu_spawn_world_body(remote, unrelated, err, sizeof(err)));
+        ++group.members[1].member_generation;
+        ASSERT_TRUE(!dc_offscreen_move_bond_group(view->gpu, remote, &group, err, sizeof(err)));
+        ASSERT_TRUE(camera_has_live_bond(view->gpu, first, first + 1u));
+        --group.members[1].member_generation;
+        ASSERT_TRUE(dc_offscreen_move_bond_group(view->gpu, remote, &group, err, sizeof(err)));
+        ASSERT_TRUE(!camera_has_live_bond(view->gpu, first, first + 1u));
+        ASSERT_TRUE(camera_has_live_bond(remote, first, first + 1u));
+        fr_structural_gpu_member_state_t state;
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_TRUE(!fr_gpu_read_structure_member(view->gpu, i + 1u, &state));
+            ASSERT_TRUE(fr_gpu_read_structure_member(remote, i + 1u, &state));
+            ASSERT_EQ(state.generation, 3u);
+            ASSERT_EQ(state.state, FR_STRUCTURAL_CONVERTED);
+            ASSERT_TRUE(!dc_gpu_read_body_motion(view->gpu, first + i, &motion, NULL, 0));
+        }
+        for (unsigned i = 0; i < 6; ++i) ASSERT_TRUE(dc_gpu_rigid_step(remote, err, sizeof(err)));
+        ASSERT_TRUE(dc_gpu_read_body_motion(remote, first + 1u, &motion, err, sizeof(err)));
+        ASSERT_TRUE(fabsf(motion.angular_velocity) > .00001f);
+        ASSERT_TRUE(dc_offscreen_collect_bond_group(remote, first + 1u, &group));
+        ASSERT_TRUE(dc_offscreen_move_bond_group(remote, view->gpu, &group, err, sizeof(err)));
+        ASSERT_TRUE(camera_has_live_bond(view->gpu, first, first + 1u));
+        ASSERT_TRUE(!camera_has_live_bond(remote, first, first + 1u));
+        ASSERT_TRUE(dc_gpu_read_world_body(remote, 77, &unrelated, err, sizeof(err)));
+        dc_offscreen_destroy(workspace);
+        ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+        PASS();
+        return;
+    }
     ASSERT_TRUE(dc_level_view_pan_pixels(view, 2 * VIEW_WIDTH, 0));
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(view->camera_offscreen.workspace);
@@ -117,10 +164,14 @@ static void check_camera_bonded_assembly(bool inspect_group) {
     PASS();
 }
 static void test_both_bond_endpoints_identify_the_same_members_and_pages(void) {
-    check_camera_bonded_assembly(true);
+    check_camera_bonded_assembly(BOND_COVERAGE);
+}
+
+static void test_bond_handoff_rebinds_slots_and_preserves_member_generations(void) {
+    check_camera_bonded_assembly(BOND_HANDOFF);
 }
 
 static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
-    check_camera_bonded_assembly(false);
+    check_camera_bonded_assembly(BOND_CAMERA);
 }
 #endif

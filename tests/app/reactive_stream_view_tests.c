@@ -420,6 +420,7 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && strcmp(argv[1], "--bond-group") == 0) {
         RUN(test_both_bond_endpoints_identify_the_same_members_and_pages);
+        RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
@@ -452,6 +453,7 @@ int main(int argc, char **argv) {
     RUN(test_quit_saves_the_offscreen_moving_body_at_the_confirmed_world_clock);
     RUN(test_camera_transfers_an_assembly_spanning_two_chunk_pages);
     RUN(test_both_bond_endpoints_identify_the_same_members_and_pages);
+    RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
     RUN(test_camera_heated_water_returns_with_its_energy);
     RUN(test_camera_bulk_liquids_return_with_their_momentum);

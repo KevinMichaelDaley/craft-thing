@@ -18,6 +18,9 @@ typedef struct {
 
 /** Collect a live connected assembly and the pages touched by its current geometry. */
 bool dc_offscreen_collect_bond_group(dc_gpu_t *gpu, uint32_t id, dc_offscreen_bond_group_t *group);
+/** Move a confirmed converted group, preserving member generations and remapping bond slots. */
+bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscreen_bond_group_t *group,
+    char *err, uint32_t cap);
 
 struct dc_offscreen {
     dc_gpu_t *gpu;

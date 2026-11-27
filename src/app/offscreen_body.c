@@ -176,3 +176,11 @@ bool dc_offscreen_move_bodies(dc_gpu_t *from, dc_gpu_t *to, dc_chunk_coord_t coo
     from->body_refresh_pending = to->body_refresh_pending = true;
     return true;
 }
+
+bool dc_offscreen_move_bond_group(dc_gpu_t *from, dc_gpu_t *to, const dc_offscreen_bond_group_t *group,
+    char *err, uint32_t cap) {
+    (void)from;
+    (void)to;
+    (void)group;
+    return error(err, cap, "Bonded assembly handoff unavailable");
+}
