@@ -27,6 +27,8 @@ bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_r
 unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_stream_result_t *snapshot);
 /** Whether the elected water owner can participate in this frame's simulation. */
 bool dc_camera_offscreen_water_ready(dc_level_view_t *view);
+/** Check the current mapped owners before changing the camera during a water cycle. */
+bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err, uint32_t cap);
 /** Elect one eligible camera eviction after its worker request has been accepted. */
 void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *snapshot,
     dc_chunk_owner_t owner, uint64_t write_generation);

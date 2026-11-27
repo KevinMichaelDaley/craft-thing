@@ -138,16 +138,17 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
     const float elapsed = 1.f / 60.f;
     unsigned ticks = 0u;
     for (unsigned cycle = 0; cycle < 2u; ++cycle) {
-        if (cycle == 1u) {
+        if (cycle == 0u) {
             ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
                         dc_level_view_tick(view, err, sizeof(err)));
             ASSERT_EQ(view->gpu->fluid_phase, 3u);
             ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
-            ASSERT_TRUE(dc_gpu_tick_step(reference, err, sizeof(err)) && dc_gpu_tick_step(reference, err, sizeof(err)));
+            ASSERT_TRUE(dc_gpu_set_tick_seconds(reference, elapsed) && dc_gpu_tick_step(reference, err, sizeof(err)) &&
+                        dc_gpu_tick_step(reference, err, sizeof(err)));
             ticks += 2u;
         }
         ASSERT_TRUE(dc_level_view_move(view, 1, 0));
-        if (cycle == 0u) {
+        if (cycle == 1u) {
             uint32_t departing;
             ASSERT_TRUE(dc_chunk_table_find(&view->table, first, &departing));
             ASSERT_TRUE(dc_chunk_table_set_active(&view->table, departing, false) &&
@@ -164,7 +165,7 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             ASSERT_TRUE(!dc_camera_offscreen_service(view, false, err, sizeof(err)));
             ASSERT_EQ(view->camera_offscreen.phase, DC_CAMERA_OFFSCREEN_STORED);
             ASSERT_TRUE(!view->camera_offscreen.workspace);
-            ASSERT_EQ(view->world_seconds, 2.);
+            ASSERT_EQ(view->world_seconds, 2. + ticks * (double)elapsed);
             view->table.next_generation = next;
             ASSERT_TRUE(dc_camera_offscreen_service(view, false, err, sizeof(err)));
             dc_stream_result_t failure = {.kind = DC_STREAM_FAILED, .coord = first,
@@ -207,6 +208,21 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
         ASSERT_TRUE(stock[1] > 0u);
         ASSERT_EQ(stock[0] + stock[1], 11u * (DC_FLUID_FULL/2u));
     }
+    ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_move(view, 1, 0) && dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+    const double start = view->world_seconds;
+    const uint64_t generation = view->camera_offscreen.generation;
+    ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+    ASSERT_TRUE(!dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(strstr(err, "common interval start"));
+    ASSERT_EQ(view->world_seconds, start);
+    dc_chunk_time_t remote_time;
+    bool writing;
+    ASSERT_TRUE(dc_level_offscreen_progress(view, first, generation, &remote_time, &writing));
+    ASSERT_TRUE(remote_time.known && remote_time.seconds == start && !writing);
+    ASSERT_EQ(view->pending_steps, 1u);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     dc_gpu_destroy(reference);
     free(chunk);

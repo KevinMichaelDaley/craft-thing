@@ -682,7 +682,7 @@ static bool execute_steps(dc_level_view_t *view, bool stop_at_water_boundary, ch
             if (paired == DC_LEVEL_OFFSCREEN_FAILED ||
                 (paired == DC_LEVEL_OFFSCREEN_UNMATCHED && !dc_gpu_tick_step(view->gpu, err, cap))) return false;
             consume_level_steps(view, 1u);
-            if (stop_at_water_boundary && !dc_gpu_liquid_owner_held(view->gpu)) return true;
+            if (stop_at_water_boundary && !view->gpu->fluid_phase) return true;
         }
     }
     return true;
@@ -695,9 +695,13 @@ static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) 
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
     if (view->liquid_seam_failed) return error(err, cap, "World requires recovery from an unconfirmed liquid seam");
-    if ((view->pending_chunk_dx || view->pending_chunk_dy) && dc_gpu_liquid_owner_held(view->gpu)) {
-        if (!execute_steps(view, true, err, cap)) return false;
-        if (dc_gpu_liquid_owner_held(view->gpu)) return true;
+    if (view->gpu && (view->pending_chunk_dx || view->pending_chunk_dy)) {
+        bool hold;
+        if (!dc_camera_offscreen_hold_remap(view, &hold, err, cap)) return false;
+        if (hold) {
+            if (!execute_steps(view, true, err, cap)) return false;
+            if (view->gpu->fluid_phase) return true;
+        }
     }
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);

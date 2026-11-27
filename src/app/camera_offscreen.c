@@ -113,6 +113,30 @@ bool dc_camera_offscreen_water_ready(dc_level_view_t *view) {
         time.known && !writing;
 }
 
+bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err, uint32_t cap) {
+    *hold = view->gpu->water_cycle_peer != NULL;
+    if (*hold || !view->gpu->fluid_phase || !view->gpu->fluid_work_possible ||
+        view->gpu->gas || view->camera_offscreen.phase != DC_CAMERA_OFFSCREEN_IDLE) return true;
+    for (uint32_t i = 0; i < view->table.capacity; ++i) {
+        const dc_chunk_slot_t *slot = &view->table.slots[i];
+        if (slot->state != DC_SLOT_ACTIVE || !slot->time.known || slot->time.seconds != view->world_seconds ||
+            dc_level_chunk_visible(view, slot->coord)) continue;
+        unsigned face = WEST;
+        while (face <= SOUTH && !face_in_view(view, slot->coord, face)) face <<= 1;
+        if (face > SOUTH) continue;
+        dc_chunk_t chunk;
+        if (!dc_gpu_download_chunk(view->gpu, i, &chunk, err, cap)) return false;
+        const dc_stream_result_t snapshot = {.time = slot->time, .coord = slot->coord, .chunk = &chunk,
+            .bulk = (fr_bulk_phase_chunk_t *)view->gpu->bulk_phase_mapped + i};
+        if (dc_camera_offscreen_water_face(view, &snapshot) == face &&
+            (has_transport_stock(&snapshot) || neighbor_has_water(view, slot->coord, face))) {
+            *hold = true;
+            break;
+        }
+    }
+    return true;
+}
+
 void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *snapshot,
     dc_chunk_owner_t owner, uint64_t write_generation) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
