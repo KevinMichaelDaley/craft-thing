@@ -101,6 +101,12 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
     ASSERT_TRUE(view && chunk && dc_level_view_set_fluid_interval(view, 2u));
     const dc_chunk_coord_t first = {view->origin.x - HALO_CHUNKS, view->origin.y};
     const uint32_t row = 32u * DC_CHUNK_SIDE;
+    dc_gpu_t *reference = NULL;
+    ASSERT_TRUE(dc_gpu_create(&reference, 2u * DC_CHUNK_SIDE, DC_CHUNK_SIDE,
+        "build/shaders/pattern.comp.spv", err, sizeof(err)) &&
+        dc_gpu_set_body_origin(reference, first, err, sizeof(err)) &&
+        dc_gpu_set_fluid_interval(reference, 2u));
+    dc_chunk_colors_t colors = {0}, expected_colors;
     for (unsigned tile = 0; tile < 2u; ++tile) {
         memset(chunk, 0, sizeof(*chunk));
         chunk->coord = (dc_chunk_coord_t){first.x + tile, first.y};
@@ -110,10 +116,20 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             chunk->cells[row+x] = (dc_cell_t){.fluid_mass = !tile && x >= 53u ? DC_FLUID_FULL/2u : 0u};
             chunk->face_velocity[row+x].x = 7.5f;
         }
+        memset(&colors, 0, sizeof(colors));
+        for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
+            if (!chunk->cells[i].fluid_mass) continue;
+            colors.water[i][1] = .75f;
+            colors.water[i][3] = 1.f;
+        }
+        ASSERT_TRUE(dc_gpu_upload_chunk(reference, tile, chunk, err, sizeof(err)) &&
+            dc_gpu_set_page(reference, tile, 0, tile, err, sizeof(err)) &&
+            fr_renderer_upload_chunk_colors(reference, tile, &colors, err, sizeof(err)));
         uint32_t slot;
         uint64_t generation;
         ASSERT_TRUE(dc_chunk_table_begin_load(&view->table, chunk->coord, &slot, &generation) &&
             dc_gpu_upload_chunk(view->gpu, slot, chunk, err, sizeof(err)) &&
+            fr_renderer_upload_chunk_colors(view->gpu, slot, &colors, err, sizeof(err)) &&
             dc_chunk_table_finish_load(&view->table, slot, generation));
         view->table.slots[slot].time = (dc_chunk_time_t){view->world_seconds, true};
         ASSERT_TRUE(dc_chunk_table_mark_dirty(&view->table, slot));
@@ -132,6 +148,8 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
                     dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
         ASSERT_TRUE(!dc_level_offscreen_owns(view, first));
         ASSERT_EQ(view->world_seconds, 2. + (2u * cycle + 2u) * (double)elapsed);
+        ASSERT_TRUE(dc_gpu_set_tick_seconds(reference, elapsed) && dc_gpu_tick_step(reference, err, sizeof(err)) &&
+                    dc_gpu_tick_step(reference, err, sizeof(err)));
         uint64_t stock[2] = {0};
         for (unsigned tile = 0; tile < 2u; ++tile) {
             uint32_t slot;
@@ -139,11 +157,22 @@ static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) {
             ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
             ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, chunk, err, sizeof(err)));
             stock[tile] = camera_stock(chunk, NULL, false);
+            dc_chunk_t expected;
+            ASSERT_TRUE(dc_gpu_download_chunk(reference, tile, &expected, err, sizeof(err)));
+            for (unsigned i = 0; i < DC_CHUNK_CELLS; ++i) {
+                ASSERT_EQ(chunk->cells[i].fluid_mass, expected.cells[i].fluid_mass);
+                ASSERT_TRUE(fabsf(chunk->face_velocity[i].x - expected.face_velocity[i].x) <= 1e-5f);
+                ASSERT_TRUE(fabsf(chunk->face_velocity[i].y - expected.face_velocity[i].y) <= 1e-5f);
+            }
+            ASSERT_TRUE(fr_renderer_download_chunk_colors(view->gpu, slot, &colors, err, sizeof(err)) &&
+                fr_renderer_download_chunk_colors(reference, tile, &expected_colors, err, sizeof(err)));
+            ASSERT_EQ(memcmp(colors.water, expected_colors.water, sizeof(colors.water)), 0);
         }
         ASSERT_TRUE(stock[1] > 0u);
         ASSERT_EQ(stock[0] + stock[1], 11u * (DC_FLUID_FULL/2u));
     }
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+    dc_gpu_destroy(reference);
     free(chunk);
     PASS();
 }
