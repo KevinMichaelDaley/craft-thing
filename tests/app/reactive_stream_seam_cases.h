@@ -192,7 +192,6 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(mono, 0u, &expected[0], err, sizeof(err)) &&
                 dc_gpu_download_chunk(mono, 1u, &expected[1], err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_download_chunk_colors(mono, 1u, &pigment, err, sizeof(err)));
-    dc_gpu_destroy(mono);
     uint32_t mass[2] = {0};
     for (unsigned tile = 0; tile < 2u; ++tile)
         for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) mass[tile] += expected[tile].cells[i].fluid_mass;
@@ -204,9 +203,20 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     dc_stream_result_release(&remote);
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
-    const double end = view->world_seconds;
-    ASSERT_TRUE(dc_offscreen_advance(workspace, end + elapsed, 1u, err, sizeof(err)));
-    ASSERT_EQ(workspace->time.seconds, end);
+    ASSERT_TRUE(dc_offscreen_advance(workspace, view->world_seconds + elapsed, 1u, err, sizeof(err)));
+    ASSERT_EQ(workspace->time.seconds, view->world_seconds);
+    ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)) &&
+                execute_level_steps(view, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
+    const double end = view->world_seconds + 3. * elapsed;
+    for (unsigned i = 0; i < 3; ++i)
+        ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+    for (unsigned i = 0; i < 4; ++i)
+        ASSERT_TRUE(dc_gpu_tick_step(mono, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(mono, 0u, &expected[0], err, sizeof(err)) &&
+                dc_gpu_download_chunk(mono, 1u, &expected[1], err, sizeof(err)) &&
+                fr_renderer_download_chunk_colors(mono, 1u, &pigment, err, sizeof(err)));
+    dc_gpu_destroy(mono);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     dc_offscreen_destroy(workspace);
     view = seam_test_view(directory, err, sizeof(err));
