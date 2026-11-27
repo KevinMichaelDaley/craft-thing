@@ -31,3 +31,7 @@ Regular near steady-state RED failed at the measured shared-submit count. GREEN 
 **2026-11-27T19:59:24Z**
 
 The serial-state comparison passes on :93 without validation. With synchronization validation, the 17-room near setup still timed out at the 120 s visibility wait, before the frame assertions. Middle cadence, saturated return and level tick tests passed separately. Investigating setup residency diagnostics instead of increasing the timeout again.
+
+**2026-11-27T20:18:05Z**
+
+The instrumented validation setup progressed from 21 visible slots/0 admitted rooms at 47 s to 58 slots/5 rooms at 142 s. Twelve slots were still loading. The fixture now tracks confirmed admissions and resident slots and applies its timeout only when both stop progressing, while requiring the full ready state on a single tick.

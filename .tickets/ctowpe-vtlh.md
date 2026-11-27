@@ -59,3 +59,7 @@ At 782cb32c, with page-indexed projection and mass launches bounded by mapped sl
 **2026-11-27T19:38:05Z**
 
 Pressure reuse at 4bbe76ec passed 7/7 Vulkan pressure checks and all 720 gates. Half-native near/middle/far p95: 36.907/40.843/41.465 ms; native: 38.542/43.320/42.687 ms. Retained 16 confirmed active owners and 2.000000104 s simulated per band. Collecting per-frame actual replay batch counts, wall times and per-kernel device timestamps for the remaining tail.
+
+**2026-11-27T20:18:05Z**
+
+Regular-frame pacing at 28413683: half-native near/middle/far mean/p95 ms = 23.044/33.619, 22.824/28.254, 22.242/29.696. Native = 25.609/32.550, 26.016/33.743, 25.965/35.490. Three of six p95 gates now pass; all six means and all three 720 cases pass. Native-step planning at 8503946e is being measured separately.
