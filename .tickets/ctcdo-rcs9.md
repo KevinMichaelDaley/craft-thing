@@ -28,3 +28,7 @@ Native Vulkan tests conserve water, oil, gas species and grain mass in both dire
 **2026-11-27T04:20:10Z**
 
 The archived split-workspace conservation tests and interface shader start at 8dc17268, with projected liquid face coupling in b26cd351 and streamed gas cases in 88b8e9c8. Reuse their split-versus-monolithic test geometry. Map the exchange to the current shared device, durable owner generations, bulk-liquid packets and conservative gas state before enabling open camera evictions.
+
+**2026-11-27T04:47:30Z**
+
+The archived split-river, reverse-flow and vertical seam fixtures give reference geometries. Its transfer_gas routine moves material ID 6, now mortar debris, so use the current five-species gas field and its pressure and energy state. For liquids, the current bulk packet also owns oil and slime momentum and retained inventory. Exercise the pair at one confirmed boundary with matching ownership generations before enabling open camera evictions.

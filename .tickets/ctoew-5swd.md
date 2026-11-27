@@ -27,3 +27,7 @@ The production camera route passes two-screen pans, world-time catch-up, conserv
 **2026-11-27T04:22:35Z**
 
 The production camera tick can demote, advance and promote one sealed stationary owner using a durable archive receipt. ctdot-kbys covers two-screen pans, failed outbound and return writes, exact water and oil stock, and cold reopen. ctcdo-rcs9 covers open liquid, gas and grain seams. ctcdo-kld7 covers dynamic and bonded assemblies. Verify the native frame budget after both ownership paths are integrated.
+
+**2026-11-27T04:57:04Z**
+
+The streaming admission now reports the selected owner and its idle proof. Confirmed dry sealed chunks catch up without replaying solver time, and newly painted water starts at the edit epoch. Open seam exchange, moving body handoff and the native frame budget remain under this parent.

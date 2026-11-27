@@ -220,7 +220,6 @@ static void test_dormant_room_starts_offscreen_water_at_its_edit_time(void) {
         view->camera_offscreen.generation, &snapshot, err, sizeof(err)));
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
         ASSERT_EQ(snapshot.chunk->cells[i].fluid_mass, chunk->cells[i].fluid_mass);
-    dc_stream_result_release(&snapshot);
 
     ASSERT_TRUE(dc_level_view_step_timed(view, .03125f, err, sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
@@ -228,6 +227,13 @@ static void test_dormant_room_starts_offscreen_water_at_its_edit_time(void) {
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_find(&view->table, coord, &slot));
     ASSERT_TRUE(view->table.slots[slot].time.known && view->table.slots[slot].time.seconds == 2.09375);
+    ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, chunk, err, sizeof(err)));
+    bool water_moved = false;
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i)
+        water_moved |= snapshot.chunk->cells[i].fluid_mass != chunk->cells[i].fluid_mass;
+    dc_stream_result_release(&snapshot);
+    ASSERT_TRUE(water_moved);
+    ASSERT_EQ(camera_stock(chunk, NULL, false), initial_water);
     ASSERT_EQ(dc_gpu_validation_errors(view->gpu), 0u);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
 
