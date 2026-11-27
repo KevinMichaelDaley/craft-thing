@@ -451,15 +451,15 @@ dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoin
     return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, NULL, err, cap);
 }
 
-dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
-    uint32_t count, float seconds, char *err, uint32_t cap) {
+static dc_liquid_seam_result_t step_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, bool full_tick, char *err, uint32_t cap) {
     dc_gpu_water_tile_t locations[MAX_WATER_COHORT_TILES];
     water_domain_t domain;
     if (!(seconds > 0.f) || seconds > .25f || !cohort_domain(tiles, count, locations, &domain)) {
         error(err, cap, "Invalid coupled water tick endpoints or interval");
         return DC_LIQUID_SEAM_REJECTED;
     }
-    const dc_gpu_t *gpu = domain.gpu, *peer = domain.peer;
+    dc_gpu_t *gpu = domain.gpu, *peer = domain.peer;
     if (gpu->fluid_interval != peer->fluid_interval || gpu->fluid_phase != peer->fluid_phase ||
         gpu->fluid_phase_budget != peer->fluid_phase_budget) {
         error(err, cap, "Coupled water phase clocks do not agree");
@@ -467,5 +467,38 @@ dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t
     }
     const dc_fluid_schedule_t schedule = dc_gpu_plan_fluid_tick(gpu->fluid_interval, gpu->fluid_phase,
         gpu->fluid_phase_budget, seconds * 60.f, true);
-    return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, &schedule, err, cap);
+    if (!full_tick)
+        return run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds, NULL, NULL, NULL, true, &schedule, err, cap);
+
+    dc_gpu_t *owners[] = {gpu, peer};
+    uint32_t mapped = 0;
+    for (unsigned i = 0; i < 2u; ++i)
+        for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(owners[i]); ++slot)
+            mapped += owners[i]->slot_page[slot] != UINT32_MAX;
+    if (mapped != count || dc_gpu_liquid_seam_pending(gpu) || dc_gpu_liquid_seam_pending(peer) ||
+        !same_water_cycle(&domain, &schedule) || gpu->marker_correction != peer->marker_correction ||
+        (gpu->marker_correction && ((gpu->fluid_tick ^ peer->fluid_tick) & 1u))) {
+        error(err, cap, "Paired tick requires complete, aligned owner mappings");
+        return DC_LIQUID_SEAM_REJECTED;
+    }
+    if (dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, true, err, cap)) {
+        dc_liquid_seam_result_t result = run_water_domain(&domain, DC_LIQUID_SEAM_X, seconds,
+            NULL, NULL, NULL, true, &schedule, err, cap);
+        if (result == DC_LIQUID_SEAM_UNCONFIRMED)
+            result = dc_gpu_resolve_liquid_seam(gpu, peer, err, cap);
+        if (result == DC_LIQUID_SEAM_COMMITTED &&
+            dc_gpu_submit_paired_tick_stage(gpu, peer, seconds, false, err, cap)) return result;
+    }
+    gpu->liquid_seam_orphaned = peer->liquid_seam_orphaned = true;
+    return DC_LIQUID_SEAM_UNCONFIRMED;
+}
+
+dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap) {
+    return step_cohort(tiles, count, seconds, false, err, cap);
+}
+
+dc_liquid_seam_result_t dc_gpu_tick_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap) {
+    return step_cohort(tiles, count, seconds, true, err, cap);
 }

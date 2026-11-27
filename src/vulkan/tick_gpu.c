@@ -9,6 +9,7 @@
 #include "ferrum/fire/gas_gpu.h"
 #include "ferrum/fire/combustion_gpu.h"
 #include "runtime_body_gpu.h"
+#include "renderer_internal.h"
 #include "thermal_gpu_internal.h"
 
 static bool error(char *buf, uint32_t cap, const char *message) {
@@ -109,17 +110,55 @@ static void record_scheduled_rigid(dc_gpu_t *gpu) {
     if (steps == 0) dc_gpu_record_rigid_refresh(gpu);
 }
 
-void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
+static void record_before_water(dc_gpu_t *gpu) {
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_tick_water_source(gpu);
     record_scheduled_rigid(gpu);
-    record_scheduled_fluid(gpu);
-    dc_gpu_record_bulk_phase(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
+}
+
+static void record_particles_and_heat(dc_gpu_t *gpu) {
     stage_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     dc_gpu_record_mpm(gpu);
     fr_thermal_record_step(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
+}
+
+void dc_gpu_record_tick_step(dc_gpu_t *gpu) {
+    record_before_water(gpu);
+    record_scheduled_fluid(gpu);
+    dc_gpu_record_bulk_phase(gpu,(gpu->timed_fluid?gpu->tick_time_scale:1.f)/60.f);
+    record_particles_and_heat(gpu);
+}
+
+bool dc_gpu_submit_paired_tick_stage(dc_gpu_t *first, dc_gpu_t *second, float seconds,
+    bool before_water, char *err, uint32_t cap) {
+    dc_gpu_t *owners[] = {first, second};
+    VkCommandBuffer commands[] = {first->command, second->command};
+    for (unsigned i = 0; i < 2u; ++i) {
+        dc_gpu_t *gpu = owners[i];
+        if (before_water && (!dc_gpu_set_tick_seconds(gpu, seconds) ||
+            !dc_gpu_runtime_bodies_service(gpu, err, cap))) return false;
+        if (!fr_renderer_begin(gpu)) return error(err, cap, "Cannot record paired owner physics");
+        if (before_water) record_before_water(gpu);
+        else {
+            dc_gpu_record_bulk_phase(gpu, seconds);
+            record_particles_and_heat(gpu);
+        }
+        stage_barrier(gpu, VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
+        if (vkEndCommandBuffer(commands[i]) != VK_SUCCESS)
+            return error(err, cap, "Cannot finish paired owner physics");
+    }
+    const VkSubmitInfo submit = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 2, .pCommandBuffers = commands};
+    if (vkQueueSubmit(first->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
+        vkQueueWaitIdle(first->queue) != VK_SUCCESS)
+        return error(err, cap, "Cannot confirm paired owner physics");
+    if (!before_water) {
+        for (unsigned i = 0; i < 2u; ++i)
+            if (owners[i]->gas && !fr_gas_gpu_step(owners[i], seconds, err, cap)) return false;
+    }
+    return true;
 }
 
 static void record_probe(dc_gpu_t *gpu, uint32_t mode) {

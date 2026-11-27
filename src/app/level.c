@@ -678,7 +678,9 @@ static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) 
             return error(err, cap, "Invalid elapsed simulation time");
         while (run->count) {
             if (view->players && !dc_players_step(view, run->seconds, err, cap)) return false;
-            if (!dc_gpu_tick_step(view->gpu, err, cap)) return false;
+            dc_level_offscreen_result_t paired = dc_level_offscreen_tick_pair(view, run->seconds, err, cap);
+            if (paired == DC_LEVEL_OFFSCREEN_FAILED ||
+                (paired == DC_LEVEL_OFFSCREEN_UNMATCHED && !dc_gpu_tick_step(view->gpu, err, cap))) return false;
             consume_level_steps(view, 1u);
         }
     }
@@ -746,7 +748,7 @@ bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
         dc_gpu_set_tick_water_source(view->gpu, true, x, y);
     } else dc_gpu_set_tick_water_source(view->gpu, false, 0, 0);
     uint32_t ready_steps = all_resident ? view->pending_steps : 0u;
-    if (ready_steps && (view->players || view->end_run - view->first_run > 1u)) {
+    if (ready_steps && (view->players || view->offscreen_handoffs || view->end_run - view->first_run > 1u)) {
         /* A mixed frame publishes each completed step before trying to present. */
         if (view->players && !dc_players_present(view, err, cap)) return false;
         if (!execute_level_steps(view, err, cap)) return false;

@@ -120,6 +120,12 @@ dc_liquid_seam_result_t dc_gpu_execute_water_cohort(const dc_liquid_seam_endpoin
 dc_liquid_seam_result_t dc_gpu_step_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
     uint32_t count, float seconds, char *err, uint32_t cap);
 
+/** Advance both complete mapped contexts through source, rigid, shared water and remaining physics.
+ * The caller holds all generations at one interval start. A failure after native physics begins
+ * fences both contexts for restoration from their last durable world save. */
+dc_liquid_seam_result_t dc_gpu_tick_water_cohort(const dc_liquid_seam_endpoint_t *tiles,
+    uint32_t count, float seconds, char *err, uint32_t cap);
+
 /** Commit a complete face plan on the shared Vulkan queue. The second endpoint
  * is one chunk in the positive axis direction from the first. Positive flux
  * goes from first to second. Rejected plans leave both endpoints unchanged.

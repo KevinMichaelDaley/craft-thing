@@ -11,6 +11,10 @@ typedef enum {
     DC_LEVEL_OFFSCREEN_FAILED
 } dc_level_offscreen_result_t;
 
+/** Run a native tick for an adjacent admitted workspace sharing the resident interval start. */
+dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
+    char *err, uint32_t cap);
+
 typedef struct {
     dc_chunk_coord_t resident, offscreen;
     uint64_t resident_generation, offscreen_generation;

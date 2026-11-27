@@ -87,6 +87,79 @@ static bool aligned_interval(const dc_level_view_t *view, const dc_chunk_slot_t 
         exchange->begin_seconds >= handoff->liquid_face_end[face];
 }
 
+static bool touches_resident(const dc_level_view_t *view, dc_chunk_coord_t coord) {
+    for (uint32_t i = 0; i < view->table.capacity; ++i) {
+        dc_liquid_seam_axis_t axis;
+        bool first;
+        const dc_chunk_slot_t *slot = &view->table.slots[i];
+        if (slot->state == DC_SLOT_ACTIVE && shared_face(slot->coord, coord, &axis, &first)) return true;
+    }
+    return false;
+}
+
+dc_level_offscreen_result_t dc_level_offscreen_tick_pair(dc_level_view_t *view, float seconds,
+    char *err, uint32_t cap) {
+    dc_offscreen_t *workspace = NULL;
+    for (dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        if (p->disk_source || !p->admitted || !p->workspace->time.known ||
+            p->workspace->time.seconds != view->world_seconds || !touches_resident(view, p->coord)) continue;
+        if (workspace && workspace != p->workspace) {
+            error(err, cap, "A water basin spans multiple offscreen workspaces");
+            return DC_LEVEL_OFFSCREEN_FAILED;
+        }
+        workspace = p->workspace;
+    }
+    if (!workspace) return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    dc_liquid_seam_endpoint_t tiles[DC_GPU_CHUNK_SLOTS + OFFSCREEN_SLOTS];
+    uint32_t count = 0;
+    if (workspace->failed || workspace->held_writes || view->closing || view->liquid_seam_failed ||
+        dc_gpu_liquid_seam_pending(view->gpu) || dc_gpu_liquid_seam_pending(workspace->gpu)) goto stale;
+    for (uint32_t i = 0; i < view->table.capacity; ++i) {
+        const dc_chunk_slot_t *s = &view->table.slots[i];
+        if (s->state != DC_SLOT_ACTIVE) continue;
+        if (i >= dc_gpu_slot_capacity(view->gpu) || !s->time.known || s->time.seconds != view->world_seconds ||
+            !s->generation || s->pinned != (view->water_generations[i] != 0u) ||
+            (s->pinned && s->generation != view->water_generations[i])) goto stale;
+        uint32_t page = view->gpu->slot_page[i];
+        if (page == UINT32_MAX || !view->gpu->page_width) goto stale;
+        tiles[count++] = (dc_liquid_seam_endpoint_t){.gpu = view->gpu, .coord = s->coord, .slot = i,
+            .tile_x = page % view->gpu->page_width, .tile_y = page / view->gpu->page_width};
+    }
+    uint32_t residents = count;
+    for (dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        if (p->workspace != workspace) continue;
+        uint32_t slot;
+        if (!p->admitted || p->write_generation || !p->generation ||
+            !dc_offscreen_page_at(workspace, p->coord, &slot) || workspace->generations[slot] != p->generation ||
+            count >= residents + OFFSCREEN_SLOTS) goto stale;
+        tiles[count++] = (dc_liquid_seam_endpoint_t){.gpu = workspace->gpu, .coord = p->coord, .slot = slot,
+            .tile_x = slot % OFFSCREEN_SIDE, .tile_y = slot / OFFSCREEN_SIDE};
+    }
+    if (!dc_level_view_stage_world_save(view, err, cap)) return DC_LEVEL_OFFSCREEN_FAILED;
+    dc_liquid_seam_result_t result = dc_gpu_tick_water_cohort(tiles, count, seconds, err, cap);
+    if (result != DC_LIQUID_SEAM_COMMITTED) {
+        if (result == DC_LIQUID_SEAM_UNCONFIRMED) view->liquid_seam_failed = workspace->failed = true;
+        return DC_LEVEL_OFFSCREEN_FAILED;
+    }
+    workspace->time.seconds = view->world_seconds + seconds;
+    for (uint32_t i = 0; i < residents; ++i) {
+        const uint32_t slot = tiles[i].slot;
+        dc_chunk_slot_t *s = &view->table.slots[slot];
+        s->pinned = dc_gpu_liquid_owner_held(view->gpu);
+        view->water_generations[slot] = s->pinned ? s->generation : 0;
+    }
+    for (dc_level_offscreen_handoff_t *p = view->offscreen_handoffs; p; p = p->next) {
+        if (p->workspace != workspace) continue;
+        p->liquid_paired = true;
+        for (unsigned f = 0; f < 4u; ++f) p->liquid_face_end[f] = workspace->time.seconds;
+    }
+    return DC_LEVEL_OFFSCREEN_HANDLED;
+
+stale:
+    error(err, cap, "Water tick requires current generations and a common interval start");
+    return DC_LEVEL_OFFSCREEN_FAILED;
+}
+
 dc_liquid_seam_result_t dc_level_offscreen_exchange_liquids(dc_level_view_t *view,
     const dc_level_liquid_exchange_t *exchange, char *err, uint32_t cap) {
     uint32_t resident_slot, offscreen_slot;
