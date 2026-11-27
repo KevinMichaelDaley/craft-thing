@@ -23,3 +23,7 @@ Keep RTX physics and composition, the real full-size swapchain, presentation cad
 **2026-11-27T17:40:56Z**
 
 The corrected diagnostic at 1abdfaa8 used the RTX A2000 for the complete 1280x720 exact concave simulation and composition, with llvmpipe only for the FIFO swapchain. All 3686400 bytes read back from that swapchain matched the RTX-composed image. With synchronization validation it reported no synchronization hazards or VUIDs (29.331 ms mean, 34.280 ms p95). The normal performance run passed at 19.068/23.333 ms. No runtime backend has shipped. The original benchmark deliberately hides its SDL window, so its pixel check reads the actual Vulkan swapchain. The mapped camera fixture also checks pixels visible inside Xephyr.
+
+**2026-11-27T17:58:19Z**
+
+Runtime 47e99db4 passed all five presenter cases under synchronization validation on persistent hidden Xephyr :93, including two independently owned windows, full swapchain readback, mapped-window pixels and two partial-initialization failures. All three existing acquisition, physics-progress and recreation regressions passed. Automatic selection used llvmpipe for presentation and RTX A2000 for rendering and physics. The 1280x720 gate passed for all scenes over 30 measured frames. Mean/p95 in ms: dry 3.107/4.214, dense 10.103/13.648, exact concave 18.253/23.474. Both saturated camera runs retain the 1920x1080 swapchain.
