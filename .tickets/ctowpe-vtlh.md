@@ -43,3 +43,7 @@ Native 88238843 ran the full near/middle/far workload with production dispatch a
 **2026-11-27T17:21:46Z**
 
 Instrumented the same production 1280x720 exact concave workload at 8f26f761 on hidden :93. Over 30 measured frames, the host presentation call averaged 38.405 ms including GPU waiting. GPU rigid work averaged 8.039 ms, fluid 5.315 ms and MPM 2.394 ms; solver work (within rigid) was 6.668 ms. Mean acquire and fence calls were 0.002/0.004 ms. Detailed timestamps add overhead, so acceptance times come from the separate uninstrumented run.
+
+**2026-11-27T17:34:27Z**
+
+8f26f761 production 720 results on hidden :93 (mean/p95, ms): dry 22.783/23.524 and dense 28.743/32.371 pass. Concave 36.417/40.686 misses both thresholds. 1abdfaa8 completed its prebuild; the two production benchmark revisions are serialized before their aggregate suites.

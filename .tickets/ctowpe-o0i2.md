@@ -39,3 +39,7 @@ In an isolated diagnostic retaining the real Vulkan swapchain and identical pixe
 **2026-11-27T16:52:22Z**
 
 Hidden Xephyr :93, populated 960x540 internal render with real 1920x1080 swapchain and experimental streaming-read staging. Near mean/p95 58.172/92.748 ms, middle 52.997/95.085, far 49.405/86.017. All 16 active owners advanced 2.000000104 s. Warmup compared 8,394,780 bytes. This diagnostic improves presentation but misses the 33.333 ms gate. No interposition shipped.
+
+**2026-11-27T17:34:27Z**
+
+Isolated two-device diagnostic keeps RTX physics, rendering, blitting and composition. It reads the complete composed image into cached coherent RAM and uploads it to a same-format full-size FIFO Vulkan swapchain on llvmpipe, in the same Xephyr window. Initial half-native frame 10 matched all 8,294,400 staged bytes and all 1,228,800 visible RGB pixels. Near/middle/far mean/p95 30.961/50.886, 29.913/58.565, 28.376/56.352 ms. The first validation run flagged an acquire-to-layout-transition stage hazard in the experimental presenter. A corrected diagnostic is queued and the runtime presenter has not changed.
