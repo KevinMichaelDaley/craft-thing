@@ -157,7 +157,24 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     for (unsigned step = 0; step < 2u; ++step) {
         ASSERT_TRUE(dc_gpu_set_tick_seconds(mono, elapsed) && dc_gpu_tick_step(mono, err, sizeof(err)));
         ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+        if (step == 0u) {
+            ++workspace->generations[0];
+            ASSERT_TRUE(!execute_level_steps(view, err, sizeof(err)));
+            ASSERT_EQ(view->world_seconds, 2.);
+            ASSERT_EQ(workspace->time.seconds, 2.);
+            ASSERT_EQ(view->pending_steps, 1u);
+            ASSERT_TRUE(!view->world_save_staged);
+            --workspace->generations[0];
+        } else {
+            ++view->table.slots[slot].generation;
+            ASSERT_TRUE(!execute_level_steps(view, err, sizeof(err)));
+            ASSERT_EQ(workspace->time.seconds, view->world_seconds);
+            ASSERT_EQ(view->pending_steps, 1u);
+            --view->table.slots[slot].generation;
+            lose_seam_receipt = true;
+        }
         ASSERT_TRUE(execute_level_steps(view, err, sizeof(err)));
+        ASSERT_TRUE(!lose_seam_receipt);
         ASSERT_EQ(view->world_seconds, 2. + (step + 1u) * (double)elapsed);
         ASSERT_EQ(workspace->time.seconds, view->world_seconds);
         ASSERT_EQ(view->table.slots[slot].time.seconds, view->world_seconds);
@@ -178,6 +195,8 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
     const double end = view->world_seconds;
+    ASSERT_TRUE(dc_offscreen_advance(workspace, end + elapsed, 1u, err, sizeof(err)));
+    ASSERT_EQ(workspace->time.seconds, end);
     ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
     dc_offscreen_destroy(workspace);
     view = seam_test_view(directory, err, sizeof(err));
@@ -190,6 +209,22 @@ static void test_level_step_advances_admitted_water_owners_together(void) {
     dc_stream_result_release(&remote);
     ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)));
     ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
+    lose_seam_receipt = lose_seam_recovery = true;
+    ASSERT_TRUE(dc_level_view_step_timed(view, elapsed, err, sizeof(err)));
+    ASSERT_TRUE(!execute_level_steps(view, err, sizeof(err)));
+    ASSERT_TRUE(!lose_seam_receipt && !lose_seam_recovery);
+    ASSERT_EQ(view->world_seconds, end);
+    ASSERT_EQ(workspace->time.seconds, end);
+    ASSERT_TRUE(!dc_level_view_destroy(view, err, sizeof(err)));
+    dc_offscreen_destroy(workspace);
+    view = seam_test_view(directory, err, sizeof(err));
+    ASSERT_TRUE(view && admit_seam_owners(view, &owners, &slot, &workspace, err, sizeof(err)));
+    ASSERT_EQ(workspace->time.seconds, end);
+    ASSERT_TRUE(dc_gpu_download_chunk(view->gpu, slot, &observed, err, sizeof(err)));
+    ASSERT_TRUE(same_water_chunk(&observed, &expected[0]));
+    ASSERT_TRUE(dc_offscreen_snapshot(workspace, owners.offscreen, owners.offscreen_generation, &remote, err, sizeof(err)));
+    ASSERT_TRUE(same_water_chunk(remote.chunk, &expected[1]));
+    dc_stream_result_release(&remote);
     dc_level_view_discard(view);
     dc_offscreen_destroy(workspace);
     PASS();
