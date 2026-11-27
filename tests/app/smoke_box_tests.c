@@ -121,7 +121,11 @@ static void check_missing_stream_gas(bool authoritative) {
     ASSERT_EQ(result.kind,DC_STREAM_LOADED);ASSERT_TRUE(result.chunk&&result.gas);
     fr_gas_checkpoint_chunk_t *expected=result.gas;
     result.gas=NULL;
-    ASSERT_TRUE(dc_stream_request_save_thermal(stream,result.chunk,result.colors,result.reactive,result.water_excess,2));
+    if(authoritative) {
+        ASSERT_TRUE(dc_stream_request_save_takeover(stream,&result,result.replaces_owner,2));
+    } else {
+        ASSERT_TRUE(dc_stream_request_save_thermal(stream,result.chunk,result.colors,result.reactive,result.water_excess,2));
+    }
     dc_stream_result_release(&result);deadline=SDL_GetTicks64()+10000u;
     while(!dc_stream_poll(stream,&result)&&SDL_GetTicks64()<deadline) SDL_Delay(1);
     ASSERT_EQ(result.kind,DC_STREAM_SAVED);dc_stream_result_release(&result);dc_stream_destroy(stream);
