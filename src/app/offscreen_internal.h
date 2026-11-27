@@ -16,6 +16,26 @@ typedef struct {
     uint32_t member_count, page_count;
 } dc_offscreen_bond_group_t;
 
+typedef struct dc_camera_bond {
+    dc_offscreen_bond_group_t group;
+    struct {
+        dc_chunk_owner_t owner;
+        uint64_t save_generation, lease_generation;
+        bool saved, returned;
+    } receipts[OFFSCREEN_SLOTS];
+    bool owns, returning;
+} dc_camera_bond_t;
+
+/** Identify the complete converted assembly occupying the offered page. */
+bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscreen_bond_group_t *group);
+/** Check exterior walls while allowing internal faces between group pages. */
+bool dc_camera_bond_page_sealed(const dc_offscreen_bond_group_t *group, const dc_stream_result_t *source);
+bool dc_camera_bond_offer(dc_level_view_t *view, const dc_stream_result_t *source,
+    dc_chunk_owner_t owner, uint64_t generation);
+void dc_camera_bond_saved(dc_level_view_t *view, const dc_stream_result_t *result);
+bool dc_camera_bond_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap);
+void dc_offscreen_release_workspace_leases(dc_level_view_t *view, dc_offscreen_t *workspace);
+
 /** Collect a live connected assembly and the pages touched by its current geometry. */
 bool dc_offscreen_collect_bond_group(dc_gpu_t *gpu, uint32_t id, dc_offscreen_bond_group_t *group);
 /** Move a confirmed converted group, preserving member generations and remapping bond slots. */
@@ -41,6 +61,9 @@ typedef struct dc_level_offscreen_handoff {
     double liquid_face_end[4];
     bool admitted, disk_source, liquid_paired, owns_bodies;
 } dc_level_offscreen_handoff_t;
+
+dc_level_offscreen_result_t dc_camera_bond_result(dc_level_view_t *view, dc_level_offscreen_handoff_t *lease,
+    const dc_stream_result_t *result, char *err, uint32_t cap);
 
 /** Resolve a world coordinate to the bounded workspace atlas. */
 bool dc_offscreen_page_at(const dc_offscreen_t *workspace, dc_chunk_coord_t coord, uint32_t *slot);

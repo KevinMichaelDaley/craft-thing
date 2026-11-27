@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdlib.h>
 
 #include "ferrum/fire/gas.h"
 #include "dungeoncraft/terrain_flags.h"
@@ -74,6 +75,24 @@ static bool face_in_view(const dc_level_view_t *view, dc_chunk_coord_t coord, un
     return face_neighbor(coord, face, &neighbor) && dc_level_chunk_visible(view, neighbor);
 }
 
+bool dc_camera_bond_page_sealed(const dc_offscreen_bond_group_t *group, const dc_stream_result_t *source) {
+    if (!source->chunk || !source->time.known || source->gas || source->water_excess ||
+        source->chunk->particle_count) return false;
+    for (unsigned face = WEST; face <= SOUTH; face <<= 1) {
+        dc_chunk_coord_t next;
+        bool interior = false;
+        if (face_neighbor(source->coord, face, &next))
+            for (unsigned p = 0; p < group->page_count; ++p) interior |= same_coord(next, group->pages[p]);
+        if (interior) continue;
+        for (unsigned i = 0; i < DC_CHUNK_SIDE; ++i) {
+            unsigned index = face == NORTH ? i : face == SOUTH ? DC_CHUNK_CELLS - DC_CHUNK_SIDE + i :
+                i * DC_CHUNK_SIDE + (face == EAST ? DC_CHUNK_SIDE - 1u : 0u);
+            if (!closed_edge_cell(source, index)) return false;
+        }
+    }
+    return true;
+}
+
 static bool neighbor_has_liquid(dc_level_view_t *view, dc_chunk_coord_t coord, unsigned face) {
     dc_chunk_coord_t neighbor;
     uint32_t slot;
@@ -106,6 +125,7 @@ unsigned dc_camera_offscreen_water_face(const dc_level_view_t *view, const dc_st
 
 bool dc_camera_offscreen_ready(dc_level_view_t *view) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
+    if (camera->bond) return camera->bond->owns && !camera->bond->returning;
     if (!camera->water_face && !camera->rigid_group) return true;
     dc_chunk_time_t time;
     bool writing;
@@ -141,6 +161,8 @@ bool dc_camera_offscreen_hold_remap(dc_level_view_t *view, bool *hold, char *err
 void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *snapshot,
     dc_chunk_owner_t owner, uint64_t write_generation) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
+    if (!view->closing && (camera->bond || camera->phase == DC_CAMERA_OFFSCREEN_IDLE) &&
+        dc_camera_bond_offer(view, snapshot, owner, write_generation)) return;
     if (camera->phase != DC_CAMERA_OFFSCREEN_IDLE || view->closing || !snapshot->chunk ||
         dc_level_chunk_visible(view, snapshot->coord) || !dc_chunk_owner_valid(owner)) return;
     unsigned face = 0;
@@ -158,6 +180,7 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
 
 void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *result) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
+    if (camera->bond) { dc_camera_bond_saved(view, result); return; }
     if (camera->phase != DC_CAMERA_OFFSCREEN_SAVING || camera->generation != result->generation ||
         !same_coord(camera->coord, result->coord)) return;
     if (result->kind == DC_STREAM_FAILED) {
@@ -169,6 +192,7 @@ void dc_camera_offscreen_saved(dc_level_view_t *view, const dc_stream_result_t *
 }
 
 void dc_camera_offscreen_discard(dc_level_view_t *view) {
+    free(view->camera_offscreen.bond);
     dc_offscreen_destroy(view->camera_offscreen.workspace);
     view->camera_offscreen = (dc_camera_offscreen_t){0};
 }
@@ -186,6 +210,7 @@ static bool camera_needs_chunk(const dc_level_view_t *view, dc_chunk_coord_t coo
 
 bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err, uint32_t cap) {
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
+    if (camera->bond) return dc_camera_bond_service(view, closing, err, cap);
     if (camera->phase == DC_CAMERA_OFFSCREEN_IDLE || camera->phase == DC_CAMERA_OFFSCREEN_SAVING)
         return true;
     bool needed = camera_needs_chunk(view, camera->coord);

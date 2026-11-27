@@ -13,6 +13,7 @@ typedef enum {
 
 typedef struct {
     struct dc_offscreen *workspace;
+    struct dc_camera_bond *bond;
     dc_chunk_coord_t coord;
     dc_chunk_owner_t owner;
     dc_chunk_time_t time;

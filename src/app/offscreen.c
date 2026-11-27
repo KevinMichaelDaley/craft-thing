@@ -210,6 +210,14 @@ static uint32_t pending_source(const dc_gpu_t *gpu, dc_chunk_coord_t coord) {
     return index;
 }
 
+void dc_offscreen_release_workspace_leases(dc_level_view_t *view, dc_offscreen_t *workspace) {
+    dc_level_offscreen_handoff_t **link = &view->offscreen_handoffs;
+    while (*link) {
+        if ((*link)->workspace == workspace) remove_handoff(link);
+        else link = &(*link)->next;
+    }
+}
+
 static bool retire_page(dc_level_offscreen_handoff_t *handoff, char *err, uint32_t cap) {
     dc_offscreen_t *workspace = handoff->workspace;
     uint32_t slot;
@@ -388,6 +396,8 @@ dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
     dc_level_offscreen_handoff_t **link = find_handoff(view, result->coord);
     dc_level_offscreen_handoff_t *handoff = *link;
     if (!handoff) return DC_LEVEL_OFFSCREEN_UNMATCHED;
+    if (view->camera_offscreen.bond && view->camera_offscreen.workspace == handoff->workspace)
+        return dc_camera_bond_result(view, handoff, result, err, cap);
     if (!handoff->admitted && handoff->generation == result->generation &&
         (result->kind == DC_STREAM_LOADED || result->kind == DC_STREAM_FAILED)) {
         if (view->closing) {
