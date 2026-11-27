@@ -268,8 +268,9 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         const dc_liquid_seam_flux_t no_flux[DC_CHUNK_SIDE] = {{0}};
         ASSERT_EQ(dc_gpu_commit_liquid_seam(owners[0], owners[1], axis, no_flux,
             g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
-        ASSERT_EQ(dc_gpu_resolve_liquid_seam(owners[0].gpu, owners[1].gpu,
+        ASSERT_EQ(dc_gpu_resolve_liquid_seam(owners[1].gpu, owners[0].gpu,
             g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
+        ASSERT_TRUE(!dc_gpu_liquid_seam_pending(owners[0].gpu) && !dc_gpu_liquid_seam_pending(owners[1].gpu));
         memcpy(plan, saved, sizeof(*saved));
     } else {
         ASSERT_INT_EQ(memcmp(saved, plan, sizeof(*saved)), 0);
@@ -281,9 +282,19 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
             g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
         ASSERT_EQ(dc_gpu_execute_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
             NULL, g_err, sizeof(g_err)), DC_LIQUID_SEAM_UNCONFIRMED);
+        ASSERT_TRUE(!dc_gpu_tick_step(owners[0].gpu, g_err, sizeof(g_err)));
+        ASSERT_TRUE(strstr(g_err, "unresolved liquid seam") != NULL);
+        dc_gpu_tick_capture_t capture;
+        ASSERT_TRUE(!dc_gpu_tick_capture(owners[1].gpu, &capture, g_err, sizeof(g_err)));
+        ASSERT_TRUE(strstr(g_err, "unresolved liquid seam") != NULL);
     }
     for (unsigned owner = 0; owner < 2; ++owner) {
         const dc_liquid_seam_endpoint_t ep = owners[owner];
+        if (!y_axis && owner == 1) {
+            ASSERT_TRUE(dc_gpu_liquid_seam_pending(ep.gpu));
+            ASSERT_TRUE(!dc_gpu_tick_step(ep.gpu, g_err, sizeof(g_err)));
+            ASSERT_TRUE(strstr(g_err, "unresolved liquid seam") != NULL);
+        }
         ASSERT_TRUE(dc_gpu_download_chunk(ep.gpu, ep.slot, &published[owner], g_err, sizeof(g_err)));
         ASSERT_TRUE(fr_renderer_download_chunk_colors(ep.gpu, ep.slot, read_colors, g_err, sizeof(g_err)));
         if (y_axis)
