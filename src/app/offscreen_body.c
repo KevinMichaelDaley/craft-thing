@@ -79,7 +79,7 @@ static bool free_slot(const dc_gpu_t *gpu, uint32_t i) {
         owner->state != DC_BODY_OWNER_RETIRED && owner->state != DC_BODY_OWNER_RESERVED;
 }
 
-static bool add_page(dc_offscreen_bond_group_t *group, dc_chunk_coord_t page) {
+bool dc_offscreen_bond_add_page(dc_offscreen_bond_group_t *group, dc_chunk_coord_t page) {
     for (uint32_t i = 0; i < group->page_count; ++i) {
         dc_chunk_coord_t p = group->pages[i];
         if (p.x == page.x && p.y == page.y) return true;
@@ -107,7 +107,7 @@ static bool add_member(dc_gpu_t *gpu, dc_offscreen_bond_group_t *group, uint32_t
         for (int dx = -1; dx <= 1; ++dx) {
             if ((dx < 0 && x == INT64_MIN) || (dx > 0 && x == INT64_MAX)) continue;
             dc_chunk_coord_t page = {x + dx, y + dy};
-            if (room_relation(body, page) != OUTSIDE_ROOM && !add_page(group, page)) return false;
+            if (room_relation(body, page) != OUTSIDE_ROOM && !dc_offscreen_bond_add_page(group, page)) return false;
         }
     }
     return true;
@@ -144,7 +144,13 @@ bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscre
             continue;
         const uint32_t *graph = dc_gpu_structural_data(gpu) + dc_gpu_structural_graph_offset(gpu);
         if (graph[1] != group->member_count) return false;
-        for (uint32_t j = 0; j < gpu->body_count; ++j) {
+        return true;
+    }
+    return false;
+}
+
+bool dc_offscreen_bond_pages_clear(dc_gpu_t *gpu, const dc_offscreen_bond_group_t *group) {
+    for (uint32_t j = 0; j < gpu->body_count; ++j) {
             const dc_gpu_body_record_t *other = dc_gpu_body_record(gpu, j);
             if (!other->body.id) continue;
             if (other->piece_count > DC_GPU_BODY_PIECES ||
@@ -154,10 +160,8 @@ bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscre
             if (k != group->member_count) continue;
             for (k = 0; k < group->page_count; ++k)
                 if (room_relation(other, group->pages[k]) != OUTSIDE_ROOM) return false;
-        }
-        return true;
     }
-    return false;
+    return true;
 }
 
 static void move_words(uint32_t *to, uint32_t *from, size_t count) {

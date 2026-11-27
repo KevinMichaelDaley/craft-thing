@@ -75,6 +75,32 @@ static bool face_in_view(const dc_level_view_t *view, dc_chunk_coord_t coord, un
     return face_neighbor(coord, face, &neighbor) && dc_level_chunk_visible(view, neighbor);
 }
 
+static bool closed_face(const dc_stream_result_t *source, unsigned face) {
+    for (unsigned i = 0; i < DC_CHUNK_SIDE; ++i) {
+        unsigned index = face == NORTH ? i : face == SOUTH ? DC_CHUNK_CELLS - DC_CHUNK_SIDE + i :
+            i * DC_CHUNK_SIDE + (face == EAST ? DC_CHUNK_SIDE - 1u : 0u);
+        if (!closed_edge_cell(source, index)) return false;
+    }
+    return true;
+}
+
+bool dc_camera_bond_enclose(dc_level_view_t *view, dc_offscreen_bond_group_t *group) {
+    for (unsigned i = 0; i < group->page_count; ++i) {
+        uint32_t slot;
+        dc_chunk_t chunk = {.coord = group->pages[i]};
+        if (dc_level_chunk_visible(view, chunk.coord) || !dc_chunk_table_find(&view->table, chunk.coord, &slot) ||
+            !dc_gpu_download_chunk(view->gpu, slot, &chunk, NULL, 0)) return false;
+        const dc_stream_result_t source = {.chunk = &chunk,
+            .bulk = (fr_bulk_phase_chunk_t *)view->gpu->bulk_phase_mapped + slot};
+        for (unsigned face = WEST; face <= SOUTH; face <<= 1) {
+            if (closed_face(&source, face)) continue;
+            dc_chunk_coord_t next;
+            if (!face_neighbor(chunk.coord, face, &next) || !dc_offscreen_bond_add_page(group, next)) return false;
+        }
+    }
+    return dc_offscreen_bond_pages_clear(view->gpu, group);
+}
+
 bool dc_camera_bond_page_sealed(const dc_offscreen_bond_group_t *group, const dc_stream_result_t *source) {
     if (!source->chunk || !source->time.known || source->gas || source->water_excess ||
         source->chunk->particle_count) return false;
@@ -83,12 +109,7 @@ bool dc_camera_bond_page_sealed(const dc_offscreen_bond_group_t *group, const dc
         bool interior = false;
         if (face_neighbor(source->coord, face, &next))
             for (unsigned p = 0; p < group->page_count; ++p) interior |= same_coord(next, group->pages[p]);
-        if (interior) continue;
-        for (unsigned i = 0; i < DC_CHUNK_SIDE; ++i) {
-            unsigned index = face == NORTH ? i : face == SOUTH ? DC_CHUNK_CELLS - DC_CHUNK_SIDE + i :
-                i * DC_CHUNK_SIDE + (face == EAST ? DC_CHUNK_SIDE - 1u : 0u);
-            if (!closed_edge_cell(source, index)) return false;
-        }
+        if (!interior && !closed_face(source, face)) return false;
     }
     return true;
 }

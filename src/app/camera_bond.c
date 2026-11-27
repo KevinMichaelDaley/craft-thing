@@ -30,7 +30,9 @@ bool dc_camera_bond_offer(dc_level_view_t *view, const dc_stream_result_t *sourc
         !dc_chunk_owner_valid(owner)) return false;
     if (!camera->bond) {
         dc_offscreen_bond_group_t group;
-        if (!dc_offscreen_bond_group_at(view->gpu, source->coord, &group) || needed(view, &group) ||
+        if (!dc_offscreen_bond_group_at(view->gpu, source->coord, &group)) return false;
+        unsigned occupied = group.page_count;
+        if (needed(view, &group) || !dc_camera_bond_enclose(view, &group) ||
             !dc_camera_bond_page_sealed(&group, source)) return false;
         for (unsigned i = 0; i < group.page_count; ++i) {
             uint32_t slot;
@@ -41,6 +43,16 @@ bool dc_camera_bond_offer(dc_level_view_t *view, const dc_stream_result_t *sourc
         dc_camera_bond_t *bond = calloc(1, sizeof(*bond));
         if (!bond) return false;
         bond->group = group;
+        bond->occupied_pages = occupied;
+        for (unsigned i = 0; i < group.page_count; ++i) {
+            uint32_t slot;
+            if (!dc_chunk_table_find(&view->table, group.pages[i], &slot)) { free(bond); return false; }
+            const dc_chunk_slot_t *s = &view->table.slots[slot];
+            if (s->state == DC_SLOT_SAVING && dc_chunk_owner_valid(s->checkpoint_owner)) {
+                bond->receipts[i].owner = s->checkpoint_owner;
+                bond->receipts[i].save_generation = s->save_generation;
+            }
+        }
         *camera = (dc_camera_offscreen_t){.bond = bond, .coord = group.pages[0], .time = source->time,
             .phase = DC_CAMERA_OFFSCREEN_SAVING, .rigid_group = true};
     }
@@ -167,8 +179,10 @@ dc_level_offscreen_result_t dc_camera_bond_result(dc_level_view_t *view, dc_leve
             dc_level_offscreen_handoff_t *page = dc_level_offscreen_lookup(view, bond->group.pages[j]);
             if (!page || !page->admitted) return DC_LEVEL_OFFSCREEN_HANDLED;
         }
+        dc_offscreen_bond_group_t physical = bond->group;
+        physical.page_count = bond->occupied_pages;
         if (!dc_level_view_stage_world_save(view, err, cap) ||
-            !dc_offscreen_move_bond_group(view->gpu, camera->workspace->gpu, &bond->group, err, cap)) {
+            !dc_offscreen_move_bond_group(view->gpu, camera->workspace->gpu, &physical, err, cap)) {
             release_source(view, true);
             return DC_LEVEL_OFFSCREEN_FAILED;
         }

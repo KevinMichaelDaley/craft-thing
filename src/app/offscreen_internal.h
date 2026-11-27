@@ -23,6 +23,7 @@ typedef struct dc_camera_bond {
         uint64_t save_generation, lease_generation;
         bool saved, returned;
     } receipts[OFFSCREEN_SLOTS];
+    unsigned occupied_pages;
     bool owns, returning;
 } dc_camera_bond_t;
 
@@ -30,6 +31,10 @@ typedef struct dc_camera_bond {
 bool dc_offscreen_bond_group_at(dc_gpu_t *gpu, dc_chunk_coord_t page, dc_offscreen_bond_group_t *group);
 /** Check exterior walls while allowing internal faces between group pages. */
 bool dc_camera_bond_page_sealed(const dc_offscreen_bond_group_t *group, const dc_stream_result_t *source);
+/** Extend the footprint through open interior faces to the walls of the workspace. */
+bool dc_camera_bond_enclose(dc_level_view_t *view, dc_offscreen_bond_group_t *group);
+bool dc_offscreen_bond_add_page(dc_offscreen_bond_group_t *group, dc_chunk_coord_t page);
+bool dc_offscreen_bond_pages_clear(dc_gpu_t *gpu, const dc_offscreen_bond_group_t *group);
 bool dc_camera_bond_offer(dc_level_view_t *view, const dc_stream_result_t *source,
     dc_chunk_owner_t owner, uint64_t generation);
 void dc_camera_bond_saved(dc_level_view_t *view, const dc_stream_result_t *result);
