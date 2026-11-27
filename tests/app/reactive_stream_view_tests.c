@@ -415,6 +415,7 @@ int main(int argc, char **argv) {
     }
     if (argc == 2 && strcmp(argv[1], "--camera-bond") == 0) {
         RUN(test_camera_transfers_an_assembly_spanning_two_chunk_pages);
+        RUN(test_close_retries_failed_bond_page_and_reopens_the_whole_group);
         printf("%d passed, %d failed\n", g_pass, g_fail);
         return g_fail != 0;
     }
@@ -452,6 +453,7 @@ int main(int argc, char **argv) {
     RUN(test_camera_transfers_moving_body_on_acknowledged_eviction_and_return);
     RUN(test_quit_saves_the_offscreen_moving_body_at_the_confirmed_world_clock);
     RUN(test_camera_transfers_an_assembly_spanning_two_chunk_pages);
+    RUN(test_close_retries_failed_bond_page_and_reopens_the_whole_group);
     RUN(test_both_bond_endpoints_identify_the_same_members_and_pages);
     RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);

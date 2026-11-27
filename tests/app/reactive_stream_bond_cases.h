@@ -14,7 +14,7 @@ static bool camera_has_live_bond(dc_gpu_t *gpu, uint32_t first, uint32_t second)
     return false;
 }
 
-enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF };
+enum bond_check { BOND_CAMERA, BOND_COVERAGE, BOND_HANDOFF, BOND_RETRY };
 static void check_camera_bonded_assembly(enum bond_check check) {
     char directory[] = "build/camera_bonded_pan_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
@@ -144,7 +144,41 @@ static void check_camera_bonded_assembly(enum bond_check check) {
     dc_gpu_world_body_t confirmed[2], restored;
     for (unsigned i = 0; i < 2; ++i)
         ASSERT_TRUE(dc_gpu_read_world_body(remote, first + i, &confirmed[i], err, sizeof(err)));
+    char failed_page[512];
+    if (check == BOND_RETRY) {
+        const char *draft = dc_world_save_directory(view->save, true);
+        ASSERT_TRUE(draft);
+        snprintf(failed_page, sizeof(failed_page), "%s/chunk_%016" PRIx64 "_%016" PRIx64 ".bin.tmp",
+            draft, (uint64_t)(origin.x + 1), (uint64_t)origin.y);
+        ASSERT_EQ(mkdir(failed_page, 0700), 0);
+    }
     ASSERT_TRUE(dc_level_view_pan_pixels(view, -2 * VIEW_WIDTH, 0));
+    if (check == BOND_RETRY) {
+        ASSERT_TRUE(!dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        ASSERT_TRUE(strstr(err, "replacement write failed"));
+        ASSERT_TRUE(camera_has_live_bond(remote, first, first + 1u));
+        ASSERT_TRUE(!camera_has_live_bond(view->gpu, first, first + 1u));
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_TRUE(dc_level_offscreen_owns(view, (dc_chunk_coord_t){origin.x + i, origin.y}));
+            ASSERT_TRUE(!dc_gpu_read_world_body(view->gpu, first + i, &restored, NULL, 0));
+            ASSERT_TRUE(dc_gpu_read_world_body(remote, first + i, &restored, err, sizeof(err)));
+            ASSERT_EQ(memcmp(&restored, &confirmed[i], sizeof(restored)), 0);
+        }
+        ASSERT_EQ(rmdir(failed_page), 0);
+        /* Shutdown must finish the page that failed even if its sibling still has a receipt in flight. */
+        ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+        view = camera_test_view(directory, true, err, sizeof(err));
+        ASSERT_TRUE(view && dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
+        ASSERT_TRUE(camera_has_live_bond(view->gpu, first, first + 1u));
+        for (unsigned i = 0; i < 2; ++i) {
+            ASSERT_TRUE(dc_gpu_read_world_body(view->gpu, first + i, &restored, err, sizeof(err)));
+            ASSERT_EQ(memcmp(&restored, &confirmed[i], sizeof(restored)), 0);
+        }
+        ASSERT_EQ(view->world_seconds, 2.03125);
+        ASSERT_TRUE(dc_level_view_destroy(view, err, sizeof(err)));
+        PASS();
+        return;
+    }
     ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
     ASSERT_TRUE(camera_has_live_bond(view->gpu, first, first + 1u));
     for (unsigned i = 0; i < 2; ++i) {
@@ -173,5 +207,8 @@ static void test_bond_handoff_rebinds_slots_and_preserves_member_generations(voi
 
 static void test_camera_transfers_an_assembly_spanning_two_chunk_pages(void) {
     check_camera_bonded_assembly(BOND_CAMERA);
+}
+static void test_close_retries_failed_bond_page_and_reopens_the_whole_group(void) {
+    check_camera_bonded_assembly(BOND_RETRY);
 }
 #endif
