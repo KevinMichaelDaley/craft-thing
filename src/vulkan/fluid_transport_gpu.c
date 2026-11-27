@@ -47,7 +47,8 @@ static void record_aperture_cache(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &descriptor, 0, NULL);
     vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-    aperture_dispatch(gpu, lines * ((leaves + 3u) / 4u));
+    uint32_t groups = vertical ? (lines * leaves + 63u) / 64u : lines * ((leaves + 3u) / 4u);
+    aperture_dispatch(gpu, groups);
     for (uint32_t nodes = leaves / 2; nodes; nodes /= 2) {
         push[3] = nodes;
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

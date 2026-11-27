@@ -16,6 +16,35 @@ uint page_at(ivec2 p) {
 }
 uint atlas_index(ivec2 p,uint page) {return (page-1u)*4096u+uint(p.y%64)*64u+uint(p.x%64);}
 #include "hydraulic_face.glsl"
+uint face_value(uvec2 p, bool vertical) {
+    uint page=pages[(p.y/64u)*((params.width+63u)/64u)+p.x/64u];
+    if(page==0u) return 0u;
+    uint index=p.y*params.width+p.x;
+    uint covered=occupancy[(vertical?4u:3u)*params.width*params.height+index];
+    return hydraulic_aperture(FULL-min(FULL,covered),ivec2(p),vertical?ivec2(0,1):ivec2(1,0));
+}
+
+/* Adjacent lanes visit adjacent columns on each row. Each lane owns one
+   whole tile, including its prefix, suffix and tree leaf. */
+void vertical_tile(uint id) {
+    uint column=id%params.width,tile=id/params.width;
+    if(tile>=params.leaves) return;
+    uint start=tile*DC_FLUID_APERTURE_TILE_CELLS;
+    uint count=min(DC_FLUID_APERTURE_TILE_CELLS,params.height-min(start,params.height));
+    uint values[DC_FLUID_APERTURE_TILE_CELLS],minimum=FULL;
+    for(uint i=0u;i<count;++i) {
+        values[i]=face_value(uvec2(column,start+i),true);
+        minimum=min(minimum,values[i]);
+        aperture_prefix[2u*((start+i)*params.width+column)]=minimum;
+    }
+    uint base=DC_FLUID_APERTURE_TREE_BASE+column*2u*params.leaves;
+    aperture_tree[base+params.leaves+tile]=minimum;
+    minimum=FULL;
+    for(uint i=count;i>0u;--i) {
+        minimum=min(minimum,values[i-1u]);
+        aperture_prefix[2u*((start+i-1u)*params.width+column)+1u]=minimum;
+    }
+}
 void main() {
     uint lane=gl_LocalInvocationID.x,group=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
     uint length=params.axis!=0u?params.height:params.width;
@@ -28,17 +57,15 @@ void main() {
         aperture_tree[base+node]=min(aperture_tree[base+2u*node],aperture_tree[base+2u*node+1u]);
         return;
     }
+    if(params.axis!=0u) {
+        vertical_tile(group*64u+lane);
+        return;
+    }
     uint batches=(params.leaves+3u)/4u;
     if(group>=lines*batches) return;
     uint line=group/batches,position=(group%batches)*64u+lane;
-    uvec2 p=params.axis!=0u?uvec2(line,position):uvec2(position,line);
-    uint value=FULL;
-    if(position<length) {
-        uint page=pages[(p.y/64u)*((params.width+63u)/64u)+p.x/64u];
-        uint plane=params.axis!=0u?4u:3u,index=p.y*params.width+p.x;
-        value=page==0u?0u:FULL-min(FULL,occupancy[plane*params.width*params.height+index]);
-        value=hydraulic_aperture(value,ivec2(p),params.axis!=0u?ivec2(0,1):ivec2(1,0));
-    }
+    uvec2 p=uvec2(position,line);
+    uint value=position<length?face_value(p,false):FULL;
     prefix[lane]=value;suffix[lane]=value;barrier();
     for(uint stride=1u;stride<16u;stride*=2u) {
         uint prior=lane%16u>=stride?prefix[lane-stride]:FULL;
