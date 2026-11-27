@@ -1,7 +1,7 @@
 ---
 id: ctowpe-vtlh
 status: in_progress
-deps: [ctowpe-0zjo, ctowpe-kudk, ctowpe-o0i2, ctowpe-l2hw, ctowpe-mbc3, ctowpe-8rdr, ctowpe-1kw3, ctowpe-1y1n, ctowpe-04hz, ctowpe-bsh0, cttl-ieib]
+deps: [ctowpe-0zjo, ctowpe-kudk, ctowpe-o0i2, ctowpe-l2hw, ctowpe-mbc3, ctowpe-8rdr, ctowpe-1kw3, ctowpe-1y1n, ctowpe-04hz, ctowpe-bsh0, cttl-ieib, ctowpe-p316]
 links: []
 created: 2026-11-27T15:00:01Z
 type: bug
@@ -67,3 +67,7 @@ Regular-frame pacing at 28413683: half-native near/middle/far mean/p95 ms = 23.0
 **2026-11-27T20:27:04Z**
 
 At 8503946e all 16 owners advanced 2.000000104 seconds per band. Mean/p95 ms near/middle/far: half-native 23.376/35.361, 22.521/30.103, 22.358/28.759; native 26.004/32.696, 25.933/33.940, 26.382/39.327. 720 dry/dense/exact concave p95 4.993/12.417/22.625 ms. Interval correctness now passes for regular and irregular frame input. A rotating-owner half-native trace samples each marker dispatch, pressure and transport, and tracks resident presentation time per frame.
+
+**2026-11-27T20:35:10Z**
+
+Per-frame profiling at 1a94089c on Xephyr :93 measured all six camera cases. In the middle 12 and slowest six native frames by duration, resident presentation (including simulation) averaged 15.309/26.595 ms near, 18.060/23.842 ms middle, and 19.172/25.698 ms far. Corresponding offscreen batch times averaged 8.778/6.792, 7.627/7.889, and 5.864/12.360 ms. Pressure was the largest sampled owner stage on slow frames in five of six cases, but the resident call consumed the majority of native slow-frame time in all three bands. The half-native binary measured batch and individual kernels only. ctowpe-p316 instruments the resident contribution directly. These instrumented traces are diagnostic; acceptance timings remain the uninstrumented figures above.
