@@ -20,7 +20,7 @@ const uint FULL=65536u,PERMEABLE=1u<<17u,KNOWN=1u<<18u,OCCUPIED=1u<<19u;
 shared uvec2 cached[CACHE_CELLS];
 shared uint source_bits[(CACHE_CELLS+31u)/32u];
 #ifdef DC_DISPLACEMENT_PROFILE
-layout(set=0,binding=31,std430) buffer Profile {uint source_visits;};
+layout(set=0,binding=31,std430) buffer Profile {uint source_visits; uint prepared_lines;};
 #endif
 uint line,length;
 ivec2 point_at(uint position) {return LATERAL!=0u?ivec2(position,line):ivec2(line,position);}
@@ -129,6 +129,9 @@ void main() {
     line=gl_WorkGroupID.x+gl_WorkGroupID.y*65535u;
     length=LATERAL!=0u?params.width:params.height;
     if(gl_SubgroupID!=0u||line>=(LATERAL!=0u?params.height:params.width)) return;
+#ifdef DC_DISPLACEMENT_PROFILE
+    if(gl_SubgroupInvocationID==0u) atomicAdd(prepared_lines,1u);
+#endif
     for(uint word=gl_SubgroupInvocationID;word<(CACHE_CELLS+31u)/32u;word+=gl_SubgroupSize)
         source_bits[word]=0u;
     subgroupMemoryBarrierShared();subgroupBarrier();

@@ -74,8 +74,8 @@ static void displacement_case(bool lateral,unsigned unknown) {
     unsigned descriptors=8;
 #ifdef DC_DISPLACEMENT_PROFILE
     VkBuffer profile_buffer;VkDeviceMemory profile_memory;uint32_t *profile;
-    ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,4,&profile_buffer,&profile_memory,(void **)&profile,err,sizeof(err)));
-    *profile=0;indices[8]=31;descriptors=9;
+    ASSERT_TRUE(dc_gpu_make_mapped_buffer(&f->gpu,2*sizeof(*profile),&profile_buffer,&profile_memory,(void **)&profile,err,sizeof(err)));
+    memset(profile,0,2*sizeof(*profile));indices[8]=31;descriptors=9;
     shader="build/diagnostics/fluid_displacement_profile.comp.spv";
 #endif
     ASSERT_TRUE(fixture_body_pipeline_with_bulk(&f->p,&f->gpu,VK_NULL_HANDLE,shader,indices,descriptors,lateral, CHUNKS));
@@ -83,7 +83,7 @@ static void displacement_case(bool lateral,unsigned unknown) {
     for(unsigned i=0;i<descriptors;i++) {
         if(i<8) info[i]=(VkDescriptorBufferInfo){f->buffers[i],0,sizes[i]*4};
 #ifdef DC_DISPLACEMENT_PROFILE
-        else info[i]=(VkDescriptorBufferInfo){profile_buffer,0,4};
+        else info[i]=(VkDescriptorBufferInfo){profile_buffer,0,2*sizeof(*profile)};
 #endif
         writes[i]=(VkWriteDescriptorSet){.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,.dstSet=f->p.descriptor,
             .dstBinding=indices[i],.descriptorCount=1,.descriptorType=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,.pBufferInfo=&info[i]};
@@ -108,6 +108,14 @@ static void displacement_case(bool lateral,unsigned unknown) {
         WIDTH,HEIGHT,lateral,unknown,mismatches,(unsigned long long)mass,(unsigned long long)initial_mass);
 #ifdef DC_DISPLACEMENT_PROFILE
     uint32_t visits=*profile;
+    uint32_t prepared_lines=profile[1], occupied_lines=0;
+    for(unsigned line=0;line<(lateral?HEIGHT:WIDTH);++line) {
+        for(unsigned pos=0;pos<(lateral?WIDTH:HEIGHT);++pos) {
+            unsigned index=lateral?index_of(pos,line):index_of(line,pos);
+            if(f->words[2][index]) {++occupied_lines;break;}
+        }
+    }
+    printf("prepared %u lines with %u occupied lines\n",prepared_lines,occupied_lines);
     printf("source visits %u, initial excess-water candidates %u\n",visits,expected_visits);
     vkUnmapMemory(f->p.device,profile_memory);
     vkDestroyBuffer(f->p.device,profile_buffer,NULL);vkFreeMemory(f->p.device,profile_memory,NULL);
@@ -121,6 +129,7 @@ static void displacement_case(bool lateral,unsigned unknown) {
     ASSERT_EQ(mismatches,0u);ASSERT_EQ(mass,initial_mass);
 #ifdef DC_DISPLACEMENT_PROFILE
     ASSERT_EQ(visits,expected_visits);
+    ASSERT_TRUE(prepared_lines<=occupied_lines);
 #endif
     PASS();
 }
