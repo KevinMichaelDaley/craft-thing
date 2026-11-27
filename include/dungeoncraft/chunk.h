@@ -104,6 +104,9 @@ typedef enum {
     DC_SLOT_SAVING
 } dc_slot_state_t;
 
+/** Last completed position on the world simulation clock, in seconds. */
+typedef struct { double seconds; bool known; } dc_chunk_time_t;
+
 typedef struct {
     dc_chunk_coord_t coord;
     dc_slot_state_t state;
@@ -111,6 +114,7 @@ typedef struct {
     uint64_t last_gpu_use;
     bool dirty;
     bool pinned;
+    dc_chunk_time_t time;
 } dc_chunk_slot_t;
 
 typedef struct {

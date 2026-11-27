@@ -255,9 +255,6 @@ bool dc_level_view_step_timed(dc_level_view_t *view, float seconds,
         return error(err, cap, "Too many pending level steps");
     if (!queue_level_step(view, seconds, err, cap)) return false;
     ++view->pending_steps;
-    for (uint32_t i = 0; i < view->table.capacity; ++i)
-        if (view->table.slots[i].state == DC_SLOT_ACTIVE)
-            dc_chunk_table_mark_dirty(&view->table, i);
     return true;
 }
 
@@ -357,6 +354,8 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
             if(!dc_chunk_table_finish_load(&view->table,index,result.generation)) {
                 dc_stream_result_release(&result);return error(err,cap,"Cannot finish loaded chunk publication");
             }
+            /* A structure checkpoint can supply different physical stock. */
+            view->table.slots[index].time = restored ? (dc_chunk_time_t){0} : result.time;
             if(view->closing) {
                 view->closing_structure_saved=false;
                 view->save_color_stale[index]=true;
@@ -429,7 +428,8 @@ static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
             free(bulk);free(gas);fr_reactive_chunk_release(&reactive);
             return error(err, cap, "Cannot begin dirty chunk save");
         }
-        bool queued=dc_stream_request_save_bulk(view->stream,&chunk,&colors,channel,liquid,gas,bulk,generation);
+        bool queued=dc_stream_request_save_snapshot(view->stream,&chunk,&colors,channel,
+            liquid,gas,bulk,slot->time,generation);
         free(bulk);
         free(gas);
         fr_reactive_chunk_release(&reactive);
@@ -586,9 +586,19 @@ bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t 
     return true;
 }
 
+static void advance_resident_chunks(dc_level_view_t *view, double seconds) {
+    for (uint32_t i = 0; i < view->table.capacity; ++i) {
+        dc_chunk_slot_t *slot = &view->table.slots[i];
+        if (slot->state != DC_SLOT_ACTIVE) continue;
+        if (slot->time.known) slot->time.seconds += seconds;
+        dc_chunk_table_mark_dirty(&view->table, i);
+    }
+}
+
 static void consume_level_steps(dc_level_view_t *view, uint32_t count) {
     if (!count) return;
     dc_level_step_run_t *run = &pending_runs(view)[view->first_run];
+    advance_resident_chunks(view, (double)run->seconds * count);
     run->count -= count;
     view->pending_steps -= count;
     if (!run->count) ++view->first_run;
@@ -946,7 +956,10 @@ bool dc_level_view_pixels(dc_level_view_t *view, uint32_t *colors,
 bool dc_level_view_capture_tick(dc_level_view_t *view,
                                 dc_gpu_tick_capture_t *capture,
                                 char *err, uint32_t cap) {
-    return view && dc_gpu_tick_capture(view->gpu, capture, err, cap);
+    if (!view || !dc_gpu_tick_capture(view->gpu, capture, err, cap)) return false;
+    const dc_gpu_t *gpu = view->gpu;
+    advance_resident_chunks(view, (gpu->timed_fluid ? gpu->tick_time_scale : 1.0f) / 60.0f);
+    return true;
 }
 
 bool dc_level_view_memory_stats(dc_level_view_t *view,

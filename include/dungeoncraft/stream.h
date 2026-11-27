@@ -13,8 +13,7 @@
 
 typedef struct dc_streamer dc_streamer_t;
 
-/** Last completed position on the world simulation clock, in seconds. */
-typedef struct { double seconds; bool known; } dc_stream_chunk_time_t;
+typedef dc_chunk_time_t dc_stream_chunk_time_t;
 
 typedef enum { DC_STREAM_LOADED, DC_STREAM_SAVED, DC_STREAM_FAILED } dc_stream_result_kind_t;
 
