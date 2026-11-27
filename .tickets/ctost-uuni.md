@@ -27,3 +27,7 @@ Native tests pick a coherent owner when pending structural terrain and streamed 
 **2026-11-27T03:14:13Z**
 
 DCS v11 now includes gas and bulk liquid from the same selected physical owner as terrain, elapsed time, colors, reactive records, and water heat. The level archive selects current resident slots and retains pending records across failed GPU publication. Earlier DCS versions still accept compatible streamed fluids when the physical records match and their known times agree. Verified 52 targeted host checks, five codec checks under ASan and UBSan, and six RTX A2000 level stream checks under Vulkan core and synchronization validation. All 625 build prerequisites of make test are ready. Full execution remains queued behind the previous exact revisions. Durable offscreen supersession is tracked in ctcos-3q4u.
+
+**2026-11-27T03:21:59Z**
+
+The targeted Vulkan run passed 22 checks across level streaming, structural storage, thermal and reactive checkpoints, and offscreen workspaces. The four level snapshot cases passed again after moving the unchanged checksum calculation with the channel format. The final codec passed five sanitizer checks. The exact code revision for make test is queued behind the earlier GPU suites.
