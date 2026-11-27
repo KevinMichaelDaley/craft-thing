@@ -1,6 +1,6 @@
 ---
 id: ctowpe-c08p
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T17:00:59Z
@@ -31,3 +31,7 @@ At 2048x1216, GPU timestamps for the raw and corrected passes together (6 measur
 **2026-11-27T17:10:05Z**
 
 Refactor 8f26f761 passes all 16 hydrostatic cases under synchronization validation, including an extra 61x2305 diagnostic beyond the former cache limit. At that height both passes together evaluated exactly 281210 transforms (one per cell per pass), and both output fields matched the serial recurrence. The production 720 loads, both saturated camera viewports and full make test are scheduled from the clean 8f26f761 checkout on hidden :93.
+
+**2026-11-27T17:12:03Z**
+
+Both seam projection cases and all three native/seam water cases passed using the production dispatch after refactoring. Together with the four hydrostatic configurations, 21/21 focused checks passed under synchronization validation. The aggregate regression and presented-frame measurements continue at 8f26f761 under ctowpe-vtlh.
