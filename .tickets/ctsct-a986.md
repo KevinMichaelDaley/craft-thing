@@ -1,6 +1,6 @@
 ---
 id: ctsct-a986
-status: in_progress
+status: closed
 deps: [ctlrcc-1nhb, ctsct-efcn]
 links: []
 created: 2026-11-27T01:19:42Z
@@ -24,3 +24,7 @@ Advance a shared elapsed time only for confirmed world ticks. Recover its epoch 
 **2026-11-27T01:19:42Z**
 
 The per-chunk stream and DCS timestamps are already bound to their physical source. Connect this shared clock to the foreground owner before scheduling asynchronous offscreen work.
+
+**2026-11-27T01:30:29Z**
+
+The level advances a shared epoch only after confirmed steps and stages it with physical saves. Cold worlds with no epoch start at zero; old untimed chunks remain unknown and older timed snapshots retain their own clock. Regression coverage includes loading, pause, partial and failed presentation, cold worker returns, interrupted publication, and malformed epoch records. Focused tests passed 40 cases (including recipe and stream channel suites), with 30 cases under ASan/UBSan. RTX A2000 checkpoint fixture passed with synchronization validation: staged epoch 20 s, newly generated stamp 20 s, older ticks 0 and 15.5 s and unknown preserved through resave. Full make test is queued on the exact code behind the predecessor Vulkan suite.
