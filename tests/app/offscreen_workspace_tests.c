@@ -9,14 +9,6 @@
 
 #include "../../src/app/offscreen.h"
 
-#ifdef DC_OFFSCREEN_RED
-#pragma weak dc_offscreen_create
-#pragma weak dc_offscreen_destroy
-#pragma weak dc_offscreen_admit
-#pragma weak dc_offscreen_advance
-#pragma weak dc_offscreen_snapshot
-#endif
-
 static int g_pass, g_fail;
 static char g_err[256];
 static uint32_t g_ticks, g_fault_tick;
@@ -56,14 +48,6 @@ bool __wrap_dc_gpu_set_tick_seconds(dc_gpu_t *gpu, float seconds) {
     return __real_dc_gpu_set_tick_seconds(gpu, seconds);
 }
 
-static bool available(void) {
-#ifdef DC_OFFSCREEN_RED
-    return dc_offscreen_create && dc_offscreen_admit && dc_offscreen_advance && dc_offscreen_snapshot;
-#else
-    return true;
-#endif
-}
-
 static dc_gpu_t *make_parent(void) {
     dc_gpu_t *parent = NULL;
     dc_gpu_create(&parent, DC_CHUNK_SIDE, DC_CHUNK_SIDE,
@@ -81,7 +65,6 @@ static bool wait_stream(dc_streamer_t *stream, dc_stream_result_t *out) {
 }
 
 static void test_isolated_tile_advances_and_returns_through_cold_storage(void) {
-    ASSERT_TRUE(available());
     reset_ticks();
     dc_gpu_t *parent = make_parent();
     const dc_chunk_coord_t base = {-9, 4}, coord = {-7, 5};
@@ -142,7 +125,6 @@ static void test_isolated_tile_advances_and_returns_through_cold_storage(void) {
 }
 
 static void test_absolute_target_budget_and_failed_owner_cannot_publish(void) {
-    ASSERT_TRUE(available());
     reset_ticks();
     dc_gpu_t *parent = make_parent();
     const dc_chunk_coord_t origin = {3, -4};

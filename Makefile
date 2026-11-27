@@ -776,8 +776,8 @@ test: test_level_ticks
 test_level_ticks: build/level_ticks_tests
 	./build/level_ticks_tests
 
-build/offscreen_workspace_tests: tests/app/offscreen_workspace_tests.c src/app/offscreen.h $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -DDC_OFFSCREEN_RED $< $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_step -Wl,--wrap=dc_gpu_set_tick_seconds
+build/offscreen_workspace_tests: tests/app/offscreen_workspace_tests.c src/app/offscreen.c src/app/offscreen.h $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) $(SHADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< src/app/offscreen.c $(GPU_OBJ) $(STREAM_OBJ) $(CHUNK_OBJ) $(GENERATE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_tick_step -Wl,--wrap=dc_gpu_set_tick_seconds
 .PHONY: test_offscreen_workspace
 test_offscreen_workspace: build/offscreen_workspace_tests
 	./build/offscreen_workspace_tests

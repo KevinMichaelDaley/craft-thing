@@ -17,12 +17,13 @@ void dc_offscreen_destroy(dc_offscreen_t *workspace);
 bool dc_offscreen_admit(dc_offscreen_t *workspace, const dc_stream_result_t *source,
                         uint64_t generation, char *err, uint32_t cap);
 
-/** Advance toward an absolute world time within a bounded number of solver steps. */
+/** Advance toward an absolute world time within a bounded number of solver steps.
+ * A failed tick requires rebuilding from the owner's last confirmed snapshot. */
 bool dc_offscreen_advance(dc_offscreen_t *workspace, double world_seconds, uint32_t step_budget,
                           char *err, uint32_t cap);
 
-/** Read an owned immutable snapshot for the expected generation. Release with
- * dc_stream_result_release. A failed simulation workspace cannot publish. */
+/** Fill an empty result with an owned snapshot for the expected generation.
+ * Release with dc_stream_result_release. Failures leave the result untouched. */
 bool dc_offscreen_snapshot(dc_offscreen_t *workspace, dc_chunk_coord_t coord,
                            uint64_t generation, dc_stream_result_t *out,
                            char *err, uint32_t cap);
