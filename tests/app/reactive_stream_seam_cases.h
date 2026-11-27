@@ -1,6 +1,8 @@
 #ifndef DC_REACTIVE_STREAM_SEAM_CASES_H
 #define DC_REACTIVE_STREAM_SEAM_CASES_H
 
+#include "../../src/app/offscreen_internal.h"
+
 static bool lose_seam_receipt, lose_seam_recovery, reject_next_queue_wait;
 
 VkResult __real_vkQueueWaitIdle(VkQueue queue);
@@ -102,6 +104,37 @@ static bool seam_water_matches(dc_level_view_t *view, uint32_t resident_slot,
     dc_stream_result_release(&remote);
     free(resident);
     return okay;
+}
+
+static void test_new_exchange_cannot_claim_an_earlier_receipt(void) {
+    char directory[] = "build/paired_receipt_XXXXXX", err[256] = {0};
+    const uint32_t lane = 24u;
+    dc_level_liquid_exchange_t exchange = {.resident = {5, -4}, .offscreen = {6, -4},
+        .begin_seconds = 2., .end_seconds = 2.03125};
+    exchange.flux[lane].water = 5000;
+    ASSERT_TRUE(mkdtemp(directory) && save_seam_pockets(directory, &exchange, lane, err, sizeof(err)));
+    dc_level_view_t *view = seam_test_view(directory, err, sizeof(err));
+    dc_offscreen_t *workspace = NULL;
+    uint32_t slot;
+    ASSERT_TRUE(view && admit_seam_owners(view, &exchange, &slot, &workspace, err, sizeof(err)));
+    ASSERT_TRUE(step_seam_resident(view, .03125f, err, sizeof(err)));
+    ASSERT_TRUE(dc_offscreen_advance(workspace, exchange.end_seconds, 1u, err, sizeof(err)));
+    const dc_liquid_seam_endpoint_t local = {.gpu = view->gpu, .coord = exchange.resident, .slot = slot};
+    const dc_liquid_seam_endpoint_t remote = {.gpu = workspace->gpu, .coord = exchange.offscreen};
+    dc_liquid_seam_flux_t prior[DC_CHUNK_SIDE] = {0};
+    prior[lane].water = 1000;
+    lose_seam_receipt = true;
+    ASSERT_EQ(dc_gpu_commit_liquid_seam(local, remote, DC_LIQUID_SEAM_X, prior, err, sizeof(err)),
+              DC_LIQUID_SEAM_UNCONFIRMED);
+    ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &exchange, err, sizeof(err)), DC_LIQUID_SEAM_REJECTED);
+    ASSERT_TRUE(dc_gpu_liquid_seam_pending(view->gpu) && !view->world_save_staged);
+    ASSERT_EQ(dc_gpu_resolve_liquid_seam(local.gpu, remote.gpu, err, sizeof(err)), DC_LIQUID_SEAM_COMMITTED);
+    ASSERT_TRUE(seam_water_matches(view, slot, &exchange, workspace, lane, 15000u, 7000u, err, sizeof(err)));
+    ASSERT_EQ(dc_level_offscreen_exchange_liquids(view, &exchange, err, sizeof(err)), DC_LIQUID_SEAM_COMMITTED);
+    ASSERT_TRUE(seam_water_matches(view, slot, &exchange, workspace, lane, 10000u, 12000u, err, sizeof(err)));
+    dc_level_view_discard(view);
+    dc_offscreen_destroy(workspace);
+    PASS();
 }
 
 static void test_level_seam_orders_owner_clocks_receipts_and_cold_publication(void) {
