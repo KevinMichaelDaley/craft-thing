@@ -1,6 +1,6 @@
 ---
 id: ctowpe-bvwf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T20:39:47Z
@@ -27,3 +27,7 @@ Across 180 native frames at 469573d1, phase 5 averaged 11.500/9.649/10.493 ms in
 **2026-11-27T20:51:43Z**
 
 After explicit device upload and readback, the old and new GPU kernels changed 1,414 to 2,470 cell masses and heat values per comparison. Both parities and both vertical-only and full correction sequences matched byte-for-byte for mass, pigment, heat, and velocity. The persistent serial-reference regression independently checked every resident cell after all four sweeps, required nonzero transfers in each sweep and across the page boundary, and passed under Vulkan synchronization validation for both parities. All six enabled/disabled seam checks passed. Uninstrumented half-native near/middle/far p95 measured 29.670/32.335/28.390 ms, with 16 owners and 2.000000104 s advanced in every band.
+
+**2026-11-27T20:56:10Z**
+
+Uninstrumented 1920x1080 native near/middle/far mean/p95 in ms: 23.238/29.832, 22.927/30.157, 22.349/28.465. Half-native: 22.323/29.670, 22.269/32.335, 22.503/28.390. Every band completed 60 frames, 16 active owners and 2.000000104 simulated seconds. The 720p dry, dense and exact concave runs also returned success with p95 3.816/12.978/22.973 ms. All nine production performance cases pass on persistent hidden Xephyr :93.

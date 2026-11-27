@@ -1,6 +1,6 @@
 ---
 id: ctowpe-vtlh
-status: in_progress
+status: closed
 deps: [ctowpe-0zjo, ctowpe-kudk, ctowpe-o0i2, ctowpe-l2hw, ctowpe-mbc3, ctowpe-8rdr, ctowpe-1kw3, ctowpe-1y1n, ctowpe-04hz, ctowpe-bsh0, cttl-ieib, ctowpe-p316, ctowpe-bvwf]
 links: []
 created: 2026-11-27T15:00:01Z
@@ -71,3 +71,7 @@ At 8503946e all 16 owners advanced 2.000000104 seconds per band. Mean/p95 ms nea
 **2026-11-27T20:35:10Z**
 
 Per-frame profiling at 1a94089c on Xephyr :93 measured all six camera cases. In the middle 12 and slowest six native frames by duration, resident presentation (including simulation) averaged 15.309/26.595 ms near, 18.060/23.842 ms middle, and 19.172/25.698 ms far. Corresponding offscreen batch times averaged 8.778/6.792, 7.627/7.889, and 5.864/12.360 ms. Pressure was the largest sampled owner stage on slow frames in all six cases, but the resident call consumed the majority of native slow-frame time in all three bands. The half-native binary measured batch and individual kernels only. ctowpe-p316 instruments the resident contribution directly. These instrumented traces are diagnostic; acceptance timings remain the uninstrumented figures above.
+
+**2026-11-27T20:56:10Z**
+
+At runtime revision 88d40c65, validated with regression tests at e0a16b3f, all nine uninstrumented performance cases pass on RTX A2000 / hidden Xephyr :93. Half-native near/middle/far mean/p95 ms = 22.323/29.670, 22.269/32.335, 22.503/28.390; native = 23.238/29.832, 22.927/30.157, 22.349/28.465. Each band retained 16 owners and advanced 2.000000104 seconds in 60 presented frames. 720 dry/dense/exact concave mean/p95 = 3.127/3.816, 9.605/12.978, 17.572/22.973 ms. The independent correction reference, GPU before/after stock/pigment/energy comparison and native seam checks also pass. Full aggregate verification remains on the integration parent.
