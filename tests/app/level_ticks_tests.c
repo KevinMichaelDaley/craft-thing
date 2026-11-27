@@ -13,6 +13,7 @@
 #include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/gpu.h"
 #include "../../src/app/level_internal.h"
+#include "../../src/app/offscreen_internal.h"
 #include "../../src/app/player_session_internal.h"
 #include "../../src/app/view_config.h"
 #include "../../src/vulkan/gpu_internal.h"
@@ -785,7 +786,27 @@ static void test_empty_camera_eviction_leaves_the_workspace_for_oil_stock(void) 
     PASS();
 }
 
+static void test_level_water_settings_change_all_owners_together(void) {
+    dc_gpu_t resident = {0}, peer = {0};
+    dc_offscreen_t workspace = {.gpu = &peer};
+    dc_level_offscreen_handoff_t handoff = {.workspace = &workspace};
+    dc_level_view_t view = {.gpu = &resident, .offscreen_handoffs = &handoff};
+    ASSERT_TRUE(dc_level_view_set_fluid_interval(&view, 3u));
+    ASSERT_EQ(resident.fluid_interval, 3u);
+    ASSERT_EQ(peer.fluid_interval, 3u);
+    ASSERT_TRUE(dc_level_view_set_marker_correction(&view, true));
+    ASSERT_TRUE(resident.marker_correction && peer.marker_correction);
+    peer.liquid_seam_orphaned = true;
+    ASSERT_TRUE(!dc_level_view_set_fluid_interval(&view, 6u));
+    ASSERT_TRUE(!dc_level_view_set_marker_correction(&view, false));
+    ASSERT_EQ(resident.fluid_interval, 3u);
+    ASSERT_EQ(peer.fluid_interval, 3u);
+    ASSERT_TRUE(resident.marker_correction && peer.marker_correction);
+    PASS();
+}
+
 int main(void) {
+    RUN(test_level_water_settings_change_all_owners_together);
     RUN(test_unequal_ticks_reach_solver_in_requested_order);
     RUN(test_equal_ticks_share_one_presentation_batch);
     RUN(test_equal_ticks_completed_before_present_failure_are_not_replayed);
