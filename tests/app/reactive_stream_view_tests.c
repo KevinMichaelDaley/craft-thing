@@ -368,6 +368,11 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--camera-grain") == 0) {
+        RUN(test_camera_reopens_grains_after_they_cross_the_owner_face);
+        printf("%d passed, %d failed\n",g_pass,g_fail);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--camera-bulk") == 0) {
         RUN(test_camera_bulk_liquids_return_with_their_momentum);
         printf("%d passed, %d failed\n", g_pass, g_fail);
@@ -468,6 +473,7 @@ int main(int argc, char **argv) {
     RUN(test_camera_preserves_completed_terrain_contacts_of_bonded_members);
     RUN(test_camera_keeps_other_authored_components_with_their_owner);
     RUN(test_bond_handoff_rebinds_slots_and_preserves_member_generations);
+    RUN(test_camera_reopens_grains_after_they_cross_the_owner_face);
     RUN(test_camera_water_basin_returns_after_a_partial_shared_cycle);
     RUN(test_camera_heated_water_returns_with_its_energy);
     RUN(test_camera_bulk_liquids_return_with_their_momentum);

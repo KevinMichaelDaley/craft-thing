@@ -98,7 +98,7 @@ static int camera_marker_order(const void *left, const void *right) {
     return memcmp(left, right, sizeof(dc_marker_t));
 }
 
-static void check_camera_water_returns(bool heated, bool bulk_liquid, bool restart) {
+static void check_camera_water_returns(bool heated, bool bulk_liquid, bool restart, bool grains) {
     char directory[] = "build/camera_water_basin_XXXXXX", err[256] = {0};
     ASSERT_TRUE(mkdtemp(directory));
     dc_level_view_t *view = camera_test_view(directory, false, err, sizeof(err));
@@ -125,6 +125,17 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
         for (unsigned x = tile ? 0u : 48u; x < (tile ? 48u : DC_CHUNK_SIDE); ++x) {
             chunk->cells[row+x] = (dc_cell_t){.fluid_mass = !tile && x >= 53u ? DC_FLUID_FULL/2u : 0u};
             chunk->face_velocity[row+x].x = 7.5f;
+        }
+        if (grains) {
+            for (unsigned y=8;y<18;y++)
+                for (unsigned x=tile?0u:48u;x<(tile?48u:64u);x++)
+                    chunk->cells[y*64u+x]=(dc_cell_t){0};
+            if (!tile) {
+                unsigned grain=10u*64u+59u;
+                chunk->cells[grain].material=DC_MATERIAL_SAND;
+                dc_chunk_seed_particles(chunk);
+                chunk->particles[grain].vx_fp=2*DC_FLUID_FULL;
+            }
         }
         if (!tile) {
             chunk->marker_count = 1;
@@ -246,7 +257,7 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
             view = dc_level_view_create(directory, 42, err, sizeof(err));
             ASSERT_TRUE(view && view->origin.x == saved_origin.x && view->origin.y == saved_origin.y);
             ASSERT_EQ(view->world_seconds, saved_time);
-            ASSERT_TRUE(fr_thermal_gpu_enable(view->gpu, err, sizeof(err)));
+            if (heated) ASSERT_TRUE(fr_thermal_gpu_enable(view->gpu, err, sizeof(err)));
             ASSERT_TRUE(dc_level_view_wait_visible(view, 25000u, err, sizeof(err)));
             ASSERT_TRUE(dc_gpu_liquid_owner_held(view->gpu));
         }
@@ -292,6 +303,11 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
             stock[tile] = camera_stock(chunk, NULL, false);
             dc_chunk_t expected;
             ASSERT_TRUE(dc_gpu_download_chunk(reference, tile, &expected, err, sizeof(err)));
+            if (grains) {
+                ASSERT_EQ(chunk->particle_count,expected.particle_count);
+                ASSERT_EQ(memcmp(chunk->particles,expected.particles,sizeof(chunk->particles)),0);
+                if (tile && !cycle) ASSERT_EQ(expected.particle_count,1u);
+            }
             if (bulk_liquid) {
                 ASSERT_TRUE(fr_bulk_phase_gpu_export_chunk(view->gpu, slot, phase, err, sizeof(err)) &&
                             fr_bulk_phase_gpu_export_chunk(reference, tile, expected_phase, err, sizeof(err)));
@@ -326,10 +342,14 @@ static void check_camera_water_returns(bool heated, bool bulk_liquid, bool resta
     PASS();
 }
 
-static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(false, false, false); }
-static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(true, false, false); }
-static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(false, true, false); }
-static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(true, true, true); }
+static void test_camera_reopens_grains_after_they_cross_the_owner_face(void) {
+    check_camera_water_returns(false,false,true,true);
+}
+
+static void test_camera_water_basin_returns_after_a_partial_shared_cycle(void) { check_camera_water_returns(false, false, false, false); }
+static void test_camera_heated_water_returns_with_its_energy(void) { check_camera_water_returns(true, false, false, false); }
+static void test_camera_bulk_liquids_return_with_their_momentum(void) { check_camera_water_returns(false, true, false, false); }
+static void test_camera_reopens_its_confirmed_partial_cycle(void) { check_camera_water_returns(true, true, true, false); }
 
 static void check_two_screen_camera_pan(bool moving_body, bool close_offscreen) {
     char directory[] = "build/camera_offscreen_pan_XXXXXX", err[256] = {0}, temporary[256];
