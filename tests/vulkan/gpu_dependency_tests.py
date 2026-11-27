@@ -21,6 +21,12 @@ class GpuDependencyTests(unittest.TestCase):
             if " " not in target:
                 cls.rules[target] = set(prerequisites.split())
 
+    def test_camera_benchmarks_track_compile_configuration(self):
+        for mode in ("half_native", "native"):
+            target = f"build/offscreen_{mode}_bench"
+            with self.subTest(target=target):
+                self.assertIn("Makefile", self.rules[target])
+
     def test_contact_object_requires_current_shader(self):
         self.assertIn("build/shaders/contacts.comp.spv",
                       self.rules["build/contact_gpu.o"])
