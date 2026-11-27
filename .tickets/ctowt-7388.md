@@ -46,3 +46,7 @@ The workspace now defers independent ticks and preserves its lease, mappings, an
 **2026-11-27T10:08:08Z**
 
 New workspaces inherit the resident cadence and marker correction setting. Level settings update all leased workspaces together and preserve phase state if any held owner rejects a change. The level tick suite passed 22 tests and the native offscreen workspace suite passed 3.
+
+**2026-11-27T10:32:09Z**
+
+The level tick path now binds adjacent admitted structure-workspace tiles to the same elapsed interval as all mapped resident tiles. Both owners run source and rigid work before shared water and bulk, particles, thermal and gas afterward. The displayed Vulkan fixture checks two full cycles against a monolithic basin, verifies color and stock after reopen, rejects stale generations before consuming the queued tick, and restores the durable pair when a receipt cannot be recovered. Camera disk election still selects isolated islands. Open-basin camera election and return during a partial interval remain unverified.
