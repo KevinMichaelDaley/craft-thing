@@ -129,6 +129,7 @@ typedef struct {
     bool dirty;
     bool pinned;
     dc_chunk_time_t time;
+    dc_chunk_time_t admitted_time; /**< First confirmed epoch of this resident generation. */
     dc_chunk_owner_t checkpoint_owner; /**< Identity of the current successfully archived state. */
 } dc_chunk_slot_t;
 

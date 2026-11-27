@@ -117,7 +117,7 @@ bool dc_players_enable_at(dc_level_view_t *v,uint32_t x,uint32_t y,
     if(v->players) return true;
     struct dc_player_session *s=calloc(1,sizeof(*s));
     if(!s) return players_error(err,cap,"Cannot allocate player session");
-    if(!dc_level_view_stage_player_save(v,err,cap)) {
+    if(!dc_level_view_stage_world_save(v,err,cap)) {
         free(s);return false;
     }
     memcpy(s->inventory,v->saved_inventory,sizeof(s->inventory));

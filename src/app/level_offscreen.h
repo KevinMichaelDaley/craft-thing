@@ -47,6 +47,8 @@ dc_level_offscreen_result_t dc_level_offscreen_result(dc_level_view_t *view,
 bool dc_level_offscreen_owns(dc_level_view_t *view, dc_chunk_coord_t coord);
 /** Report writes that shutdown must drain before committing a staged world. */
 bool dc_level_offscreen_writing(const dc_level_view_t *view);
+/** Queue confirmed paired snapshots before the staged world closes. */
+bool dc_level_offscreen_flush_pairs(dc_level_view_t *view, char *err, uint32_t cap);
 /** Release level lease bookkeeping without destroying the caller's workspaces. */
 void dc_level_offscreen_discard(dc_level_view_t *view);
 

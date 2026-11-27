@@ -286,7 +286,7 @@ static void test_staged_structure_reopen_retains_times_when_pending_slots_move(v
     view.stream = dc_stream_create(directory, 42, 4);
     dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
     ASSERT_TRUE(view.save && view.stream && chunk);
-    ASSERT_TRUE(dc_level_view_stage_player_save(&view, err, sizeof(err)));
+    ASSERT_TRUE(dc_level_view_stage_world_save(&view, err, sizeof(err)));
     ASSERT_TRUE(structure_time_gpu(&view.gpu, err, sizeof(err)));
     ASSERT_TRUE(dc_chunk_table_init(&view.table, DC_GPU_CHUNK_SLOTS));
     const dc_chunk_coord_t coords[] = {{-7, 2}, {4, 5}, {9, -6}};

@@ -16,6 +16,9 @@ dc_world_save_t *dc_world_save_open(const char *directory, char *err, uint32_t c
 /** Create the private directory for a new save transaction. */
 bool dc_world_save_begin(dc_world_save_t *save, char *err, uint32_t cap);
 
+/** Remove a private draft before its writers have been attached. */
+bool dc_world_save_abort(dc_world_save_t *save);
+
 /** Return the canonical directory or the active staging directory. */
 const char *dc_world_save_directory(const dc_world_save_t *save, bool staging);
 

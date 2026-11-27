@@ -116,8 +116,8 @@ bool dc_camera_offscreen_service(dc_level_view_t *view, bool closing, char *err,
     if (!time.known || writing) return true;
     if (!closing && independent && !dc_offscreen_advance(camera->workspace,
         view->world_seconds, CAMERA_WORKSPACE_STEPS_PER_TICK, err, cap)) {
-        dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0);
-        dc_camera_offscreen_discard(view);
+        if (dc_level_offscreen_cancel(view, camera->coord, camera->generation, NULL, 0))
+            dc_camera_offscreen_discard(view);
         return false;
     }
     dc_level_offscreen_progress(view, camera->coord, camera->generation, &time, &writing);

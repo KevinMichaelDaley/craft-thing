@@ -164,6 +164,13 @@ bool dc_world_save_begin(dc_world_save_t *save, char *err, uint32_t cap) {
     return true;
 }
 
+bool dc_world_save_abort(dc_world_save_t *save) {
+    if (!save || !save->staging || !discard_directory(save->root, draft_name)) return false;
+    save->staging = false;
+    save->clock_cached = false;
+    return true;
+}
+
 const char *dc_world_save_directory(const dc_world_save_t *save, bool staging) {
     if (!save) return NULL;
     return staging ? (save->staging ? save->draft : NULL) : save->directory;

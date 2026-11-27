@@ -28,6 +28,8 @@ struct dc_gpu_liquid_seam {
     VkBuffer plan;
     VkDeviceMemory memory;
     void *mapped;
+    dc_gpu_t *pending_peer;
+    bool pending_bulk;
 };
 
 _Static_assert(sizeof(dc_liquid_seam_flux_t) == 3u * sizeof(int32_t), "Liquid lane layout mismatch");
@@ -133,11 +135,37 @@ static void activate_liquid_work(dc_gpu_t *gpu, bool bulk) {
     fr_gas_gpu_geometry_changed(gpu, false);
 }
 
+static dc_liquid_seam_result_t complete_dispatch(dc_gpu_t *gpu, struct dc_gpu_liquid_seam *seam,
+                                                 char *err, uint32_t cap) {
+    const seam_plan_t *plan = seam->mapped;
+    if (plan->receipt == DC_LIQUID_RECEIPT_REJECTED) {
+        seam->pending_peer = NULL;
+        return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam plan exceeds donor stock or face capacity");
+    }
+    if (plan->receipt != DC_LIQUID_RECEIPT_COMMITTED)
+        return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam completion receipt is missing");
+    activate_liquid_work(gpu, seam->pending_bulk);
+    activate_liquid_work(seam->pending_peer, seam->pending_bulk);
+    seam->pending_peer = NULL;
+    return DC_LIQUID_SEAM_COMMITTED;
+}
+
+dc_liquid_seam_result_t dc_gpu_resolve_liquid_seam(dc_gpu_t *first, dc_gpu_t *second,
+                                                  char *err, uint32_t cap) {
+    struct dc_gpu_liquid_seam *seam = first ? first->liquid_seam : NULL;
+    if (!seam || !second || seam->pending_peer != second || vkQueueWaitIdle(first->queue) != VK_SUCCESS)
+        return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Cannot reconcile the liquid seam dispatch");
+    return complete_dispatch(first, seam, err, cap);
+}
+
 dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t first,
     dc_liquid_seam_endpoint_t second, dc_liquid_seam_axis_t axis,
     const dc_liquid_seam_flux_t flux[DC_CHUNK_SIDE], char *err, uint32_t cap) {
     if (!flux || !adjacent_endpoints(first, second, axis))
         return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam endpoints do not share a mapped face");
+    dc_gpu_t *gpu = first.gpu;
+    if (gpu->liquid_seam && gpu->liquid_seam->pending_peer)
+        return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "A liquid seam receipt is still pending");
     bool water = false, bulk = false;
     for (uint32_t i = 0; i < DC_CHUNK_SIDE; ++i) {
         if (!valid_flux(flux[i].water) || !valid_flux(flux[i].oil) || !valid_flux(flux[i].slime))
@@ -146,7 +174,6 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
         bulk |= flux[i].oil != 0 || flux[i].slime != 0;
     }
     if (!water && !bulk) return DC_LIQUID_SEAM_COMMITTED;
-    dc_gpu_t *gpu = first.gpu;
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Cannot synchronize liquid seam endpoints");
     if (bulk && (!dc_gpu_ensure_bulk_phase_pipeline(gpu, err, cap) ||
@@ -171,14 +198,9 @@ dc_liquid_seam_result_t dc_gpu_commit_liquid_seam(dc_liquid_seam_endpoint_t firs
     fr_renderer_barrier(gpu->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_HOST_READ_BIT);
+    seam->pending_peer = second.gpu;
+    seam->pending_bulk = bulk;
     if (!fr_renderer_submit(gpu))
         return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam submission was not confirmed");
-    if (plan->receipt == DC_LIQUID_RECEIPT_REJECTED)
-        return report(DC_LIQUID_SEAM_REJECTED, err, cap, "Liquid seam plan exceeds donor stock or face capacity");
-    if (plan->receipt != DC_LIQUID_RECEIPT_COMMITTED)
-        return report(DC_LIQUID_SEAM_UNCONFIRMED, err, cap, "Liquid seam completion receipt is missing");
-
-    activate_liquid_work(gpu, bulk);
-    activate_liquid_work(second.gpu, bulk);
-    return DC_LIQUID_SEAM_COMMITTED;
+    return complete_dispatch(gpu, seam, err, cap);
 }

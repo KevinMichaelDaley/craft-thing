@@ -40,7 +40,7 @@ struct dc_level_view {
     uint32_t from_slot,to_slot;
     uint64_t from_generation,to_generation;
     bool destination_bound,smoke_box,stream_ambient_gas;
-    bool closing,closing_structure_saved,player_save_staged;
+    bool closing, closing_structure_saved, world_save_staged, liquid_seam_failed;
     dc_chunk_colors_t *save_colors;
     bool save_color_stale[DC_GPU_CHUNK_SLOTS];
     uint32_t smoke_closed;
@@ -58,8 +58,8 @@ static inline bool dc_level_chunk_visible(const dc_level_view_t *view, dc_chunk_
 /** Dispose of an unpublished level during failed construction. */
 void dc_level_view_discard(dc_level_view_t *view);
 
-/** Keep gameplay world changes private until the player inventory can be saved with them. */
-bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t cap);
+/** Stage all edits until the coupled world records can commit together. */
+bool dc_level_view_stage_world_save(dc_level_view_t *view, char *err, uint32_t cap);
 
 /** Configure the standard ambient gas model before streaming chunk stock. */
 bool dc_level_view_configure_atmosphere(dc_level_view_t *view, char *err, uint32_t cap);

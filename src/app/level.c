@@ -32,6 +32,7 @@ static bool initialize_queued_gas(dc_level_view_t *view, char *err, uint32_t cap
 }
 
 static bool save_level_structure(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (view->liquid_seam_failed) return error(err, cap, "Cannot save an unconfirmed liquid seam");
     return initialize_queued_gas(view, err, cap) && save_world_clock(view, err, cap) &&
            fr_gpu_save_level_structure(view->gpu, view->body_path, &view->table,
                                        view->gas_admitted, err, cap);
@@ -364,6 +365,7 @@ static bool publish_loaded_chunk(dc_level_view_t *view, uint32_t index,
         (admission.idle && time.seconds < view->world_seconds))
         time = (dc_chunk_time_t){.seconds = view->world_seconds, .known = true};
     view->table.slots[index].time = time;
+    view->table.slots[index].admitted_time = time;
     if (view->closing) {
         view->closing_structure_saved = false;
         view->save_color_stale[index] = true;
@@ -432,6 +434,7 @@ static bool process_results(dc_level_view_t *view, char *err, uint32_t cap) {
 }
 
 static bool schedule_saves(dc_level_view_t *view, char *err, uint32_t cap) {
+    if (view->liquid_seam_failed) return error(err, cap, "Cannot save an unconfirmed liquid seam");
     if (!initialize_queued_gas(view, err, cap)) return false;
     bool trace=getenv("DC_SAVE_TRACE")!=NULL;
     uint64_t stage=SDL_GetTicks64(),structure_ms=0,chunk_ms=0;
@@ -648,19 +651,6 @@ void dc_level_view_discard(dc_level_view_t *view) {
     free(view);
 }
 
-bool dc_level_view_stage_player_save(dc_level_view_t *view, char *err, uint32_t cap) {
-    if (view->player_save_staged) return true;
-    if (!dc_world_save_begin(view->save, err, cap)) return false;
-    const char *staging = dc_world_save_directory(view->save, true);
-    char body_path[sizeof(view->body_path)];
-    int length = snprintf(body_path, sizeof(body_path), "%s/" DC_WORLD_BODY_RECORD, staging);
-    if (length < 0 || (size_t)length >= sizeof(body_path) || !dc_stream_stage(view->stream, staging))
-        return error(err, cap, "Cannot stage player world saves");
-    memcpy(view->body_path, body_path, (size_t)length + 1);
-    view->player_save_staged = true;
-    return true;
-}
-
 static void advance_resident_chunks(dc_level_view_t *view, double seconds) {
     view->world_seconds += seconds;
     for (uint32_t i = 0; i < view->table.capacity; ++i) {
@@ -697,6 +687,7 @@ static bool execute_level_steps(dc_level_view_t *view, char *err, uint32_t cap) 
 
 bool dc_level_view_tick(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return error(err, cap, "Level view is null");
+    if (view->liquid_seam_failed) return error(err, cap, "World requires recovery from an unconfirmed liquid seam");
     if (view->players && view->pending_steps && !view->transfer_pending)
         dc_players_prepare_view(view);
     if (!process_results(view, err, cap)) return false;
@@ -1114,8 +1105,11 @@ bool dc_level_view_transfer_result(dc_level_view_t *view,
 bool dc_level_view_destroy(dc_level_view_t *view, char *err, uint32_t cap) {
     if (!view) return true;
     bool staged = dc_world_save_directory(view->save, true) != NULL;
-    bool okay = dc_camera_offscreen_service(view, true, err, cap) &&
-        (!staged || dc_players_save_inventory(view, err, cap));
+    bool okay = !view->liquid_seam_failed || error(err, cap, "Cannot close an unconfirmed liquid seam");
+    if (okay) okay = dc_camera_offscreen_service(view, true, err, cap) &&
+        dc_level_offscreen_flush_pairs(view, err, cap);
+    if (okay && staged) okay = view->players ? dc_players_save_inventory(view, err, cap) :
+        dc_player_inventory_stage(view->save, view->saved_inventory, err, cap);
     dc_players_destroy(view);
     view->closing=true;
     uint64_t save_start=SDL_GetTicks64();
