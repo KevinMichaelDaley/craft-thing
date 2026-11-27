@@ -336,6 +336,8 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
                     ASSERT_TRUE(!dc_gpu_tick_step(resident, g_err, sizeof(g_err)));
                     ASSERT_TRUE(!dc_gpu_set_fluid_interval(offscreen, intervals[i]));
                     ASSERT_TRUE(!dc_gpu_set_page(offscreen, 1u, 0u, UINT32_MAX, g_err, sizeof(g_err)));
+                    ASSERT_TRUE(!dc_gpu_upload_chunk(offscreen, tiles[EAST].slot, &initial[EAST].chunk,
+                                                     g_err, sizeof(g_err)));
                     const dc_liquid_seam_endpoint_t reordered[] = {tiles[CENTER], tiles[SOUTH], tiles[EAST]};
                     ASSERT_EQ(dc_gpu_step_water_cohort(reordered, TILE_COUNT, elapsed[step] / 60.f, g_err, sizeof(g_err)),
                               DC_LIQUID_SEAM_REJECTED);
@@ -390,6 +392,8 @@ static void test_coupled_water_matches_every_native_tick_and_recovers_once(void)
     ASSERT_EQ(resident->fluid_tick, final_tick);
     ASSERT_EQ(offscreen->fluid_tick, final_tick);
     ASSERT_TRUE(!dc_gpu_set_page(resident, 0u, 1u, UINT32_MAX, g_err, sizeof(g_err)));
+    ASSERT_TRUE(!dc_gpu_upload_chunk(resident, tiles[CENTER].slot, &initial[CENTER].chunk,
+                                     g_err, sizeof(g_err)));
     dc_gpu_destroy(resident);
     dc_gpu_destroy(offscreen);
     resident = offscreen = NULL;
