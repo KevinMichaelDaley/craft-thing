@@ -1,6 +1,6 @@
 ---
 id: ctowpe-jc8w
-status: in_progress
+status: closed
 deps: [ctowpe-utq0]
 links: []
 created: 2026-11-27T19:39:06Z
@@ -35,3 +35,7 @@ The serial-state comparison passes on :93 without validation. With synchronizati
 **2026-11-27T20:18:05Z**
 
 The instrumented validation setup progressed from 21 visible slots/0 admitted rooms at 47 s to 58 slots/5 rooms at 142 s. Twelve slots were still loading. The fixture now tracks confirmed admissions and resident slots and applies its timeout only when both stop progressing, while requiring the full ready state on a single tick.
+
+**2026-11-27T20:27:04Z**
+
+The 17-room regular fixture passed the original clock/stock/serial-state assertions with synchronization validation after progress-aware setup. The irregular-frame reference including a moving grain also passed. At 8503946e all six camera means passed and three p95 gates passed; the remaining three are on the parent performance ticket.

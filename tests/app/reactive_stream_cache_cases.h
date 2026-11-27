@@ -335,11 +335,12 @@ static bool step_watched_camera_frame(dc_level_view_t *view, dc_offscreen_t *con
 static bool admit_saturated_camera_rooms(dc_level_view_t *view, dc_chunk_t *chunk,
         dc_chunk_coord_t *rooms, unsigned room_count, unsigned screens,
         dc_offscreen_t **owners, char *err, uint32_t cap) {
+    enum { STALL_MS = 120000u };
     if (!seed_saturated_rooms(view, chunk, rooms, room_count, err, cap) ||
         !dc_level_view_wait_visible(view, 120000u, err, cap) ||
-        !dc_level_view_pan_pixels(view, (int32_t)screens * VIEW_WIDTH, 0) ||
-        !dc_level_view_wait_visible(view, 120000u, err, cap)) return false;
-    const uint64_t deadline = SDL_GetTicks64() + 120000u;
+        !dc_level_view_pan_pixels(view, (int32_t)screens * VIEW_WIDTH, 0)) return false;
+    uint64_t deadline = SDL_GetTicks64() + STALL_MS;
+    unsigned peak_admitted = 0, peak_resident = 0;
     do {
         if (!dc_level_view_tick(view, err, cap)) return false;
         unsigned count = 0;
@@ -348,9 +349,21 @@ static bool admit_saturated_camera_rooms(dc_level_view_t *view, dc_chunk_t *chun
             if (count == DC_CAMERA_WORKSPACE_LIMIT || !h->workspace->time.known) return false;
             owners[count++] = h->workspace;
         }
-        if (count == DC_CAMERA_WORKSPACE_LIMIT) return true;
+        unsigned resident = 0;
+        for (uint32_t i = 0; i < view->table.capacity; ++i) {
+            const dc_chunk_slot_t *slot = &view->table.slots[i];
+            if (slot->state == DC_SLOT_ACTIVE && dc_level_chunk_visible(view, slot->coord)) ++resident;
+        }
+        if (count == DC_CAMERA_WORKSPACE_LIMIT && resident == SIM_CHUNKS_X * SIM_CHUNKS_Y &&
+            !view->pending_chunk_dx && !view->pending_chunk_dy && dc_camera_offscreen_ready(view))
+            return true;
+        if (count > peak_admitted || resident > peak_resident) deadline = SDL_GetTicks64() + STALL_MS;
+        if (count > peak_admitted) peak_admitted = count;
+        if (resident > peak_resident) peak_resident = resident;
         SDL_Delay(1);
     } while (SDL_GetTicks64() < deadline);
+    snprintf(err, cap, "Saturated camera stalled after admitting %u owners and %u visible slots",
+             peak_admitted, peak_resident);
     return false;
 }
 
@@ -427,6 +440,13 @@ static void test_paced_middle_rooms_preserve_fractional_steps_across_irregular_f
     ASSERT_TRUE(probe);
     dc_stream_result_t initial = {0};
     ASSERT_TRUE(dc_offscreen_snapshot(owners[0], probe->coord, probe->generation, &initial, err, sizeof(err)));
+    const uint32_t grain = 20u * DC_CHUNK_SIDE + 32u;
+    initial.chunk->cells[grain].material = DC_MATERIAL_SAND;
+    dc_chunk_seed_particles(initial.chunk);
+    initial.chunk->particles[grain].vx_fp = DC_FLUID_FULL;
+    uint32_t slot;
+    ASSERT_TRUE(initial.chunk->particle_count == 1u && dc_offscreen_page_at(owners[0], probe->coord, &slot) &&
+                dc_gpu_upload_chunk(owners[0]->gpu, slot, initial.chunk, err, sizeof(err)));
     dc_offscreen_t *reference = dc_offscreen_create(view->gpu, owners[0]->origin, err, sizeof(err));
     ASSERT_TRUE(reference && dc_offscreen_admit(reference, &initial, probe->generation, err, sizeof(err)));
     dc_stream_result_release(&initial);
@@ -448,6 +468,9 @@ static void test_paced_middle_rooms_preserve_fractional_steps_across_irregular_f
     ASSERT_EQ(memcmp(actual.chunk->cells, expected.chunk->cells, sizeof(chunk->cells)), 0);
     ASSERT_EQ(memcmp(actual.chunk->face_velocity, expected.chunk->face_velocity, sizeof(chunk->face_velocity)), 0);
     ASSERT_TRUE(camera_markers_match(actual.chunk, expected.chunk));
+    ASSERT_TRUE(actual.chunk->particle_count > 0u);
+    ASSERT_EQ(actual.chunk->particle_count, expected.chunk->particle_count);
+    ASSERT_EQ(memcmp(actual.chunk->particles, expected.chunk->particles, sizeof(chunk->particles)), 0);
     dc_stream_result_release(&actual);
     dc_stream_result_release(&expected);
     dc_offscreen_destroy(reference);

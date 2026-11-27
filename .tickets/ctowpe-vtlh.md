@@ -63,3 +63,7 @@ Pressure reuse at 4bbe76ec passed 7/7 Vulkan pressure checks and all 720 gates. 
 **2026-11-27T20:18:05Z**
 
 Regular-frame pacing at 28413683: half-native near/middle/far mean/p95 ms = 23.044/33.619, 22.824/28.254, 22.242/29.696. Native = 25.609/32.550, 26.016/33.743, 25.965/35.490. Three of six p95 gates now pass; all six means and all three 720 cases pass. Native-step planning at 8503946e is being measured separately.
+
+**2026-11-27T20:27:04Z**
+
+At 8503946e all 16 owners advanced 2.000000104 seconds per band. Mean/p95 ms near/middle/far: half-native 23.376/35.361, 22.521/30.103, 22.358/28.759; native 26.004/32.696, 25.933/33.940, 26.382/39.327. 720 dry/dense/exact concave p95 4.993/12.417/22.625 ms. Interval correctness now passes for regular and irregular frame input. A rotating-owner half-native trace samples each marker dispatch, pressure and transport, and tracks resident presentation time per frame.

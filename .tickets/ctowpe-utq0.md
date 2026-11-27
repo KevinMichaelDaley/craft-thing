@@ -1,6 +1,6 @@
 ---
 id: ctowpe-utq0
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T19:53:26Z
@@ -30,3 +30,7 @@ Native RTX reproduction confirmed on hidden :93: the seven real middle-band fram
 **2026-11-27T20:11:56Z**
 
 GREEN on hidden :93: all 16 middle-band owners and their water state now match serial replay on the seven-frame reproduction and drain. Regular pacing and middle cadence also pass. A host cross-check exercised 262144 randomized service calls against the real replay planning functions, comparing every native duration byte-for-byte with serial execution. A rejected group retained its queued steps and confirmed time.
+
+**2026-11-27T20:27:04Z**
+
+Final GPU regression passed under Vulkan synchronization validation on hidden Xephyr :93. All sixteen owner clocks, water cells, face velocities, complete markers and the live sand grain particle records matched the serial native reference after the seven irregular frames. The regular 16-owner comparison also passed. Actual near/middle/far p95: half-native 35.361/30.103/28.759 ms; native 32.696/33.940/39.327. All 720 mean/p95 gates passed. Remaining camera timing work is tracked by ctowpe-vtlh.

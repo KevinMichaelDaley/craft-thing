@@ -58,6 +58,8 @@ struct dc_offscreen {
     uint64_t generations[OFFSCREEN_SLOTS];
     dc_chunk_time_t time;
     double due_seconds;
+    /* Each entry retains the target used to compute one native step. Only
+       time is confirmed; replay_end is the endpoint after all queued steps. */
     double replay_targets[OFFSCREEN_STEP_LIMIT], replay_end;
     unsigned replay_count;
     uint32_t held_writes, references;
