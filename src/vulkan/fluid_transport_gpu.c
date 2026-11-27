@@ -4,7 +4,7 @@
 
 void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     const VkPipeline pipelines[2], uint32_t width, uint32_t height, uint32_t seam_axis) {
-    enum { UPWARD = 0u, LATERAL = 1u };
+    enum { UPWARD = 0u, LATERAL = 1u, FIRST_DISPLACEMENT_MODE = 11u };
     const uint32_t order[] = {LATERAL, UPWARD};
     uint32_t push[4] = {width, height, 0u, seam_axis};
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -12,7 +12,7 @@ void dc_gpu_record_water_displacement(dc_gpu_t *gpu, VkDescriptorSet descriptor,
     for (uint32_t i = 0; i < sizeof(order) / sizeof(order[0]); ++i) {
         const uint32_t mode = order[i];
         const uint32_t lines = mode == LATERAL ? height : width;
-        push[2] = 11u + mode;
+        push[2] = FIRST_DISPLACEMENT_MODE + mode;
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, pipelines[mode]);
         vkCmdPushConstants(gpu->command, gpu->pipeline_layout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, (seam_axis ? 4u : 3u) * sizeof(uint32_t), push);

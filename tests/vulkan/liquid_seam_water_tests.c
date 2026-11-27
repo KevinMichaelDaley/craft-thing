@@ -248,6 +248,10 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
         uint32_t *inactive_counts = owner ? ep.gpu->marker_count_a_mapped : ep.gpu->marker_count_b_mapped;
         inactive_counts[ep.slot] = 0u;
     }
+    ASSERT_TRUE(dc_gpu_plan_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
+                                      plan, g_err, sizeof(g_err)));
+    for (uint32_t lane = 0; lane < DC_CHUNK_SIDE; ++lane)
+        ASSERT_INT_EQ(plan->displaced_fp[lane], 0);
     seed_apertures(owners[0].gpu, y_axis, DC_CHUNK_SIDE, 0);
     owners[0].gpu->rigid_occupancy_present = true;
     const dc_liquid_seam_endpoint_t occupied = owners[y_axis];
@@ -364,7 +368,8 @@ static void compare_plan(dc_liquid_seam_axis_t axis) {
     memset(plan, 0, sizeof(*plan));
     if (y_axis) g_submit_fault = LOSE_ACKNOWLEDGEMENT;
     ASSERT_EQ(dc_gpu_execute_water_seam(owners[0], owners[1], axis, step_seconds, NULL,
-        plan, g_err, sizeof(g_err)), y_axis ? DC_LIQUID_SEAM_UNCONFIRMED : DC_LIQUID_SEAM_COMMITTED);
+        y_axis ? NULL : plan, g_err, sizeof(g_err)),
+        y_axis ? DC_LIQUID_SEAM_UNCONFIRMED : DC_LIQUID_SEAM_COMMITTED);
     if (y_axis) {
         ASSERT_INT_EQ(plan->crossing_fp[FORWARD], 0);
         ASSERT_TRUE(dc_gpu_liquid_seam_pending(owners[0].gpu) && dc_gpu_liquid_seam_pending(owners[1].gpu));

@@ -372,21 +372,17 @@ static bool prepare_publication(dc_gpu_t *gpu, dc_gpu_t *peer, bool thermal,
            dc_gpu_prepare_water_publication(gpu, peer, &scratch->publication, buffers, err, cap);
 }
 
-static void record_stage_readback(VkCommandBuffer command, VkBuffer buffer,
-                                  const VkBufferCopy *regions, uint32_t count) {
+static void record_stage_readback(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch,
+                                  unsigned crossing_snapshot, bool include_velocity) {
+    const VkBufferCopy regions[] = {
+        {scratch->offset[CROSSINGS], scratch->offset[crossing_snapshot], buffer_layout[CROSSINGS].size},
+        {scratch->offset[VELOCITY], scratch->offset[PROJECTED_VELOCITY], buffer_layout[VELOCITY].size}
+    };
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
-    vkCmdCopyBuffer(command, buffer, buffer, count, regions);
+    vkCmdCopyBuffer(command, scratch->buffer, scratch->buffer, include_velocity ? 2u : 1u, regions);
     fr_renderer_barrier(command, VK_PIPELINE_STAGE_2_COPY_BIT, 0, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, 0);
-}
-
-static void record_advection_readback(VkCommandBuffer command, const struct dc_gpu_seam_projection *scratch) {
-    const VkBufferCopy regions[] = {
-        {scratch->offset[VELOCITY], scratch->offset[PROJECTED_VELOCITY], buffer_layout[VELOCITY].size},
-        {scratch->offset[CROSSINGS], scratch->offset[ADVECTION_CROSSINGS], buffer_layout[CROSSINGS].size}
-    };
-    record_stage_readback(command, scratch->buffer, regions, 2u);
 }
 
 static dc_liquid_seam_result_t run_seam(dc_liquid_seam_endpoint_t first, dc_liquid_seam_endpoint_t second,
@@ -453,16 +449,12 @@ static dc_liquid_seam_result_t run_seam(dc_liquid_seam_endpoint_t first, dc_liqu
     const uint32_t seam_axis = axis == DC_LIQUID_SEAM_X ? DC_WATER_SEAM_HORIZONTAL : DC_WATER_SEAM_VERTICAL;
     if (transport && occupancy)
         dc_gpu_record_water_displacement(gpu, scratch->sets[0], scratch->displacement, width, height, seam_axis);
-    if (plan) {
-        const VkBufferCopy displaced = {scratch->offset[CROSSINGS], scratch->offset[DISPLACEMENT_CROSSINGS],
-                                         buffer_layout[CROSSINGS].size};
-        record_stage_readback(command, scratch->buffer, &displaced, 1u);
-    }
+    if (plan) record_stage_readback(command, scratch, DISPLACEMENT_CROSSINGS, false);
     dc_gpu_record_dense_projection(gpu, scratch->sets, width, height, seconds * 60.f);
     if (transport) {
         dc_gpu_record_water_seam_transport(gpu, scratch->sets[0], scratch->transport, width, height,
                                             seconds * 60.f, occupancy, seam_axis);
-        if (plan) record_advection_readback(command, scratch);
+        if (plan) record_stage_readback(command, scratch, ADVECTION_CROSSINGS, true);
         dc_gpu_record_water_seam_correction(gpu, scratch->sets[0], scratch->correction,
                                             width, height, seconds * 60.f, seam_axis);
     }
