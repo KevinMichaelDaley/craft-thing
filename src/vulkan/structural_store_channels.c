@@ -66,7 +66,7 @@ bool dc_checkpoint_channels_set_times(dc_checkpoint_channels_t *p,
 
 bool dc_checkpoint_channels_decode_times(dc_checkpoint_channels_t *p,uint32_t count) {
     if (p->version < DC_STRUCTURE_TIME_VERSION) return true;
-    if (!count || count > DC_GPU_CHUNK_SLOTS * 2u ||
+    if (!p->time_bytes || !count || count > DC_GPU_CHUNK_SLOTS * 2u ||
         p->time_length != (size_t)count * sizeof(uint64_t)) return false;
     dc_chunk_time_t *times = calloc(count, sizeof(*times));
     if (!times) return false;
