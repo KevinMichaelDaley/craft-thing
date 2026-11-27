@@ -19,20 +19,32 @@ static bool isolated_solvers(const dc_gpu_t *gpu) {
         !fr_thermal_gpu_enabled(gpu) && !fr_combustion_gpu_enabled(gpu);
 }
 
+static bool cell_has_transport_stock(const dc_stream_result_t *snapshot, uint32_t index) {
+    if (snapshot->chunk->cells[index].fluid_mass ||
+        (snapshot->bulk && (snapshot->bulk->oil_fp[index] || snapshot->bulk->slime_fp[index])))
+        return true;
+    const fr_gas_checkpoint_chunk_t *gas = snapshot->gas;
+    if (!gas) return false;
+    if (gas->carrier_tail[index][0] || gas->carrier_tail[index][1]) return true;
+    for (uint32_t species = 0; species < FR_GAS_SPECIES; ++species) {
+        if (gas->cells[index][species]) return true;
+    }
+    return false;
+}
+
+static bool has_transport_stock(const dc_stream_result_t *snapshot) {
+    for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
+        if (cell_has_transport_stock(snapshot, i)) return true;
+    }
+    return false;
+}
+
 static bool closed_edge_cell(const dc_stream_result_t *snapshot, uint32_t index) {
     const dc_cell_t *cell = snapshot->chunk->cells + index;
-    if (cell->material != DC_MATERIAL_STONE || !(cell->flags & DC_CELL_LOADED_TERRAIN) ||
-        (cell->flags & DC_CELL_RELEASED_TERRAIN) ||
-        cell->fluid_mass || (snapshot->bulk && (snapshot->bulk->oil_fp[index] ||
-                                               snapshot->bulk->slime_fp[index]))) return false;
-    const fr_gas_checkpoint_chunk_t *gas = snapshot->gas;
-    if (!gas) return true;
-    if (gas->cells[index][GAS_CHECKPOINT_VOLUME_WORD] || gas->carrier_tail[index][0] ||
-        gas->carrier_tail[index][1]) return false;
-    for (uint32_t species = 0; species < FR_GAS_SPECIES; ++species) {
-        if (gas->cells[index][species]) return false;
-    }
-    return true;
+    return cell->material == DC_MATERIAL_STONE && (cell->flags & DC_CELL_LOADED_TERRAIN) &&
+        !(cell->flags & DC_CELL_RELEASED_TERRAIN) &&
+        (!snapshot->gas || !snapshot->gas->cells[index][GAS_CHECKPOINT_VOLUME_WORD]) &&
+        !cell_has_transport_stock(snapshot, index);
 }
 
 bool dc_camera_offscreen_isolated(const dc_level_view_t *view, const dc_stream_result_t *snapshot) {
@@ -54,7 +66,7 @@ void dc_camera_offscreen_offer(dc_level_view_t *view, const dc_stream_result_t *
     dc_camera_offscreen_t *camera = &view->camera_offscreen;
     if (camera->phase != DC_CAMERA_OFFSCREEN_IDLE || view->closing ||
         dc_level_chunk_visible(view, snapshot->coord) || !dc_chunk_owner_valid(owner) ||
-        !dc_camera_offscreen_isolated(view, snapshot)) return;
+        !dc_camera_offscreen_isolated(view, snapshot) || !has_transport_stock(snapshot)) return;
     *camera = (dc_camera_offscreen_t){.coord = snapshot->coord, .owner = owner,
         .time = snapshot->time, .generation = write_generation, .phase = DC_CAMERA_OFFSCREEN_SAVING};
 }
