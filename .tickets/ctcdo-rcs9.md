@@ -1,7 +1,7 @@
 ---
 id: ctcdo-rcs9
 status: in_progress
-deps: [ctdot-kbys, ctols-xhuy]
+deps: [ctdot-kbys, ctols-xhuy, ctols-vhg9]
 links: []
 created: 2026-11-27T04:17:01Z
 type: task
@@ -32,3 +32,7 @@ The archived split-workspace conservation tests and interface shader start at 8d
 **2026-11-27T04:47:30Z**
 
 The archived split-river, reverse-flow and vertical seam fixtures give reference geometries. Its transfer_gas routine moves material ID 6, now mortar debris, so use the current five-species gas field and its pressure and energy state. For liquids, the current bulk packet also owns oil and slime momentum and retained inventory. Exercise the pair at one confirmed boundary with matching ownership generations before enabling open camera evictions.
+
+**2026-11-27T05:22:16Z**
+
+The shared-device liquid commit can apply a signed plan for water, oil and slime while preserving extensive channels. ctols-vhg9 owns the paired owner generations, epoch, replay control and cold recovery prerequisite. Current pressure-derived planning and conservative gas and grain exchange remain part of this parent.

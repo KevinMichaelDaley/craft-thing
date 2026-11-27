@@ -51,3 +51,7 @@ Correction to the previous peak note: 334.86 K was the summary printed by the ol
 **2026-11-27T04:12:38Z**
 
 The ancestor gas-pigment full make test run exited 2 at tests/app/forest_bonfire_tests.c:455 (!run.timed_out) during the locked still-air 180-second case. The other four forest cases completed. Concurrent GPU workloads were present; the cause of the timeout is unconfirmed. Recheck the case in isolation before using it to assess a streaming change.
+
+**2026-11-27T05:15:29Z**
+
+The pinned stream-transactions suite at 531a2f4eebe5808643b0ab1694c076c1751a1f13 reached the forest checks and exited 2. The west crosswind case failed tests/app/forest_bonfire_tests.c:580 (!run.timed_out), while the other four forest cases passed. Other Vulkan workloads were active. This records a second timeout variant for the isolated reproduction, with the cause still unconfirmed.

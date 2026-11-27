@@ -1,6 +1,6 @@
 ---
 id: ctols-xhuy
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-27T05:01:33Z
@@ -21,3 +21,9 @@ Validate both mapped endpoints and the full face plan before any stock changes. 
 ## Acceptance Criteria
 
 Native tests move water, oil and slime in both directions on real shared contexts, conserve exact stock, heat and momentum, and show a rejected lane or stale page leaves the whole face unchanged. Keep automatic open camera enablement under the parent.
+
+## Notes
+
+**2026-11-27T05:22:16Z**
+
+The shared RTX Vulkan transaction passed four native cases with core and synchronization validation. Water, oil and slime moved in both directions, including a simultaneous two-lane swap between full cells. Exact stock, retained inventory, water heat, water color and bulk heat and momentum were checked. A blocked, full or retained-stock lane rejects the whole face, including its otherwise valid lanes. Stale slot and world-coordinate bindings are rejected before dispatch. An injected lost acknowledgement after completion returned unconfirmed with the two actual deltas equal and opposite. The broader 31 Vulkan cases, 80 host cases, shader validation and build dependency checks passed.

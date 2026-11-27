@@ -211,18 +211,26 @@ static void test_vertical_face_accepts_reverse_flow_and_simultaneous_full_cell_s
     f.bulk_a->oil_fp[a] = DC_FLUID_FULL - 8192u;
     f.bulk_b->oil_fp[b] = DC_FLUID_FULL - 24576u - 8192u;
     f.bulk_b->slime_fp[b] = 8192u;
+    f.a->cells[a + 1u].fluid_mass = f.b->cells[b].fluid_mass;
+    f.b->cells[b + 1u].fluid_mass = f.a->cells[a].fluid_mass;
+    f.bulk_a->oil_fp[a + 1u] = f.bulk_b->oil_fp[b];
+    f.bulk_b->oil_fp[b + 1u] = f.bulk_a->oil_fp[a];
+    f.bulk_a->slime_fp[a + 1u] = f.bulk_b->slime_fp[b];
     ASSERT_TRUE(seed_endpoint(f.first, f.a, f.bulk_a) && seed_endpoint(f.second, f.b, f.bulk_b));
     dc_liquid_seam_flux_t flux[DC_CHUNK_SIDE] = {0};
     flux[lane] = (dc_liquid_seam_flux_t){-8192, 12288, -4096};
+    flux[lane + 1u] = (dc_liquid_seam_flux_t){8192, -12288, 4096};
     ASSERT_EQ(dc_gpu_commit_liquid_seam(f.first, f.second, DC_LIQUID_SEAM_Y, flux,
         g_err, sizeof(g_err)), DC_LIQUID_SEAM_COMMITTED);
     ASSERT_TRUE(download_endpoint(f.first, f.a, f.bulk_a) && download_endpoint(f.second, f.b, f.bulk_b));
-    ASSERT_EQ(f.a->cells[a].fluid_mass, 16384u);
-    ASSERT_EQ(f.b->cells[b].fluid_mass, 16384u);
-    ASSERT_EQ(f.bulk_a->oil_fp[a], 45056u);
-    ASSERT_EQ(f.bulk_b->oil_fp[b], 45056u);
-    ASSERT_EQ(f.bulk_a->slime_fp[a], 4096u);
-    ASSERT_EQ(f.bulk_b->slime_fp[b], 4096u);
+    for (uint32_t i = 0; i < 2u; ++i) {
+        ASSERT_EQ(f.a->cells[a + i].fluid_mass, 16384u);
+        ASSERT_EQ(f.b->cells[b + i].fluid_mass, 16384u);
+        ASSERT_EQ(f.bulk_a->oil_fp[a + i], 45056u);
+        ASSERT_EQ(f.bulk_b->oil_fp[b + i], 45056u);
+        ASSERT_EQ(f.bulk_a->slime_fp[a + i], 4096u);
+        ASSERT_EQ(f.bulk_b->slime_fp[b + i], 4096u);
+    }
     ASSERT_EQ(dc_gpu_validation_errors(f.first.gpu), 0u);
     destroy_fixture(&f);
     PASS();
