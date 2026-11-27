@@ -23,3 +23,7 @@ Exercise the real camera path with multiple independently due owners. Record eac
 **2026-11-27T18:12:33Z**
 
 The new camera cadence assertion compiled and failed on separate Vulkan submissions, while both owner clocks reached their expected values. After batching, it passed with both owner command buffers observed in one vkQueueSubmit. The opposite-edge return and 17-room saturation tests also passed on hidden Xephyr with synchronization validation. Each batch executes the existing solver command sequence per owner, waits on a shared fence, and commits only the affected clocks.
+
+**2026-11-27T18:20:40Z**
+
+The d50c4f60 refactor passed all three camera checks and all four workspace checks under Vulkan synchronization validation on persistent hidden :93. The injected failure after a completed group submission confirmed that only the earlier successful round updated its participating clocks, and a room that had already reached its target stayed usable. The cold-storage regression preserved gas species exactly. The half-native near benchmark improved from 31.031/49.009 ms mean/p95 at 47e99db4 to 26.412/42.568 ms with the same 16 owners and 2.000000104 s simulated. The broader frame budget remains open.
