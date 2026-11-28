@@ -37,6 +37,29 @@ static bool snapshot(dc_gpu_t *g, const char *name, uint32_t *pixels,
     SDL_FreeSurface(surface);
   return okay;
 }
+
+/* Sample above the stone floor, where only the two extracted bodies can
+ * occlude. The readings are outside the timed frame loop. */
+enum { OPTICAL_COLUMNS = 120, OPTICAL_ROWS = 61 };
+static bool read_body_opacity(dc_gpu_t *gpu, float *opacity, char *err) {
+  unsigned opaque = 0;
+  for (unsigned row = 0; row < OPTICAL_ROWS; ++row) {
+    for (unsigned col = 0; col < OPTICAL_COLUMNS; ++col) {
+      unsigned x = 4 * col, y = 4 * row;
+      uint32_t occupant;
+      fr_occlusion_node_t node;
+      if (!dc_gpu_read_occupancy(gpu, x, y, &occupant, NULL, err, 256) ||
+          !fr_renderer_read_opacity(gpu, x, y, &node) || !node.known ||
+          !(node.maximum >= 0.f && node.maximum <= 1.f) ||
+          (!occupant && node.maximum != 0.f))
+        return false;
+      opacity[row * OPTICAL_COLUMNS + col] = node.maximum;
+      if (node.maximum > .99f) ++opaque;
+    }
+  }
+  return opaque > 0;
+}
+
 static void
 test_two_concave_textured_bodies_with_colored_lights_sun_and_stable_pause(
     void) {
@@ -64,6 +87,10 @@ test_two_concave_textured_bodies_with_colored_lights_sun_and_stable_pause(
   ASSERT_TRUE(
       snapshot(g, "build/screenshots/renderer_lit_before.bmp", pixels, err));
   ASSERT_TRUE(memcmp(paused, pixels, 480 * 270 * 4) != 0);
+  float before[OPTICAL_COLUMNS * OPTICAL_ROWS], moved[OPTICAL_COLUMNS * OPTICAL_ROWS];
+  ASSERT_TRUE(read_body_opacity(g, before, err));
+  ASSERT_EQ(before[10 * OPTICAL_COLUMNS + 45], 1.f);
+  ASSERT_EQ(before[10 * OPTICAL_COLUMNS + 55], 0.f);
   uint32_t count;
   ASSERT_TRUE(dc_gpu_read_pixel_shape(g, 0x80000001u, NULL, 0, &count, err,
                                       sizeof(err)));
@@ -93,6 +120,13 @@ test_two_concave_textured_bodies_with_colored_lights_sun_and_stable_pause(
               fabsf(b.mass - 2894.4f) < .003f);
   ASSERT_TRUE(
       snapshot(g, "build/screenshots/renderer_lit_motion.bmp", pixels, err));
+  ASSERT_TRUE(read_body_opacity(g, moved, err));
+  unsigned cleared = 0, newly_opaque = 0;
+  for (unsigned i = 0; i < OPTICAL_COLUMNS * OPTICAL_ROWS; ++i) {
+    if (before[i] > .99f && moved[i] == 0.f) ++cleared;
+    if (before[i] == 0.f && moved[i] > .99f) ++newly_opaque;
+  }
+  ASSERT_TRUE(cleared > 0 && newly_opaque > 0);
   memcpy(paused, pixels, 480 * 270 * 4);
   for (unsigned frame = 0; frame < 4; frame++) {
     ASSERT_TRUE(dc_gpu_present_chunks(g, err, sizeof(err)));
@@ -106,6 +140,12 @@ test_two_concave_textured_bodies_with_colored_lights_sun_and_stable_pause(
   ASSERT_TRUE(dc_gpu_present_chunks(g, err, sizeof(err)));
   ASSERT_TRUE(
       snapshot(g, "build/screenshots/renderer_brick_rings.bmp", pixels, err));
+  ASSERT_TRUE(memcmp(paused, pixels, 480 * 270 * sizeof(*pixels)) != 0);
+  ASSERT_TRUE(read_body_opacity(g, before, err));
+  ASSERT_EQ(memcmp(before, moved, sizeof(moved)), 0);
+  printf("Rotation cleared %u opaque samples and occupied %u new ones; "
+         "material restyling preserved all %u optical samples\n", cleared,
+         newly_opaque, OPTICAL_COLUMNS * OPTICAL_ROWS);
   printf("Displayed480x270, actual physics+renderer %.2f ticks/s (%u "
          "frames/%.3fs), exact mass and four identical paused frames\n",
          90 / elapsed, 90u, elapsed);
