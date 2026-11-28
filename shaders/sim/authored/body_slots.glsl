@@ -1,5 +1,5 @@
 /* One availability mask per workgroup, followed by the two inclusive prefix planes. */
-const uint SLOT_GROUP_SIZE=128u, SLOT_MASK_WORDS=4u;
+const uint SLOT_GROUP_SIZE=128u, SLOT_MASK_WORDS=4u, FAIL_BODY_CAPACITY=8u;
 shared uint group_masks[SLOT_MASK_WORDS];
 
 void plan_body_slots() {
@@ -40,7 +40,7 @@ void plan_body_slots() {
     }
     prefix+=groups*params.padding;
     if(words[prefix+groups-1u]<needed) {
-        if(group==0u && lane==0u) atomicOr(words[2],8u);
+        if(group==0u && lane==0u) atomicOr(words[2],FAIL_BODY_CAPACITY);
         return;
     }
     uint mask_base=base+group*SLOT_MASK_WORDS;

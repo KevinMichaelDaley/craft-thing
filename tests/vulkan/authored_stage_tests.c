@@ -368,7 +368,7 @@ static void test_component_plan_only_offers_available_live_slots(void) {
     ASSERT_EQ(diagnostic.rigid_components,2u);
     ASSERT_TRUE(!dc_gpu_body_record(gpu,original-1)->body.active);
 
-    ASSERT_TRUE(dc_gpu_runtime_bodies_reserve(gpu,original*4,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_runtime_bodies_reserve(gpu,original*8,err,sizeof(err)));
     dc_gpu_body_owner(gpu,original)->state=DC_BODY_OWNER_RESERVED;
     dc_gpu_body_owner(gpu,original+1)->generation=UINT32_MAX;
     dc_gpu_body_record(gpu,original+2)->reserved[0]=DC_GPU_STRUCTURAL_TAG;
@@ -382,6 +382,15 @@ static void test_component_plan_only_offers_available_live_slots(void) {
     ASSERT_EQ(dc_gpu_body_owner(gpu,original+1)->generation,UINT32_MAX);
     ASSERT_EQ(dc_gpu_body_record(gpu,original+2)->reserved[0],DC_GPU_STRUCTURAL_TAG);
     ASSERT_EQ(dc_gpu_body_record(gpu,0)->body.id,100u);
+    uint32_t next=original*5+3;
+    for (uint32_t slot=original+3;slot<next;++slot)
+        dc_gpu_body_owner(gpu,slot)->state=DC_BODY_OWNER_RESERVED;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].body_slot,original-1);
+    ASSERT_EQ(plans[1].body_slot,next);
+    printf("Sparse body admission retained live ownership and proposed slots %u and %u\n",
+           plans[0].body_slot,plans[1].body_slot);
     dc_gpu_destroy(gpu); PASS();
 }
 

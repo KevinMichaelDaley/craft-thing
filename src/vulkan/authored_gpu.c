@@ -9,7 +9,7 @@
 enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
        STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 22, STAGE_GRAPH_REFERENCES = 8,
        STAGE_BODY_MASKS = 9, STAGE_BODY_PREFIX = 10, STAGE_BODY_SLOTS = 11,
-       STAGE_BODY_GROUP_WORDS = 6, STAGE_PHASES = 12 };
+       STAGE_BODY_GROUP_WORDS = 6, STAGE_LANES = 128, STAGE_PHASES = 12 };
 _Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
 _Static_assert(FR_STRUCTURAL_MEMBER_CAPACITY < 32u, "Member coverage must fit a GPU word");
@@ -38,6 +38,16 @@ static bool error(char *err, uint32_t cap, const char *reason) {
     return false;
 }
 
+static uint32_t stage_groups(uint32_t items) {
+    return 1u + (items - 1u) / STAGE_LANES;
+}
+
+static void dispatch_groups(VkCommandBuffer command, uint32_t groups) {
+    /* Vulkan guarantees 65,535 groups in each dimension. */
+    uint32_t x = groups > 65535u ? 65535u : groups;
+    vkCmdDispatch(command, x, 1u + (groups - 1u) / x, 1);
+}
+
 static void destroy_stage(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s) {
     if (!s) return;
     for (unsigned i = 0; i < STAGE_PHASES; i++)
@@ -60,7 +70,7 @@ void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
 
 static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_stage **out,
                        char *err, uint32_t cap) {
-    uint32_t body_groups=1u+(dc_gpu_body_capacity(gpu)-1u)/128u;
+    uint32_t body_groups = stage_groups(dc_gpu_body_capacity(gpu));
     VkDeviceSize bytes = ((VkDeviceSize)STAGE_HEADER_WORDS +
                           (VkDeviceSize)count * (STAGE_WORDS_PER_PIXEL + STAGE_PLAN_WORDS) +
                           DC_STRUCTURAL_GRAPH_WORDS+(VkDeviceSize)body_groups*STAGE_BODY_GROUP_WORDS) * sizeof(uint32_t);
@@ -174,7 +184,7 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
     uint32_t push[4] = {r->width, r->height, r->structure != NULL, 0};
     vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     for (uint32_t phase = 0; phase < STAGE_PHASES; phase++) {
-        uint32_t groups = (count + 127u) / 128u;
+        uint32_t groups = stage_groups(count);
         if (phase == STAGE_GRAPH_REFERENCES) {
             if (!r->structure) continue;
             groups = r->structure->node_count + r->structure->member_count +
@@ -188,9 +198,7 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
             for (uint32_t offset = 1; offset < items; offset *= 2u) {
                 push[3] = offset * 2u + parity;
                 vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-                uint32_t n=(items+127u)/128u;
-                uint32_t x=n>65535u ? 65535u : n;
-                vkCmdDispatch(gpu->command,x,(n+x-1u)/x,1);
+                dispatch_groups(gpu->command, stage_groups(items));
                 stage_barrier(gpu, false);
                 parity ^= 1u;
             }
@@ -198,8 +206,7 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
             vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         } else {
             if(phase==STAGE_BODY_MASKS || phase==STAGE_BODY_SLOTS) groups=s->body_groups;
-            uint32_t x=groups>65535u ? 65535u : groups;
-            vkCmdDispatch(gpu->command,x,(groups+x-1u)/x,1);
+            dispatch_groups(gpu->command, groups);
             stage_barrier(gpu, false);
         }
     }
@@ -221,7 +228,7 @@ bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
         return error(err, cap, "Cannot reach authored staging boundary");
     uint32_t count = r->width * r->height;
     if (gpu->authored_stage && gpu->authored_stage->pixels == count &&
-        gpu->authored_stage->body_groups == 1u+(dc_gpu_body_capacity(gpu)-1u)/128u)
+        gpu->authored_stage->body_groups == stage_groups(dc_gpu_body_capacity(gpu)))
         return stage_request(gpu, gpu->authored_stage, r, err, cap);
     struct dc_gpu_authored_stage *replacement = NULL;
     if (!stage_init(gpu, count, &replacement, err, cap) ||

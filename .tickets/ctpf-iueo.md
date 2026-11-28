@@ -63,3 +63,7 @@ The GPU preflight admitted a NaN joint stiffness. It now validates all eight mec
 **2026-11-28T06:48:20Z**
 
 The GPU component planner counted 7 tiles and 254 words for a shape that the production sparse encoder stored in 4 tiles / 146 words. Planning now uses the same 16x16 tile layout, header and tile-record sizes as runtime checkpoint conversion. A concave 73-pixel shape crosses horizontal and vertical tile boundaries and re-enters an occupied tile on a separate prong. The final footprint matches byte-for-byte storage length, with both empty directory entries retained. Authored staging 12/12 and pixel geometry 7/7 pass with synchronization validation; spirv-val passes.
+
+**2026-11-28T06:54:31Z**
+
+A native RED admitted two new components even when 63 of 64 live body slots were already occupied. Staging now reads the addressed body directory on the GPU and creates stable tentative slot assignments from available records and ownership generations. Insufficient capacity sets the shared capacity failure bit without claiming any slot. After growth to 512 slots and changes to reservations on the same staged canvas, the final plan chose slots 63 and 323, skipping a whole unavailable workgroup, exhausted generations, reserved owners and structural tags. Current body IDs and owners were preserved. All 13 staging cases and the body allocator probe passed core and synchronization validation. The slot plan is tentative; final joint publication remains open.

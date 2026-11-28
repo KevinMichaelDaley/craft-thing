@@ -220,7 +220,7 @@ build/prop_asset.o: src/assets/prop.c include/ferrum/assets/prop.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/authored_request.o: src/structural/authoring.c include/ferrum/structural/authoring.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
+build/authored_gpu.o: src/vulkan/authored_gpu.c src/vulkan/gpu_internal.h src/vulkan/runtime_body_gpu.h include/ferrum/structural/authoring.h build/shaders/authored.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 GPU_OBJ += build/pressure_work_gpu.o build/projection_gpu.o build/fluid_transport_gpu.o
 build/fluid_transport_gpu.o: src/vulkan/fluid_transport_gpu.c include/dungeoncraft/fluid_aperture_layout.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
