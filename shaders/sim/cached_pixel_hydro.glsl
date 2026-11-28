@@ -31,28 +31,6 @@ void select_hydro_domain(Body b) {
     }
 }
 
-// The primary pixel kernel specializes its shape accessors. Neighboring
-// occupancy can also belong to an independently authored convex collider.
-bool cached_convex_overlap(Body b,vec2 low) {
-    vec2 high=low+1;
-    for(uint piece=0u;piece<max(1u,b.piece_count);piece++) {
-        uint n=b.piece_count==0u?body_vertices(b):b.pieces[piece].count;
-        vec2 minp=vec2(1e20),maxp=vec2(-1e20);
-        bool separated=false;
-        for(uint i=0u;i<n;i++) {
-            uint j=(i+1u)%n;
-            vec2 a=b.piece_count==0u?body_vertex(b,i):
-                b.center+body_rotate(vec2(b.pieces[piece].vertices[i])/65536.-b.center,b.angle);
-            vec2 z=b.piece_count==0u?body_vertex(b,j):
-                b.center+body_rotate(vec2(b.pieces[piece].vertices[j])/65536.-b.center,b.angle);
-            if(piece_edge_separates_cell(a,z,low,high)) {separated=true;break;}
-            minp=min(minp,a);maxp=max(maxp,a);
-        }
-        if(!separated && all(greaterThan(high,minp)) && all(lessThan(low,maxp))) return true;
-    }
-    return false;
-}
-
 uint cached_hydro_occupant(uint atlas) {
     uint r=structural_base()+32u+(atlas/4096u)*8u;
     uvec2 x=uvec2(DC_DATA(r),DC_DATA(r+1u)),y=uvec2(DC_DATA(r+2u),DC_DATA(r+3u));
@@ -67,7 +45,11 @@ uint cached_hydro_occupant(uint atlas) {
         b.x_fp=b.local_fp.x;b.y_fp=b.local_fp.y;
         if((b.piece_count&PIXEL_BODY_FLAG)!=0u) {
             if(convex_cell_overlap(b,cell)) return b.id;
-        } else if(cached_convex_overlap(b,vec2(cell)-vec2(b.local_fp)/65536.)) return b.id;
+        } else {
+            vec2 low=vec2(cell)-vec2(b.local_fp)/65536.;
+            for(uint piece=0u;piece<max(1u,b.piece_count);piece++)
+                if(convex_piece_cell_overlap(b,piece,low,low+1.)) return b.id;
+        }
     }
     return 0u;
 }
