@@ -117,12 +117,15 @@ void __wrap_vkCmdDispatchIndirect(VkCommandBuffer command, VkBuffer buffer,
 static void test_full_frame(unsigned width, unsigned height, bool present) {
   dc_gpu_t *g;
   char err[256] = {0};
-  ASSERT_TRUE(dc_gpu_create(&g, width, height, "build/shaders/pattern.comp.spv", err,
-                            sizeof(err)));
+  const char *shader="build/shaders/pattern.comp.spv";
+  ASSERT_TRUE(present ? dc_gpu_create_window(&g,width,height,width,height,shader,err,sizeof(err)) :
+                        dc_gpu_create(&g,width,height,shader,err,sizeof(err)));
   if(present) {
     ASSERT_TRUE(g->swapchain!=VK_NULL_HANDLE);
     ASSERT_EQ(g->swap_extent.width,width);
     ASSERT_EQ(g->swap_extent.height,height);
+    SDL_ShowWindow(g->window);
+    SDL_PumpEvents();
     printf("Presented %s swapchain %ux%u\n",SDL_GetCurrentVideoDriver(),width,height);
   }
   VkPhysicalDeviceProperties device;
@@ -154,7 +157,10 @@ static void test_full_frame(unsigned width, unsigned height, bool present) {
     bool profile_frame = getenv("DC_RENDERER_FRAME_PROFILE") != NULL;
     ASSERT_TRUE(profile_frame ? dc_gpu_tick_capture(g, &tick, err, sizeof(err)) :
                                dc_gpu_tick_step(g, err, sizeof(err)));
-    ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
+    if(present) {
+      ASSERT_TRUE(dc_gpu_present_chunks(g,err,sizeof(err)));
+      ASSERT_EQ(vkQueueWaitIdle(g->queue),VK_SUCCESS);
+    } else ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
     clock_gettime(CLOCK_MONOTONIC, &stop);
     if(i==0u)
       printf("Timed dispatch groups: texture %u, optical %u, compose %u\n",
