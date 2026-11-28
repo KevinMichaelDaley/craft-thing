@@ -217,6 +217,8 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     ASSERT_TRUE(gpu->particle_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->chunk_buffer != gpu->chunk_staging_buffer);
     ASSERT_TRUE(gpu->particle_buffer != gpu->particle_staging_buffer);
+    VkDeviceSize staging_size = buffer_allocation(gpu, gpu->particle_staging_buffer);
+    ASSERT_TRUE(staging_size < 2u * sizeof(((dc_chunk_t *)0)->particles));
     ASSERT_TRUE(gpu->mpm_force_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->mpm_velocity_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->mpm_force_buffer != gpu->mpm_force_staging_buffer);
@@ -232,7 +234,7 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     }
     if(has_system_host&&has_local_host) {
         uint64_t staging_bytes=(uint64_t)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*sizeof(dc_cell_t)+
-            (uint64_t)DC_GPU_CHUNK_SLOTS*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t)+
+            staging_size+
             (uint64_t)gpu->width*gpu->height*24u+
             dc_gpu_component_storage_bytes(gpu)*3u;
         ASSERT_TRUE(gpu->mapped_system_bytes>=staging_bytes);
@@ -459,6 +461,11 @@ static void test_tick_capture_orders_gpu_stages_and_handoffs(void) {
 }
 
 int main(int argc,char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--stream-staging") == 0) {
+        RUN(test_chunk_and_particle_state_use_separate_stream_staging);
+        RUN(test_density_mixes_only_within_each_cell);
+        return g_fail != 0;
+    }
     if (argc == 2 && strcmp(argv[1], "--workspace-atlas") == 0) {
         RUN(test_shared_workspace_allocates_only_its_rounded_pages);
         printf("%d passed, %d failed\n", g_pass, g_fail);
