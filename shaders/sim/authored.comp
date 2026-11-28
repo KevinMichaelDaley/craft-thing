@@ -8,6 +8,7 @@ const uint GRAPH_WORDS=2320u;
 const uint GRAPH_NODES=16u,GRAPH_MEMBERS=400u,GRAPH_JOINTS=528u,GRAPH_ANCHORS=1552u;
 const uint JOINT_STIFFNESS_WORD=5u,ANCHOR_STIFFNESS_WORD=13u,INTERFACE_ANGLE_INDEX=8u;
 const uint MEMBER_COVERAGE_WORD=21u;
+const uint SHAPE_TILE_SIDE=16u;
 uint pixels() {return params.width*params.height;}
 uint physical(uint i) {return 24u+i*2u;}
 uint appearance(uint i) {return 24u+pixels()*2u+i*16u;}
@@ -155,9 +156,11 @@ void main() {
     }
     if(PHASE==5u) {
         uint low_x=words[p+3u],low_y=words[p+4u];
-        uint tx=low_x+((x-low_x)/8u)*8u,ty=low_y+((y-low_y)/8u)*8u;
-        /* One occupied texel elects each sparse tile; at most 64 local reads. */
-        for(uint yy=ty;yy<=y;yy++) for(uint xx=tx;xx<min(tx+8u,params.width);xx++) {
+        uint tx=x-(x-low_x)%SHAPE_TILE_SIDE,ty=y-(y-low_y)%SHAPE_TILE_SIDE;
+        if(x>tx && words[label(i-1u)]==owner) return;
+        if(y>ty && words[label(i-params.width)]==owner) return;
+        /* Only the first occupied texel of this component in this tile contributes. */
+        for(uint yy=ty;yy<=y;yy++) for(uint xx=tx;xx<min(tx+SHAPE_TILE_SIDE,params.width);xx++) {
             uint candidate=yy*params.width+xx;
             if(candidate>=i) break;
             if(words[label(candidate)]==owner) return;
@@ -169,7 +172,9 @@ void main() {
         uint width=words[p+5u]-words[p+3u]+1u,height=words[p+6u]-words[p+4u]+1u;
         for(uint k=0u;k<5u;k++) words[d+k]=words[p+k];
         words[d+5u]=width;words[d+6u]=height;words[d+7u]=words[p+7u];
-        words[d+8u]=8u+((width+7u)/8u)*((height+7u)/8u)+words[p+7u]*33u;
+        uint columns=(width+SHAPE_TILE_SIDE-1u)/SHAPE_TILE_SIDE;
+        uint rows=(height+SHAPE_TILE_SIDE-1u)/SHAPE_TILE_SIDE;
+        words[d+8u]=8u+columns*rows+words[p+7u]*33u;
         words[d+9u]=rank;
     }
 }
