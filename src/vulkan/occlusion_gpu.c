@@ -9,6 +9,7 @@ typedef struct {float opacity;uint32_t known;} optical_input_t;
 struct fr_occlusion_gpu {
   dc_gpu_t *gpu;
   uint32_t width[32], height[32], offset[32], levels, nodes;
+  uint32_t revision;
   VkBuffer input, hierarchy;
   VkDeviceMemory input_memory, hierarchy_memory;
   void *input_mapped, *hierarchy_mapped;
@@ -70,7 +71,7 @@ bool fr_occlusion_gpu_create(dc_gpu_t *g, uint32_t w, uint32_t h,
     goto fail;
   VkDescriptorBufferInfo buffers[2] = {{c->input, 0, input_bytes},
                                        {c->hierarchy, 0, node_bytes}};
-  if (!fr_renderer_compute_init(g, &c->compute, buffers, 2, 24,
+  if (!fr_renderer_compute_init(g, &c->compute, buffers, 2, 7 * sizeof(uint32_t),
                                 "build/shaders/occlusion.comp.spv", err, cap))
     goto fail;
   *out = c;
@@ -105,23 +106,26 @@ bool fr_occlusion_gpu_generate(fr_occlusion_gpu_t *c, char *err, uint32_t cap) {
   fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                       VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                       VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_READ_BIT);
-  return fr_renderer_submit(g);
+  if (fr_renderer_submit(g)) return true;
+  c->revision = 0;
+  return false;
 }
 void fr_occlusion_record(fr_occlusion_gpu_t *c, VkBuffer indirect,
                          VkDeviceSize offset) {
   dc_gpu_t *g = c->gpu;
+  if (++c->revision == 0) c->revision = 1;
   vkCmdBindPipeline(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                     c->compute.pipeline);
   vkCmdBindDescriptorSets(g->command, VK_PIPELINE_BIND_POINT_COMPUTE,
                           c->compute.pipeline_layout, 0, 1,
                           &c->compute.descriptor, 0, NULL);
   for (uint32_t l = 0; l < c->levels; l++) {
-    uint32_t p[6] = {c->width[l],
+    uint32_t p[7] = {c->width[l],
                      c->height[l],
                      c->offset[l],
                      l ? c->offset[l - 1] : 0,
                      l ? c->width[l - 1] : 0,
-                     l ? c->height[l - 1] : 0};
+                     l ? c->height[l - 1] : 0, c->revision};
     vkCmdPushConstants(g->command, c->compute.pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(p), p);
     if (indirect)
@@ -131,7 +135,8 @@ void fr_occlusion_record(fr_occlusion_gpu_t *c, VkBuffer indirect,
     fr_renderer_barrier(g->command, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                        VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+                        VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
   }
 }
 bool fr_occlusion_gpu_read(fr_occlusion_gpu_t *c, uint32_t level, uint32_t x,
