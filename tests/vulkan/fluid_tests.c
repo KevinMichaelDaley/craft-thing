@@ -759,6 +759,30 @@ static void check_cached_face_velocity(bool shift) {
 static void test_displaced_water_velocity_stays_with_chunk(void) {check_cached_face_velocity(false);}
 static void test_camera_shift_retains_evicted_water_velocity(void) {check_cached_face_velocity(true);}
 
+static void check_replaced_water_owner(bool shift) {
+    char err[256]={0};
+    dc_chunk_t left={0},right={.coord={1,0}};
+    dc_gpu_t *gpu=make_grid(&left,&right,err,sizeof(err));
+    ASSERT_TRUE(gpu);
+    dc_face_velocity_t *faces=gpu->velocity_mapped;
+    faces[0]=(dc_face_velocity_t){3.f,5.f};
+    faces[64]=(dc_face_velocity_t){1.f,2.f};
+    if(shift) ASSERT_TRUE(dc_gpu_shift_velocity(gpu,1,0,err,sizeof(err)));
+    left.coord.x=2;
+    left.face_velocity[0]=(dc_face_velocity_t){-7.f,4.f};
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,&left,err,sizeof(err)));
+    unsigned tile=shift?1u:0u;
+    if(shift) ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,1,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu,tile,0,0,err,sizeof(err)));
+    ASSERT_EQ(faces[tile*64].x,-7.f);
+    ASSERT_EQ(faces[tile*64].y,4.f);
+    if(shift) {ASSERT_EQ(faces[0].x,1.f);ASSERT_EQ(faces[0].y,2.f);}
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+static void test_upload_replaces_current_water_faces(void) {check_replaced_water_owner(false);}
+static void test_upload_between_shift_and_remap_keeps_new_owner(void) {check_replaced_water_owner(true);}
+
 static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
     char err[256] = {0};
     dc_chunk_t *chunks = calloc(24, sizeof(*chunks));
@@ -1082,6 +1106,8 @@ static void test_closed_displacement_retains_and_reports_overflow(void) {
 int main(int argc,char **argv) {
     RUN(test_displaced_water_velocity_stays_with_chunk);
     RUN(test_camera_shift_retains_evicted_water_velocity);
+    RUN(test_upload_replaces_current_water_faces);
+    RUN(test_upload_between_shift_and_remap_keeps_new_owner);
     if(argc==2 && strcmp(argv[1],"--cached-velocity")==0) return g_fail!=0;
     RUN(test_rigid_displacement_raises_water_without_losing_volume);
     RUN(test_closed_displacement_retains_and_reports_overflow);
