@@ -90,7 +90,6 @@ bool locate_body(inout Body body) {
         all(greaterThan(body.bounds_high,ivec2(0))));
     body.previous_x_fp = body.x_fp;
     body.previous_y_fp = body.y_fp;
-    body.previous_angle = body.angle;
     return body.visible != 0u;
 }
 

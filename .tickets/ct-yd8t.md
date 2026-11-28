@@ -43,3 +43,7 @@ Current native cached-motion recheck under Vulkan synchronization validation: al
 **2026-11-28T07:40:36Z**
 
 GPU seam regression: a 128-pixel stone body (mass 345.600006) now reaches vertical velocity 65536 after four steps both on screen and straddling a known cached chunk. Cached floor candidates and exact contact rows are checked, and recycling the chunk slot restores boundary contacts. Wholly cached stone still has zero vertical velocity.
+
+**2026-11-28T07:46:20Z**
+
+Native Vulkan regression with the camera moved one chunk right exposed a second seam failure: the same partly visible 128-pixel stone had zero vertical velocity when its first occupied pixel was left of the viewport. The solver now resolves that signed cached reference. Both camera positions give 65536 after four steps; evicting the reference chunk preserves the last world position and velocity. Representable wholly offscreen bodies now retain correct solver coordinates; x124 velocity remains zero. Residency results 3 passed, 1 failed. World body tests 3/3, including far-camera eviction and signed world carry.

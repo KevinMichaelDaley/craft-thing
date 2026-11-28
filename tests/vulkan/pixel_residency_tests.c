@@ -63,6 +63,19 @@ static void cached_stone(unsigned world_x,unsigned camera_chunk) {
     float mass=motion.mass;int velocity=body.body.vy_fp;
     printf("Known cached stone x%u: pixels%u mass%.6f vy%d\n",world_x,pixels,mass,velocity);
     if(world_x==60 && !camera_chunk) check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u);
+    if(camera_chunk==1) {
+        memset(chunk,0,sizeof(*chunk));
+        chunk->coord.x=17;
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
+        dc_gpu_world_body_t frozen;
+        ASSERT_TRUE(dc_gpu_read_world_body(gpu,body.body.id,&frozen,err,sizeof(err)));
+        ASSERT_EQ(frozen.chunk.x,body.chunk.x);
+        ASSERT_EQ(frozen.chunk.y,body.chunk.y);
+        ASSERT_EQ(frozen.body.x_fp,body.body.x_fp);
+        ASSERT_EQ(frozen.body.y_fp,body.body.y_fp);
+        ASSERT_EQ(frozen.body.vy_fp,body.body.vy_fp);
+    }
     dc_gpu_destroy(gpu);free(chunk);
     ASSERT_EQ(pixels,128u);ASSERT_TRUE(fabsf(mass-128.f*2.7f)<.002f);
     ASSERT_EQ(solver_body.x_fp,expected_x);
