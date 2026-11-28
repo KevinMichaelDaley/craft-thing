@@ -35,3 +35,7 @@ Pinned 255d0c96 completed both first-present cases on the RTX A2000 with the iso
 **2026-11-28T04:19:36Z**
 
 RTX A2000, hidden Xephyr, 256x128, f2a02ab6: cold cache loaded zero bytes and presented the lit frame after 156.046 s, including GPU setup 84.340 s and thermal setup 44.866 s. Warm loaded 28118997 bytes and presented in 3.769 s. Both probes passed 2/2. Another workspace used the GPU during the measurement, so the difference from the October/November baseline is descriptive. Cold start still misses the responsiveness requirement.
+
+**2026-11-28T05:16:02Z**
+
+After offline thermal phase specialization, the isolated displayed RTX A2000 first-present probe passed both cases cold and warm. Cold first present took 115.321 s (general GPU setup 78.353 s, thermal 8.729 s). Warm took 2.461 s (GPU 1.265 s, thermal 0.031 s). The previous cold thermal interval was 44.866 s. Cold general physics pipeline creation still dominates and fails the quick-launch criterion.
