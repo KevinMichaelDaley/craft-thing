@@ -236,7 +236,7 @@ GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_mate
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCreateDescriptorPool
 test: build/authored_stage_tests
-build/shaders/authored.comp.spv: shaders/sim/authored.comp shaders/sim/authored/body_slots.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_storage.glsl shaders/sim/runtime_body_storage.glsl include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/pixel_geometry_layout.h
+build/shaders/authored.comp.spv: shaders/sim/authored.comp shaders/sim/authored/body_slots.glsl shaders/sim/authored/destinations.glsl shaders/sim/rigid_body.glsl shaders/sim/rigid_storage.glsl shaders/sim/runtime_body_storage.glsl include/dungeoncraft/body_storage_layout.h include/dungeoncraft/material_density.h include/dungeoncraft/pixel_geometry_layout.h
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
