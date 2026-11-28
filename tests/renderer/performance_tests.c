@@ -209,8 +209,9 @@ static void test_full_frame(unsigned width, unsigned height, bool present) {
     }
   }
   printf("Full frame %ux%u mean %.3f ms, worst %.3f ms "
-         "(simulation + render + submission/wait, %u samples)\n",
-         width, height, wall / samples, worst, samples);
+         "(simulation + render + %s, %u samples)\n",
+         width, height, wall / samples, worst,
+         present ? "present/queue completion" : "submission/wait",samples);
   printf("Renderer mean GPU ms: total %.3f, texture %.3f, optical %.3f, "
          "hierarchy %.3f, light %.3f, compose %.3f\n",
          times[0] / samples, times[1] / samples, times[2] / samples,
@@ -226,7 +227,10 @@ static void test_full_frame(unsigned width, unsigned height, bool present) {
 }
 int main(int argc,char **argv) {
   bool present=argc==2 && strcmp(argv[1],"--present")==0;
-  if(argc!=1 && !present) return 2;
+  if(argc!=1 && !present) {
+    fprintf(stderr,"Usage: %s [--present]\n",argv[0]);
+    return 2;
+  }
   g_profile_passes = getenv("DC_RENDERER_PASS_PROFILE") != NULL;
   test_full_frame(480, 270, present);
   test_full_frame(640, 360, present);
