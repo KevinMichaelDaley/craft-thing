@@ -288,7 +288,12 @@ void main() {
             uint r=record(selected);for(uint word=0u;word<24u;word++) DC_DATA(r+word)=0u;
             DC_DATA(r)=(DC_DATA(g+36256u)%n+i*32u+bit)%n;DC_DATA(r+1u)=0xffffffffu;DC_DATA(r+2u)=0xffffffffu;
         }
-        if(i==n/32u-1u) {DC_DATA(g+36257u)=min(rank,64u);DC_DATA(g+36259u)=uint(rank>64u);}
+        if(i==n/32u-1u) {
+            uint selected=min(rank,64u);
+            DC_DATA(g+36257u)=selected;
+            DC_DATA(g+36259u)=uint(rank>selected);
+            DC_DATA(g+36263u)=rank-selected;
+        }
         return;
     }
     if(EXTRACTION_PHASE==5u) {if(i<n) candidates[i]=0xffffffffu;return;}

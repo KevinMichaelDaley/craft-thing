@@ -1008,6 +1008,31 @@ static bool restart_demo(dc_level_view_t **view, const char *base_directory,
     return true;
 }
 
+static void show_extraction_report(dc_level_view_t *view, uint32_t window_id) {
+    dc_gpu_extraction_stats_t stats;
+    dc_level_view_status_t status;
+    char report[512];
+    if (dc_gpu_read_extraction_stats(dc_level_view_gpu(view), &stats) &&
+        dc_level_view_status(view, &status)) {
+        snprintf(report, sizeof(report),
+                 "Loaded chunks in simulation window: %u/%u\n"
+                 "Body slots in use: %u/%u\nGeometry words in use: %u/%u\n\n"
+                 "Last extraction batch: %u selected, %u committed\n"
+                 "Unknown connectivity: %u\nDeferred by batch limit: %u\n"
+                 "Blocked by body slots: %u\nBlocked by geometry space: %u\n"
+                 "Extraction pending: %s",
+                 status.ready_chunks, status.total_chunks, stats.owned_bodies, stats.body_capacity,
+                 stats.arena_used_words, stats.arena_capacity_words, stats.selected_components,
+                 stats.committed_components, stats.unknown_components, stats.deferred_by_batch_limit,
+                 stats.no_body_slot_components, stats.no_arena_components, stats.pending ? "yes" : "no");
+    } else {
+        snprintf(report, sizeof(report), "Could not read completed extraction statistics.");
+    }
+    if (SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Material extraction", report,
+                                 SDL_GetWindowFromID(window_id)) != 0)
+        fprintf(stderr, "%s\n", report);
+}
+
 static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
                               uint32_t zoom, bool paused, bool entering_seed,
                               bool seed_error, const char *seed_text,
@@ -1028,7 +1053,7 @@ static bool update_demo_title(dc_level_view_t *view, uint64_t seed,
     } else
         snprintf(title, sizeof(title),
                  "Dungeoncraft  |  seed %" PRIu64 "  |  chunk (%" PRId64 ",%" PRId64
-                 ") + (%u,%u)  |  loaded %u/%u  |  %ux%s",
+                 ") + (%u,%u)  |  loaded %u/%u  |  %ux%s  |  F3 extraction",
                  seed, status.origin.x, status.origin.y, status.offset_x,
                  status.offset_y, status.ready_chunks, status.total_chunks,
                  zoom, paused ? "  |  paused" : "");
@@ -1378,6 +1403,9 @@ int main(int argc, char **argv) {
                 case SDLK_4: material = DC_MATERIAL_DIRT; break;
                 case SDLK_5: material = DC_MATERIAL_GRAVEL; break;
                 case SDLK_6: material = DC_MATERIAL_WOOD; break;
+                case SDLK_F3:
+                    if (!event.key.repeat) show_extraction_report(view, event.key.windowID);
+                    break;
                 case SDLK_F8:
                     if(bonfire&&!event.key.repeat) bonfire_focus=bonfire_focus==2?0:2;
                     if (scene_path && !event.key.repeat) dc_level_view_toggle_lighting(view);

@@ -14,6 +14,7 @@ bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats
     stats->arena_used_words=graph[40001];stats->arena_capacity_words=graph[40002];
     stats->pending=base[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u;
     stats->selected_components=graph[36257]<64u?graph[36257]:64u;
+    stats->deferred_by_batch_limit=graph[36263];
     uint32_t free_words=stats->arena_capacity_words>stats->arena_used_words?
         stats->arena_capacity_words-stats->arena_used_words:0u;
     for(uint32_t candidate=0;candidate<stats->selected_components;candidate++) {
