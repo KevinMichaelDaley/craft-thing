@@ -28,7 +28,7 @@ layout(push_constant) uniform Params {
     uint width,height,phase,seconds,pool_word,unused_view,mode,profile_count,page_width;
     uvec2 sprite_address;
 } params;
-uint active_phase() {return SPECIALIZED_PHASE==0xffffffffu?params.phase:SPECIALIZED_PHASE;}
+#define active_phase() (SPECIALIZED_PHASE==0xffffffffu ? params.phase : SPECIALIZED_PHASE)
 layout(buffer_reference,std430,buffer_reference_align=4) buffer Words {uint words[];};
 layout(buffer_reference,std430,buffer_reference_align=8) readonly buffer Handles {uvec2 values[];};
 layout(buffer_reference,std430,buffer_reference_align=16) buffer ParcelSamples {vec4 values[];};

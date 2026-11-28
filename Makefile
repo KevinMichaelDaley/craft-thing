@@ -2542,6 +2542,16 @@ build/dungeoncraft build/controls_tests build/reactive_stream_view_display_tests
 build/shaders/thermal.comp.spv: shaders/reactive/thermal.comp shaders/reactive/address.glsl shaders/reactive/body_wetting.glsl shaders/reactive/coating_mass.glsl include/dungeoncraft/thermal_parameters.h include/dungeoncraft/reactive_state_layout.h include/dungeoncraft/reactive_profile_layout.h include/dungeoncraft/coating_layout.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
+THERMAL_PHASE_IDS := 0 1 2 4 5 6 7 8 9 10 11 13 14 16 17 19 20 21 23 24 25
+THERMAL_PHASE_MODULES := $(addprefix build/shaders/thermal_phase_,$(addsuffix .comp.spv,$(THERMAL_PHASE_IDS)))
+build/shaders/thermal_phase_%.comp.spv: build/shaders/thermal.comp.spv
+	spirv-opt --set-spec-const-default-value "0:$*" --freeze-spec-const \
+		--fold-spec-const-op-composite --eliminate-dead-branches --eliminate-local-single-store \
+		--ccp --simplify-instructions --eliminate-dead-branches --eliminate-dead-functions \
+		--eliminate-dead-code-aggressive $< -o $@
+$(GPU_OBJ) $(GPU_SOURCE_BINARIES) $(PERFORMANCE_OBJ) $(NATIVE360_OBJ): | $(THERMAL_PHASE_MODULES)
+$(GPU_SOURCE_BINARIES) build/lighting_gpu.o build/thermal_gpu.o build/thermal_liquid_seam_gpu.o \
+    $(filter %/fire_ray_gpu.o %/lighting_gpu.o %/thermal_gpu.o %/thermal_liquid_seam_gpu.o,$(PERFORMANCE_OBJ) $(NATIVE360_OBJ) $(QUARTER_APP_OBJ)): src/vulkan/thermal_gpu_state.h
 build/shaders/combustion.comp.spv: shaders/reactive/combustion.comp shaders/reactive/address.glsl shaders/reactive/coating_mass.glsl shaders/reactive/coating_burn.glsl shaders/gas/types.glsl include/dungeoncraft/combustion_parameters.h include/dungeoncraft/thermal_parameters.h include/dungeoncraft/coating_layout.h include/dungeoncraft/corrosion_parameters.h
 	mkdir -p $(dir $@)
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@

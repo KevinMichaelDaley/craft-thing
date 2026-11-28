@@ -203,7 +203,7 @@ static bool error(char *err,uint32_t cap,const char *message) {
 }
 static void destroy(dc_gpu_t *g,struct fr_thermal_gpu *t) {
     if(!t) return;
-    for(uint32_t phase=0;phase<24;phase++) if(t->phase_pipelines[phase])
+    for(uint32_t phase=0;phase<FR_THERMAL_PHASE_COUNT;phase++) if(t->phase_pipelines[phase])
         vkDestroyPipeline(g->device,t->phase_pipelines[phase],NULL);
     fr_renderer_compute_destroy(g,&t->compute);
     fr_renderer_compute_destroy(g,&t->feedback);
@@ -220,21 +220,22 @@ void fr_thermal_gpu_destroy(dc_gpu_t *g) {
     if(g) {if(g->thermal_control_mapped) memset(g->thermal_control_mapped,0,DC_HYDRO_CONTROL_BYTES);destroy(g,g->thermal);g->thermal=NULL;}
 }
 static bool specialize_phases(dc_gpu_t *g,struct fr_thermal_gpu *t,char *err,uint32_t cap) {
-    const char *setting=getenv("DC_THERMAL_SPECIALIZED_PHASES");
-    if(setting&&strcmp(setting,"0")==0) return true;
-    VkShaderModule module=VK_NULL_HANDLE;
-    if(!dc_gpu_load_shader_module(g,"build/shaders/thermal.comp.spv",&module,err,cap)) return false;
-    VkSpecializationMapEntry entry={.constantID=0,.size=sizeof(uint32_t)};
-    VkResult result=VK_SUCCESS;
-    for(uint32_t phase=0;phase<24&&result==VK_SUCCESS;phase++) {
-        VkSpecializationInfo specialization={.mapEntryCount=1,.pMapEntries=&entry,.dataSize=sizeof(phase),.pData=&phase};
+    /* Phase zero already owns the descriptor set and its pipeline. */
+    static const uint32_t phases[]={1,2,4,5,6,7,8,9,10,11,13,14,16,17,19,20,21,23,24,25};
+    for(size_t i=0;i<sizeof(phases)/sizeof(phases[0]);i++) {
+        uint32_t phase=phases[i];
+        char path[64];
+        snprintf(path,sizeof(path),"build/shaders/thermal_phase_%u.comp.spv",phase);
+        VkShaderModule module=VK_NULL_HANDLE;
+        if(!dc_gpu_load_shader_module(g,path,&module,err,cap)) return false;
         VkComputePipelineCreateInfo info={.sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
             .stage={.sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,.stage=VK_SHADER_STAGE_COMPUTE_BIT,
-                .module=module,.pName="main",.pSpecializationInfo=&specialization},.layout=t->compute.pipeline_layout};
-        result=vkCreateComputePipelines(g->device,g->pipeline_cache,1,&info,NULL,&t->phase_pipelines[phase]);
+                .module=module,.pName="main"},.layout=t->compute.pipeline_layout};
+        VkResult result=vkCreateComputePipelines(g->device,g->pipeline_cache,1,&info,NULL,&t->phase_pipelines[phase]);
+        vkDestroyShaderModule(g->device,module,NULL);
+        if(result!=VK_SUCCESS) return error(err,cap,"Cannot create thermal phase pipeline");
     }
-    vkDestroyShaderModule(g->device,module,NULL);
-    return result==VK_SUCCESS||error(err,cap,"Cannot specialize thermal phases");
+    return true;
 }
 static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_thermal_gpu **out,char *err,uint32_t cap) {
     struct fr_thermal_gpu *t=calloc(1,sizeof(*t));
@@ -261,8 +262,11 @@ static bool create(dc_gpu_t *g,struct fr_reactive_gpu *reactive,struct fr_therma
         {g->runtime_bodies->root.buffer,0,g->runtime_bodies->root.bytes},{g->occupancy_buffer,0,VK_WHOLE_SIZE},
         {g->bulk_phase_buffer,0,VK_WHOLE_SIZE}};
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline begin\n");
-    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,THERMAL_PUSH_WORDS*sizeof(uint32_t),"build/shaders/thermal.comp.spv",err,cap)) {destroy(g,t);return false;}
-    if(!specialize_phases(g,t,err,cap)) {destroy(g,t);return false;}
+    const char *setting=getenv("DC_THERMAL_SPECIALIZED_PHASES");
+    bool specialized=!setting||strcmp(setting,"0")!=0;
+    const char *base_shader=specialized?"build/shaders/thermal_phase_0.comp.spv":"build/shaders/thermal.comp.spv";
+    if(!fr_renderer_compute_init(g,&t->compute,buffers,11,THERMAL_PUSH_WORDS*sizeof(uint32_t),base_shader,err,cap)||
+       (specialized&&!specialize_phases(g,t,err,cap))) {destroy(g,t);return false;}
     if(getenv("DC_PIPELINE_TRACE")) fprintf(stderr,"thermal pipeline end\n");
     if(!fr_thermal_feedback_init(g,&t->feedback,buffers[3],buffers[5],err,cap)) {destroy(g,t);return false;}
     *out=t;return true;
@@ -311,7 +315,7 @@ static void phase(dc_gpu_t *g,uint32_t mode,float seconds) {
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_HOST_BIT,
         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_HOST_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
         VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-    VkPipeline selected=mode<24u&&t->phase_pipelines[mode]?t->phase_pipelines[mode]:t->compute.pipeline;
+    VkPipeline selected=t->phase_pipelines[mode]?t->phase_pipelines[mode]:t->compute.pipeline;
     vkCmdBindPipeline(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,selected);
     vkCmdBindDescriptorSets(g->command,VK_PIPELINE_BIND_POINT_COMPUTE,t->compute.pipeline_layout,0,1,&t->compute.descriptor,0,NULL);
     vkCmdPushConstants(g->command,t->compute.pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
