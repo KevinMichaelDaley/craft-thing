@@ -288,12 +288,19 @@ static void test_absent_normal_uses_renderer_default_not_raw_placeholder(void) {
 
 static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
     fr_authored_request_t r = request();
-    uint8_t *p = calloc(576u, 8u), *a = calloc(576u, 64u);
+    enum { WIDTH=64, HEIGHT=19, PIXELS=WIDTH*HEIGHT, SHAPE_WIDTH=33, SHAPE_HEIGHT=17 };
+    uint8_t *p = calloc(PIXELS, 8u), *a = calloc(PIXELS, 64u);
     ASSERT_TRUE(p && a);
-    r.width = 64; r.height = 9; r.physical = p; r.appearance = a;
-    r.physical_bytes = 576u * 8u; r.appearance_bytes = 576u * 64u;
-    for (unsigned x = 1; x <= 17; x++) {
-        p[(64u + x) * 8u] = 1; p[(64u + x) * 8u + 2u] = 3;
+    r.width = WIDTH; r.height = HEIGHT; r.physical = p; r.appearance = a;
+    r.physical_bytes = PIXELS * 8u; r.appearance_bytes = PIXELS * 64u;
+    uint32_t words=(SHAPE_WIDTH*SHAPE_HEIGHT+7)/8;
+    uint32_t *shape=calloc(words,sizeof(*shape));
+    ASSERT_TRUE(shape);
+    for (unsigned y=0;y<SHAPE_HEIGHT;++y) for (unsigned x=0;x<SHAPE_WIDTH;++x) {
+        if (x && y) continue;
+        unsigned texel=(y+1)*WIDTH+x+1, local=y*SHAPE_WIDTH+x;
+        p[texel*8]=1; p[texel*8+2]=FR_AUTHORED_RIGID;
+        shape[local/8]|=1u<<((local%8)*4);
     }
     p[(5u * 64u + 60u) * 8u] = 2; p[(5u * 64u + 60u) * 8u + 2u] = 3;
     dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
@@ -301,11 +308,18 @@ static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
     fr_authored_component_plan_t plans[2]; uint32_t count = 0;
     ASSERT_TRUE(fr_gpu_read_authored_components(gpu, plans, 2, &count, err, sizeof(err)));
     ASSERT_EQ(count, 2u); ASSERT_EQ(plans[0].source_root, 65u);
-    ASSERT_EQ(plans[0].occupied, 17u); ASSERT_EQ(plans[0].width, 17u);
-    ASSERT_EQ(plans[0].height, 1u); ASSERT_EQ(plans[0].tiles, 3u);
-    ASSERT_EQ(plans[0].geometry_words, 110u);
+    dc_gpu_body_record_t bodies[DC_GPU_BODY_CAPACITY]={0};
+    bodies[0].body=(dc_gpu_body_t){.width=SHAPE_WIDTH,.height=SHAPE_HEIGHT,.active=1};
+    bodies[0].piece_count=DC_GPU_PIXEL_BODY_FLAG | (SHAPE_WIDTH+SHAPE_HEIGHT-1);
+    ASSERT_TRUE(dc_gpu_upgrade_dense_pixels(gpu,bodies,&shape,&words));
+    ASSERT_EQ(shape[1],4u); ASSERT_EQ(words,146u);
+    ASSERT_EQ(plans[0].occupied,SHAPE_WIDTH+SHAPE_HEIGHT-1);
+    ASSERT_EQ(plans[0].width,SHAPE_WIDTH); ASSERT_EQ(plans[0].height,SHAPE_HEIGHT);
+    printf("Sparse shape runtime/planned: tiles %u/%u, words %u/%u\n",
+           shape[1],plans[0].tiles,words,plans[0].geometry_words);
+    ASSERT_EQ(plans[0].tiles,shape[1]); ASSERT_EQ(plans[0].geometry_words,words);
     ASSERT_EQ(plans[1].source_root, 380u); ASSERT_EQ(plans[1].body_slot, 1u);
-    dc_gpu_destroy(gpu); free(p); free(a); PASS();
+    dc_gpu_destroy(gpu); free(shape); free(p); free(a); PASS();
 }
 
 static void test_failed_resize_preserves_ready_component_plan(void) {
@@ -344,6 +358,10 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
 }
 
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--sparse-plan")) {
+        RUN(test_parallel_plans_span_workgroups_and_sparse_tiles);
+        return g_fail!=0;
+    }
     RUN(test_structural_references_require_existing_nodes);
     RUN(test_invalid_interface_mechanics_rejected_before_placement);
     RUN(test_each_declared_member_requires_owned_structural_pixels);
