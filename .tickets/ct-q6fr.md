@@ -1,6 +1,6 @@
 ---
 id: ct-q6fr
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-17T07:51:26Z
@@ -53,3 +53,7 @@ Device-local owner Vulkan GREEN:90→200→1025 records across2→4→17 slabs, 
 **2026-10-17T09:45:36Z**
 
 Fresh main full suite is confirmed expired while paused for parent renderer/user GPU ownership: timeout PID92476 and scheduler92479 no longer exist; persistent log ends structural_failure13/13. This is PARTIAL, not a completed current regression. Restart fresh once parent explicitly releases the GPU. Current CPU test_gpu_tools passes; GPU remains exclusively live material demo PID108258.
+
+**2026-11-28T04:05:50Z**
+
+Verified the fixed-64 cross-subsystem audit, ABI, structural separation, ownership generations, mailbox and retire-after-fence contract in design/dynamic_rigid_storage.md. The d105fc10 full run passed the layout, transactional growth and device-local ownership tests. On the RTX A2000 the GPU preserved every checked record at 90, 200, 1025 and 6000 bodies (94 slabs) with zero mismatches. The full suite completed, resolving the outstanding verification recorded in October.
