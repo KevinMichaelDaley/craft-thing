@@ -86,7 +86,8 @@ void main() {
         particles[first]=particle;atomicAdd(counts[slot],1u);
     }
     cells[atlas]=uvec2(mapped|(rigid_material(mapped)?DC_CELL_LOADED_TERRAIN<<DC_CELL_FLAGS_SHIFT:0u),material==6u?65536u:0u);
-    uint r=p.registry_base+32u+slot*8u,style=configuration[4u+mapped];
+    uint r=p.registry_base+32u+slot*8u;
+    uint style=mapped<=10u?configuration[4u+mapped]:0u;
     ivec2 rest=ivec2(canonical_cell(registry[r],position.x%64u),canonical_cell(registry[r+2u],position.y%64u));
     Appearance a=texture_sample(rest,1u,mapped,style);
     uint source=8u+count*2u+i*16u,flags=words[source+15u];
