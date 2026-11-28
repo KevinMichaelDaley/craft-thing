@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vulkan/vulkan.h>
 
 #include "ferrum/fire/bulk_phase_gpu.h"
 #include "ferrum/fire/thermal_gpu.h"
@@ -12,6 +13,13 @@ static int g_pass=0,g_fail=0;
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() g_pass++
+
+static unsigned sweep_dispatches;
+VKAPI_ATTR void VKAPI_CALL __real_vkCmdDispatch(VkCommandBuffer,uint32_t,uint32_t,uint32_t);
+VKAPI_ATTR void VKAPI_CALL __wrap_vkCmdDispatch(VkCommandBuffer command,uint32_t x,uint32_t y,uint32_t z) {
+    sweep_dispatches++;
+    __real_vkCmdDispatch(command,x,y,z);
+}
 
 static void test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot(void) {
     char err[256]={0};dc_gpu_t *gpu=NULL;dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
@@ -575,12 +583,57 @@ static void test_rigid_rotation_does_not_shear_thin_slime(void) {
     ASSERT_EQ(out->slime_fp[rotating],out->slime_fp[still]);
     dc_gpu_destroy(gpu);free(chunk);free(bulk);free(out);PASS();
 }
+static void test_mixed_liquid_replay_preserves_every_face_and_phase(void) {
+    char err[256]={0};
+    dc_gpu_t *gpu=NULL;
+    dc_chunk_t *input=calloc(1,sizeof(*input)), *result=calloc(1,sizeof(*result));
+    dc_chunk_t *first=calloc(1,sizeof(*first));
+    fr_bulk_phase_chunk_t *phase=calloc(1,sizeof(*phase)), *output=calloc(1,sizeof(*output));
+    fr_bulk_phase_chunk_t *first_phase=calloc(1,sizeof(*first_phase));
+    ASSERT_TRUE(input && result && first && phase && output && first_phase);
+    for(unsigned i=0;i<DC_CHUNK_CELLS;i++) {
+        input->cells[i].fluid_mass=14001u+i%17u;
+        phase->oil_fp[i]=2001u+i%23u;
+        phase->slime_fp[i]=501u+i%11u;
+        input->face_velocity[i]=(dc_face_velocity_t){(int)(i%13u)-6,(int)(i%19u)-9};
+    }
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    bool exact=true;
+    for(unsigned run=0;run<12 && exact;run++) {
+        ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,UINT32_MAX,err,sizeof(err)) &&
+            dc_gpu_upload_chunk(gpu,0,input,err,sizeof(err)) &&
+            dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)) &&
+            fr_bulk_phase_gpu_import_chunk(gpu,0,input,phase,err,sizeof(err)));
+        sweep_dispatches=0;
+        ASSERT_TRUE(fr_bulk_phase_gpu_step(gpu,.05f,err,sizeof(err)));
+        /* Each of four parities evaluates flux and publishes velocities in
+         * separate dispatches. The last pass derives retained volumes. */
+        ASSERT_EQ(sweep_dispatches, 2u*4u+1u);
+        ASSERT_TRUE(
+            dc_gpu_download_chunk(gpu,0,result,err,sizeof(err)) &&
+            fr_bulk_phase_gpu_export_chunk(gpu,0,output,err,sizeof(err)));
+        if(run==0) {
+            *first=*result;
+            *first_phase=*output;
+        } else {
+            exact=memcmp(first->cells,result->cells,sizeof(result->cells))==0 &&
+                memcmp(first->face_velocity,result->face_velocity,sizeof(result->face_velocity))==0 &&
+                memcmp(first_phase,output,sizeof(*output))==0;
+        }
+    }
+    dc_gpu_destroy(gpu);
+    free(input);free(result);free(first);free(phase);free(output);free(first_phase);
+    ASSERT_TRUE(exact);PASS();
+}
+
 int main(int argc,char **argv) {
     if(argc==2&&strcmp(argv[1],"--phase-validation")==0) {
         RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
         RUN(test_slime_flux_yields_under_load_and_softens_when_hot);
         printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail?1:0;
     }
+    RUN(test_mixed_liquid_replay_preserves_every_face_and_phase);
+    if(argc==2 && strcmp(argv[1],"--mixed-replay")==0) return g_fail!=0;
     RUN(test_gpu_chunk_keeps_distinct_bulk_phase_and_clears_reused_slot);
     RUN(test_water_solver_respects_full_oil_cell_capacity);
     RUN(test_dense_oil_exchanges_with_water_in_sealed_vertical_pair);
