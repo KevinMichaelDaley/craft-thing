@@ -46,3 +46,7 @@ The shared RTX cache was observed at 134108241 bytes near the 128 MiB cap. Durin
 **2026-11-28T04:57:21Z**
 
 Cold-start follow-up: thermal enable creates the 247,884-byte generic thermal shader pipeline and 24 runtime specializations. Phases 24 and 25 still bind the generic pipeline. In an isolated build, freezing the phase at GLSL compilation and eliminating unreachable functions produced valid SPIR-V for phases 0/1/4/11/24/25 at 98,140 / 105,444 / 102,652 / 25,372 / 55,972 / 55,972 bytes. A direct inlining experiment enlarged some modules to 370,164 bytes. These are module-size checks only; cold and warm startup, emitted heat and conservation still need controlled measurement before selecting this approach.
+
+**2026-11-28T05:13:00Z**
+
+Displayed 960x540 RTX A2000 bonfire on persistent Xephyr, empty application cache and driver disk caching disabled for cold runs. Before/after base-ready plus scene gas-enable intervals totaled 173.993 / 139.671 s cold and 19.583 / 8.271 s warm. The cold base interval itself rose from 87.457 to 95.684 s, while the scene interval fell from 86.536 to 43.987 s. These single runs include concurrent machine load. Candidate uploaded all 187 chunks, passed all four displayed checkpoint cases and both specialized/universal shader-load checks. The separate displayed frame budget remains open.

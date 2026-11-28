@@ -1,6 +1,6 @@
 ---
 id: ctlo-w232
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T04:52:07Z
@@ -19,3 +19,7 @@ Retain eight Jacobi iterations, unchanged correction arithmetic, coupled grain b
 **2026-10-24T05:05:39Z**
 
 Rejected as runtime optimization. Five exact body/contact cases (including1057 rows), two coupled grain cases and seven command-cache cases pass. Displayed fixed-clock comparison is45.239ms average /53.309ms worst versus~29.4ms for separate dispatches, with substantial cold pipeline compilation cost. Complete source and tests are preserved and pushed on experiment/workgroup-jacobi at b80a034; production worktree restores the existing multi-workgroup solver. Full-frame target remains unmet.
+
+**2026-11-28T05:13:00Z**
+
+Rechecked archived experiment b80a0349 on the RTX A2000 with core and synchronization validation. All five solver-state comparisons, two coupled-grain comparisons and seven command-cache checks passed. The eight barrier-separated iterations stride rows and bodies by workgroup size. Bond reset, position and velocity dispatches retain their ordered path. The archived displayed measurement was 45.239 ms mean versus about 29.4 ms with separate dispatches. Experiment complete; the faster production implementation stays enabled.
