@@ -48,6 +48,14 @@ static void test_thin_wall_and_unknown_nodes_survive_hierarchy(void) {
   ASSERT_TRUE(fr_occlusion_gpu_read(c, 3, 0, 0, &node));
   ASSERT_EQ(node.maximum, 1.f);
   ASSERT_EQ(node.known, 0u);
+  fr_occlusion_node_t changed, untouched;
+  ASSERT_TRUE(fr_occlusion_gpu_read(c, 1, 0, 0, &changed));
+  ASSERT_TRUE(fr_occlusion_gpu_read(c, 1, 2, 1, &untouched));
+  ASSERT_TRUE(changed.reserved > untouched.reserved);
+  uint32_t stamp = changed.reserved;
+  ASSERT_TRUE(fr_occlusion_gpu_generate(c, err, sizeof(err)));
+  ASSERT_TRUE(fr_occlusion_gpu_read(c, 1, 0, 0, &changed));
+  ASSERT_EQ(changed.reserved, stamp);
   fr_occlusion_gpu_destroy(c);
   dc_gpu_destroy(g);
   PASS();
