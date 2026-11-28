@@ -57,6 +57,7 @@ static void cut_material(uint16_t material) {
     char directory[]="build/ui_material_cut_XXXXXX",err[256]={0};
     ASSERT_TRUE(mkdtemp(directory));ASSERT_TRUE(seed_mainland_pond(directory,material));
     dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));
+    if(!view) fprintf(stderr,"Cannot open paint test view: %s\n",err);
     ASSERT_TRUE(view);ASSERT_TRUE(dc_level_view_set_spring_enabled(view,false));
     ASSERT_TRUE(dc_level_view_wait_visible(view,120000,err,sizeof(err)));
     dc_level_view_status_t residency;
@@ -97,9 +98,23 @@ static void cut_material(uint16_t material) {
     double final_y=body.chunk.y*64.+body.body.y_fp/65536.+motion.center_y;
     dc_gpu_rigid_solver_stats_t stats;
     ASSERT_TRUE(dc_level_view_rigid_solver_stats(view,&stats));
-    ASSERT_EQ(stats.overflow,0u);ASSERT_EQ(stats.solved_contacts,0u);
     printf("Paint cut material%u mass%.3f density%.3f centerY%.6f→%.6f\n",material,motion.mass,motion.density,initial_y,final_y);
+    if(stats.solved_contacts) {
+        dc_gpu_contact_stats_t summary;
+        ASSERT_TRUE(dc_level_view_contacts(view,&summary,NULL,0,err,sizeof(err)));
+        dc_gpu_contact_t *contacts=calloc(summary.count?summary.count:1,sizeof(*contacts));
+        ASSERT_TRUE(contacts);
+        ASSERT_TRUE(dc_level_view_contacts(view,&summary,contacts,summary.count,err,sizeof(err)));
+        printf("%u solved contacts, %u final contacts\n",stats.solved_contacts,summary.count);
+        for(unsigned i=0;i<summary.count && i<8;i++) {
+            dc_gpu_contact_t *c=&contacts[i];
+            printf("contact %u: owners %u,%u kind %u chunk %lld,%lld cell %u\n",
+                i,c->body_a,c->body_b,c->kind,(long long)c->feature_chunk.x,(long long)c->feature_chunk.y,c->feature_b);
+        }
+        free(contacts);
+    }
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
+    ASSERT_EQ(stats.overflow,0u);ASSERT_EQ(stats.solved_contacts,0u);
     ASSERT_TRUE(material==DC_MATERIAL_STONE?final_y>initial_y+1:final_y<initial_y-1);PASS();
 }
 static void test_large_painted_stone_cut_sinks_across_known_seams(void) {cut_material(DC_MATERIAL_STONE);}

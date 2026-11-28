@@ -151,6 +151,13 @@ static void submerged_wood(dc_chunk_coord_t camera) {
     ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
     dc_gpu_world_body_t body;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu,0x80000001u,&body,err,sizeof(err)));
+    dc_gpu_rigid_solver_stats_t stats;
+    ASSERT_TRUE(dc_gpu_read_rigid_solver_stats(gpu,&stats));
+    ASSERT_EQ(stats.overflow,0u);
+    ASSERT_EQ(body.chunk.x,2);
+    ASSERT_EQ(body.chunk.y,0);
+    ASSERT_TRUE(abs(body.body.x_fp-(20<<16)-body.body.vx_fp)<32);
+    ASSERT_TRUE(abs(body.body.y_fp-(20<<16)-body.body.vy_fp)<32);
     printf("Submerged wood camera %lld,%lld: velocity %d,%d\n",(long long)camera.x,(long long)camera.y,body.body.vx_fp,body.body.vy_fp);
     dc_gpu_destroy(gpu);free(chunk);
     ASSERT_TRUE(fabsf(body.body.vy_fp/65536.f+1.f/6.f)<.003f);
@@ -162,7 +169,45 @@ static void test_cached_wet_wood_responds_to_moving_water(void) {submerged_wood(
 static void test_distant_camera_keeps_cached_buoyancy_and_drag(void) {
     submerged_wood((dc_chunk_coord_t){INT64_C(1)<<40,-(INT64_C(1)<<40)});
 }
+static void test_distant_camera_preserves_landing_on_cached_floor(void) {
+    char err[256]={0};
+    dc_gpu_t *gpu=NULL;
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+    chunk->coord.x=2;
+    for(unsigned y=20;y<28;y++) for(unsigned x=20;x<36;x++)
+        chunk->cells[y*64+x].material=DC_MATERIAL_STONE;
+    for(unsigned y=36;y<64;y++) for(unsigned x=0;x<64;x++)
+        chunk->cells[y*64+x].material=DC_MATERIAL_STONE;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    dc_chunk_coord_t camera={INT64_C(1)<<40,-(INT64_C(1)<<40)};
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,camera,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    bool supported=false;
+    dc_gpu_world_body_t b;
+    for(unsigned tick=0;tick<20;tick++) {
+        ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
+        dc_gpu_rigid_solver_stats_t stats;
+        ASSERT_TRUE(dc_gpu_read_rigid_solver_stats(gpu,&stats));
+        ASSERT_EQ(stats.overflow,0u);
+        supported|=stats.solved_contacts>0u;
+        ASSERT_TRUE(dc_gpu_read_world_body(gpu,0x80000001u,&b,err,sizeof(err)));
+        ASSERT_EQ(b.chunk.x,2);ASSERT_EQ(b.chunk.y,0);
+    }
+    float y=b.body.y_fp/65536.f;
+    printf("Distant cached landing height %.6f velocity %d supported %u\n",y,b.body.vy_fp,supported);
+    dc_gpu_destroy(gpu);free(chunk);
+    ASSERT_TRUE(supported);
+    ASSERT_TRUE(fabsf(y-28.f)<.2f);
+    ASSERT_TRUE(abs(b.body.vy_fp)<6554);
+    PASS();
+}
 int main(int argc,char **argv) {
+    if(argc==1 || (argc==2 && strcmp(argv[1],"--landing")==0)) {
+        RUN(test_distant_camera_preserves_landing_on_cached_floor);
+        if(argc==2) return g_fail!=0;
+    }
     if(argc==1 || (argc==2 && strcmp(argv[1],"--distant")==0)) {
         RUN(test_distant_camera_keeps_cached_buoyancy_and_drag);
         if(argc==2) return g_fail!=0;
