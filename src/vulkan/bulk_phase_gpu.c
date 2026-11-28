@@ -112,6 +112,13 @@ void dc_gpu_record_bulk_domain(dc_gpu_t *gpu, VkDescriptorSet descriptor,
             0,sizeof(push),&push);
         vkCmdDispatch(gpu->command,(width*height+63u)/64u,1,1);
         vkCmdPipelineBarrier2(gpu->command,&dependency);
+        /* All transverse shear reads must finish before neighboring normal
+         * velocities change. Publish this parity before the next sweep. */
+        push.parity=parity+2u;
+        vkCmdPushConstants(gpu->command,gpu->pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,
+            0,sizeof(push),&push);
+        vkCmdDispatch(gpu->command,(width*height+63u)/64u,1,1);
+        vkCmdPipelineBarrier2(gpu->command,&dependency);
     }
     vkCmdBindPipeline(gpu->command,VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->bulk_phase_retained_pipeline);

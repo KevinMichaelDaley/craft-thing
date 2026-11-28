@@ -132,7 +132,7 @@ void main() {
     if(index>=params.width*params.height) return;
     ivec2 p=ivec2(int(index%params.width),int(index/params.width));
     uint coordinate=params.axis==0u?uint(p.y):uint(p.x);
-    if((coordinate&1u)!=params.parity) return;
+    if((coordinate&1u)!=(params.parity&1u)) return;
     ivec2 q=p+(params.axis==0u?ivec2(0,1):ivec2(1,0));
     if(q.x>=int(params.width)||q.y>=int(params.height)) return;
     uint top_page=page_at(p),bottom_page=page_at(q);
@@ -140,6 +140,16 @@ void main() {
     uint top_at=atlas_at(p,top_page),bottom_at=atlas_at(q,bottom_page);
     if(!DC_CELL_LIQUID_PERMEABLE(cells[top_at].x&65535u)||
        !DC_CELL_LIQUID_PERMEABLE(cells[bottom_at].x&65535u)) return;
+    // Retained oil is derived again after the four pair sweeps. Use its
+    // word at the unswapped pair origin for the pending normal velocity.
+    const uint pending_channel=3u;
+    if(params.parity>=2u) {
+        float flow=uintBitsToFloat(bulk_at(top_at,pending_channel));
+        if(params.axis==0u) face_velocity[index].y=flow;
+        else face_velocity[index].x=flow;
+        return;
+    }
+    uint pair_origin=top_at;
     uint world_size=params.width*params.height;
     uint face_open=FULL-min(FULL,occupancy[(params.axis==0u?4u:3u)*world_size+index]);
     uint top_index=index;
@@ -173,9 +183,8 @@ void main() {
             params.oil_density,params.axis,water_flow);
         water_flow=couple_water_phase(top_at,2u,top[2],water_mass,
             params.slime_density,params.axis,water_flow);
-        if(params.axis==0u) face_velocity[index].y=water_flow;
-        else face_velocity[index].x=water_flow;
     }
+    bulk_write(pair_origin,pending_channel,floatBitsToUint(water_flow));
     uvec3 top_before=uvec3(top[0],top[1],top[2]);
     uvec3 bottom_before=uvec3(bottom[0],bottom[1],bottom[2]);
     uint excess=used(top)>top_capacity?used(top)-top_capacity:0u;
