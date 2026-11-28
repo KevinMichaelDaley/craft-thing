@@ -42,3 +42,7 @@ After cap fix and query refactor, full tools/with-vulkan make -j8 test PASS. Sub
 **2026-11-26T15:25:12Z**
 
 The shared RTX cache was observed at 134108241 bytes near the 128 MiB cap. During the timed adhesion tests, the repeated launcher command spent substantial CPU time between scenes using that shared cache. The actual locked siege sweep uses a worktree-local DC_PIPELINE_CACHE_DIR. Its first context loaded zero bytes, saved 22922613 bytes, and subsequent fireproof and delayed contexts loaded and reused that cache. The prompt and stone-carrier controls passed. This is execution evidence for cache isolation across concurrent worktrees.
+
+**2026-11-28T04:57:21Z**
+
+Cold-start follow-up: thermal enable creates the 247,884-byte generic thermal shader pipeline and 24 runtime specializations. Phases 24 and 25 still bind the generic pipeline. In an isolated build, freezing the phase at GLSL compilation and eliminating unreachable functions produced valid SPIR-V for phases 0/1/4/11/24/25 at 98,140 / 105,444 / 102,652 / 25,372 / 55,972 / 55,972 bytes. A direct inlining experiment enlarged some modules to 370,164 bytes. These are module-size checks only; cold and warm startup, emitted heat and conservation still need controlled measurement before selecting this approach.
