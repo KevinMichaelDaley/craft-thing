@@ -67,3 +67,7 @@ The GPU component planner counted 7 tiles and 254 words for a shape that the pro
 **2026-11-28T06:54:31Z**
 
 A native RED admitted two new components even when 63 of 64 live body slots were already occupied. Staging now reads the addressed body directory on the GPU and creates stable tentative slot assignments from available records and ownership generations. Insufficient capacity sets the shared capacity failure bit without claiming any slot. After growth to 512 slots and changes to reservations on the same staged canvas, the final plan chose slots 63 and 323, skipping a whole unavailable workgroup, exhausted generations, reserved owners and structural tags. Current body IDs and owners were preserved. All 13 staging cases and the body allocator probe passed core and synchronization validation. The slot plan is tentative; final joint publication remains open.
+
+**2026-11-28T07:04:00Z**
+
+GPU staging checks total rigid geometry demand against free words in the active geometry bank. A validated NVIDIA regression reproduced two 4088-word plans overcommitting the bank after admitting an existing body, then passed after the capacity check and on retry after heap growth. Final placement and publication remain in progress.
