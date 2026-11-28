@@ -11,6 +11,15 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
         ASSERT_TRUE(dc_gpu_upload_chunk(gpu,1,chunk,err,sizeof(err)));
         gpu->body_refresh_pending=true;
         ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+        dc_gpu_broadphase_stats_t candidates;
+        dc_gpu_broadphase_pair_t pairs[32];
+        ASSERT_TRUE(dc_gpu_read_broadphase(gpu,&candidates,pairs,32,err,sizeof(err)));
+        unsigned matching=0;
+        for(unsigned i=0;i<candidates.count;++i) if(pairs[i].chunk.x==1 && pairs[i].chunk.y==0) {
+            ASSERT_EQ(pairs[i].kind,replaced ? DC_GPU_PAIR_BOUNDARY : DC_GPU_PAIR_TERRAIN);
+            matching++;
+        }
+        ASSERT_EQ(matching,1u);
         dc_gpu_contact_stats_t stats;
         dc_gpu_contact_t contacts[512];
         ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,512,err,sizeof(err)));
