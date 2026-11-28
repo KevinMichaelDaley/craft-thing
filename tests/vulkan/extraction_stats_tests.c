@@ -36,7 +36,20 @@ static void test_full_body_pool_is_not_misreported_as_unknown_water_physics(void
 static void test_missing_world_connectivity_is_reported_separately(void) {diagnostic_case(1);}
 static void test_geometry_arena_exhaustion_is_reported_separately(void) {diagnostic_case(2);}
 static void test_batch_deferral_reports_the_number_waiting(void) {diagnostic_case(3);}
+static void test_allocated_geometry_capacity_is_visible_before_first_extraction(void) {
+    dc_gpu_t gpu={.width=64,.height=64,.pixel_pool_words=8192,.automatic_components_enabled=true};
+    gpu.body_mapped=calloc(1,dc_gpu_body_storage_bytes(&gpu));
+    ASSERT_TRUE(gpu.body_mapped);
+    dc_gpu_extraction_stats_t stats;
+    bool okay=dc_gpu_read_extraction_stats(&gpu,&stats);
+    free(gpu.body_mapped);
+    ASSERT_TRUE(okay);
+    ASSERT_EQ(stats.arena_used_words,0u);
+    ASSERT_EQ(stats.arena_capacity_words,8192u);
+    PASS();
+}
 int main(void) {
+    RUN(test_allocated_geometry_capacity_is_visible_before_first_extraction);
     RUN(test_batch_deferral_reports_the_number_waiting);
     RUN(test_full_body_pool_is_not_misreported_as_unknown_water_physics);
     RUN(test_missing_world_connectivity_is_reported_separately);
