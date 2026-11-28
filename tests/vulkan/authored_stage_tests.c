@@ -433,17 +433,23 @@ static void test_component_plan_respects_used_geometry_and_aggregate_demand(void
     ASSERT_EQ(pool[1],42u);
     ASSERT_TRUE(8176u <= capacity && 8176u > capacity-pool[1]);
     memcpy(header,pool,sizeof(header));
+    uint32_t occupied[42];
+    uint32_t *bank=pool+DC_GPU_PIXEL_POOL_HEADER_WORDS+pool[0]*capacity;
+    memcpy(occupied,bank,sizeof(occupied));
     ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&diagnostic,NULL,0,err,sizeof(err)));
     ASSERT_EQ(diagnostic.failures,FR_AUTHORED_FAIL_CAPACITY);
     ASSERT_TRUE(!fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
     ASSERT_TRUE(strstr(err,"geometry")); ASSERT_EQ(count,2u);
     ASSERT_EQ(memcmp(header,pool,sizeof(header)),0);
+    ASSERT_EQ(memcmp(occupied,bank,sizeof(occupied)),0);
     ASSERT_TRUE(dc_gpu_runtime_geometry_reserve(gpu,8176u+pool[1],err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
     ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].geometry_words+plans[1].geometry_words,8176u);
-    ASSERT_EQ(((uint32_t *)gpu->body_mapped)[dc_gpu_pixel_pool_word_offset(gpu)+1u],42u);
+    pool=(uint32_t *)gpu->body_mapped+dc_gpu_pixel_pool_word_offset(gpu);
+    bank=pool+DC_GPU_PIXEL_POOL_HEADER_WORDS+pool[0]*dc_gpu_pixel_pool_capacity(gpu);
+    ASSERT_EQ(pool[1],42u); ASSERT_EQ(memcmp(occupied,bank,sizeof(occupied)),0);
     dc_gpu_destroy(gpu); free(chunk); free(objects); free(physical_map); free(colors); PASS();
 }
 
