@@ -43,3 +43,7 @@ A separate pinned integrated run at 3c94b591 exited 2 on the later large-body ca
 **2026-11-28T04:15:50Z**
 
 Recovered the exit receipt and log for the exact unguarded 486563d0 replay. It passed all four cases on the RTX A2000, including the second context. The refactored full suite passed all four as well. The original failing executable omitted the Vulkan result, so the precise resource rejected during that original run cannot be recovered from this log.
+
+**2026-11-28T06:26:18Z**
+
+Checked historical kernel records, the exact full-run log, and its fixture timestamps. On Nov 26 at 15:06:51 PST NVIDIA reported NV_ERR_NO_MEMORY allocating DMA mapping VA. The earlier world_body_tests created build/world_bodies_Z5p7im at 15:08:05; the halo second-context failure occurred after world_body_tests and gpu_tests, before the full run exited at 15:09:30. No NVIDIA diagnostic in that later interval identifies the failing halo call. The earlier kernel event establishes mapping pressure on the host, but cannot be attributed to this context. Current mapped-buffer startup also collapses vkBindBufferMemory and vkMapMemory into the same message.
