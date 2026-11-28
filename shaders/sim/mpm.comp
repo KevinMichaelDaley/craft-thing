@@ -453,13 +453,13 @@ uint rest_volume_fp(Particle particle) {
     return uint(round(float(particle.mass_fp)/grain_density(particle.material)));
 }
 
-void accept_one(ivec2 owner, uint layer) {
+uint accept_one(ivec2 owner, uint layer) {
     uint index = particle_index(owner, layer);
     Particle particle = proposals[index];
-    if (particle.mass_fp == 0u) { accepted[index] = 0u; return; }
+    if (particle.mass_fp == 0u) return 0u;
     ivec2 target = target_of(particle, owner);
-    if (all(equal(target, owner))) { accepted[index] = 1u; return; }
-    if (page_at(target) == 0u) { accepted[index] = 0u; return; }
+    if (all(equal(target, owner))) return 1u;
+    if (page_at(target) == 0u) return 0u;
     uint occupied = 0u,used_volume=0u,volume=rest_volume_fp(particle);
     for (uint other_layer = 0u; other_layer < 2u; ++other_layer) {
         Particle old;
@@ -469,7 +469,7 @@ void accept_one(ivec2 owner, uint layer) {
     }
     /* Resident grains reserve their rest volume until they actually leave.
        A second storage layer is not a second physical cell of capacity. */
-    if(occupied>=2u||used_volume+volume>CELL_REST_VOLUME_LIMIT_FP) {accepted[index]=0u;return;}
+    if(occupied>=2u||used_volume+volume>CELL_REST_VOLUME_LIMIT_FP) return 0u;
     uint rank = 0u;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
@@ -486,8 +486,27 @@ void accept_one(ivec2 owner, uint layer) {
             }
         }
     }
-    accepted[index] = rank < 2u - occupied && used_volume+volume<=CELL_REST_VOLUME_LIMIT_FP ?
+    return rank < 2u - occupied && used_volume+volume<=CELL_REST_VOLUME_LIMIT_FP ?
         (MOVEMENT_FLAGS_ENABLED?2u:1u) : 0u;
+}
+
+shared uvec2 row_decisions[256];
+void record_decisions(ivec2 cell) {
+    uint page = page_at(cell);
+    uvec2 decisions = uvec2(0);
+    if (page != 0u && particle_counts[page - 1u] != 0u && grain_at(cell))
+        decisions = uvec2(accept_one(cell, 0u), accept_one(cell, 1u));
+    uint lane = gl_LocalInvocationIndex;
+    row_decisions[lane] = decisions << (2u * gl_LocalInvocationID.x);
+    barrier();
+    // Each 16-cell row starts on a packed-word boundary in both chunk layers.
+    if (gl_LocalInvocationID.x == 0u && page != 0u) {
+        uvec2 packed = row_decisions[lane];
+        for (uint x = 1u; x < 16u; ++x) packed |= row_decisions[lane + x];
+        uint index = particle_index(cell, 0u);
+        accepted[index / 16u] = packed.x;
+        accepted[(index + CELLS) / 16u] = packed.y;
+    }
 }
 
 Particle zero_particle() {
@@ -499,7 +518,7 @@ uint gather_decision(uint index) {
 #ifdef DC_MPM_GATHER_PROFILE
     atomicAdd(gather_profile[0],1u);
 #endif
-    return accepted[index];
+    return (accepted[index / 16u] >> (2u * (index % 16u))) & 3u;
 }
 
 #ifdef DC_MPM_SHARED_GATHER
@@ -619,6 +638,7 @@ void main() {
 #ifdef DC_MPM_COALESCED_COMMIT
     if(mode==5u) {coalesced_commit(tile,tiles_x);return;}
 #endif
+    if (mode == 3u) { record_decisions(cell); return; }
     if (!in_grid(cell)) return;
 #ifdef DC_MPM_DOMAIN
     if (mode == MODE_INITIAL_DOMAIN_MOISTURE) {
@@ -646,10 +666,6 @@ void main() {
         if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;
         g2p_one(cell, 0u);
         g2p_one(cell, 1u);
-    } else if (mode == 3u) {
-        if (particle_counts[page_at(cell) - 1u] == 0u || !grain_at(cell)) return;
-        accept_one(cell, 0u);
-        accept_one(cell, 1u);
     } else if (mode == 4u) gather(cell);
     else if (mode == 5u) commit_cell(cell);
 }

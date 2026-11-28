@@ -26,7 +26,7 @@ bool dc_gpu_mpm_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                              DC_MPM_PARTICLES_PER_CHUNK *
                              sizeof(dc_mpm_particle_t);
     VkDeviceSize flags = (VkDeviceSize)dc_gpu_slot_capacity(gpu) *
-                         DC_MPM_PARTICLES_PER_CHUNK * sizeof(uint32_t);
+                         DC_MPM_PARTICLES_PER_CHUNK / 16u * sizeof(uint32_t);
     VkDeviceSize grid = (VkDeviceSize)gpu->width * gpu->height;
     VkDeviceSize component_bytes=dc_gpu_component_storage_bytes(gpu);
     if(!dc_gpu_mpm_scan_layout(gpu->width,gpu->height,&gpu->mpm_scan_layout))

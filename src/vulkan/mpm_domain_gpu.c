@@ -49,7 +49,7 @@ static bool prepare(dc_gpu_t *gpu,char *err,uint32_t cap) {
         [OCC]=grid*8u,[DIRTY]=(tiles+1u)*4u,[SOURCE]=particles*4u,[NEXT_SOURCE]=particles*4u,[TILE]=tiles*8u,
         [FLOW]=grid*sizeof(dc_face_velocity_t),[PARTICLE]=pool,[COUNT]=tiles*4u,
         [PROPOSAL]=pool,[OUTPUT]=pool,[GRID]=grid*16u,[FORCE]=grid*16u,[SPEED]=grid*8u,
-        [ACCEPT]=particles*4u,[WORK]=(16u+2u*d->groups)*sizeof(uint32_t),
+        [ACCEPT]=particles/16u*sizeof(uint32_t),[WORK]=(16u+2u*d->groups)*sizeof(uint32_t),
         [LABEL]=grid*4u,[NEXT_LABEL]=grid*4u,[SIZE]=grid*4u};
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(gpu->physical,&properties);
