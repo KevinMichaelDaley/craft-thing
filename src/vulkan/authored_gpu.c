@@ -4,10 +4,12 @@
 
 #include "ferrum/structural/authoring.h"
 #include "gpu_internal.h"
+#include "runtime_body_gpu.h"
 
 enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
        STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 22, STAGE_GRAPH_REFERENCES = 8,
-       STAGE_PHASES = 9 };
+       STAGE_BODY_MASKS = 9, STAGE_BODY_PREFIX = 10, STAGE_BODY_SLOTS = 11,
+       STAGE_BODY_GROUP_WORDS = 6, STAGE_PHASES = 12 };
 _Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
 _Static_assert(FR_STRUCTURAL_MEMBER_CAPACITY < 32u, "Member coverage must fit a GPU word");
@@ -26,7 +28,7 @@ struct dc_gpu_authored_stage {
     VkDescriptorSet descriptor;
     VkPipelineLayout layout;
     VkPipeline pipelines[STAGE_PHASES];
-    uint32_t pixels;
+    uint32_t pixels, body_groups;
     uint64_t local_bytes, system_bytes;
     bool ready;
 };
@@ -58,9 +60,10 @@ void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
 
 static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_stage **out,
                        char *err, uint32_t cap) {
+    uint32_t body_groups=1u+(dc_gpu_body_capacity(gpu)-1u)/128u;
     VkDeviceSize bytes = ((VkDeviceSize)STAGE_HEADER_WORDS +
                           (VkDeviceSize)count * (STAGE_WORDS_PER_PIXEL + STAGE_PLAN_WORDS) +
-                          DC_STRUCTURAL_GRAPH_WORDS) * sizeof(uint32_t);
+                          DC_STRUCTURAL_GRAPH_WORDS+(VkDeviceSize)body_groups*STAGE_BODY_GROUP_WORDS) * sizeof(uint32_t);
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(gpu->physical, &properties);
     if (bytes > properties.limits.maxStorageBufferRange)
@@ -69,6 +72,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
     if (!s) return error(err, cap, "Cannot allocate authored staging context");
     *out = s;
     s->pixels = count;
+    s->body_groups = body_groups;
     void *mapped = NULL;
     uint64_t local_before = gpu->mapped_local_bytes;
     uint64_t system_before = gpu->mapped_system_bytes;
@@ -76,15 +80,17 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
     s->local_bytes = gpu->mapped_local_bytes - local_before;
     s->system_bytes = gpu->mapped_system_bytes - system_before;
     s->mapped = mapped;
-    VkDescriptorSetLayoutBinding binding = {
+    VkDescriptorSetLayoutBinding bindings[2] = {{
         .binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+        .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT}};
+    bindings[1]=bindings[0];
+    bindings[1].binding=1;
     VkDescriptorSetLayoutCreateInfo set = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1, .pBindings = &binding};
+        .bindingCount = 2, .pBindings = bindings};
     if (vkCreateDescriptorSetLayout(gpu->device, &set, NULL, &s->set_layout) != VK_SUCCESS)
         return error(err, cap, "Cannot create authored descriptor layout");
-    VkDescriptorPoolSize size = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1};
+    VkDescriptorPoolSize size = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2};
     VkDescriptorPoolCreateInfo pool = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &size};
@@ -95,11 +101,11 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
         .descriptorPool = s->pool, .descriptorSetCount = 1, .pSetLayouts = &s->set_layout};
     if (vkAllocateDescriptorSets(gpu->device, &allocation, &s->descriptor) != VK_SUCCESS)
         return error(err, cap, "Cannot allocate authored descriptor");
-    VkDescriptorBufferInfo buffer = {s->buffer, 0, bytes};
+    VkDescriptorBufferInfo buffers[] = {{s->buffer, 0, bytes},dc_gpu_runtime_bodies_binding(gpu)};
     VkWriteDescriptorSet write = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = s->descriptor, .dstBinding = 0, .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &buffer};
+        .dstSet = s->descriptor, .dstBinding = 0, .descriptorCount = 2,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = buffers};
     vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
     VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 16};
     VkPipelineLayoutCreateInfo layout = {
@@ -131,8 +137,10 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
 static void stage_barrier(dc_gpu_t *gpu, bool host) {
     VkMemoryBarrier2 barrier = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-        .srcStageMask = host ? VK_PIPELINE_STAGE_2_HOST_BIT : VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .srcAccessMask = host ? VK_ACCESS_2_HOST_WRITE_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                        (host ? VK_PIPELINE_STAGE_2_HOST_BIT|VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT : 0),
+        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                         (host ? VK_ACCESS_2_HOST_WRITE_BIT|VK_ACCESS_2_TRANSFER_WRITE_BIT : 0),
         .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_HOST_BIT,
         .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
                          VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_HOST_READ_BIT};
@@ -174,19 +182,24 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
             if (!groups) continue;
         }
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, s->pipelines[phase]);
-        if (phase == 6u) {
+        if (phase == 6u || phase == STAGE_BODY_PREFIX) {
+            uint32_t items=phase==6u ? count : s->body_groups;
             uint32_t parity = 0;
-            for (uint32_t offset = 1; offset < count; offset *= 2u) {
+            for (uint32_t offset = 1; offset < items; offset *= 2u) {
                 push[3] = offset * 2u + parity;
                 vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-                vkCmdDispatch(gpu->command, (count + 127u) / 128u, 1, 1);
+                uint32_t n=(items+127u)/128u;
+                uint32_t x=n>65535u ? 65535u : n;
+                vkCmdDispatch(gpu->command,x,(n+x-1u)/x,1);
                 stage_barrier(gpu, false);
                 parity ^= 1u;
             }
             push[3] = parity;
             vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         } else {
-            vkCmdDispatch(gpu->command, groups, 1, 1);
+            if(phase==STAGE_BODY_MASKS || phase==STAGE_BODY_SLOTS) groups=s->body_groups;
+            uint32_t x=groups>65535u ? 65535u : groups;
+            vkCmdDispatch(gpu->command,x,(groups+x-1u)/x,1);
             stage_barrier(gpu, false);
         }
     }
@@ -207,7 +220,8 @@ bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "Cannot reach authored staging boundary");
     uint32_t count = r->width * r->height;
-    if (gpu->authored_stage && gpu->authored_stage->pixels == count)
+    if (gpu->authored_stage && gpu->authored_stage->pixels == count &&
+        gpu->authored_stage->body_groups == 1u+(dc_gpu_body_capacity(gpu)-1u)/128u)
         return stage_request(gpu, gpu->authored_stage, r, err, cap);
     struct dc_gpu_authored_stage *replacement = NULL;
     if (!stage_init(gpu, count, &replacement, err, cap) ||

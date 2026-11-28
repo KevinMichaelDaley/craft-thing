@@ -1,6 +1,10 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #include "../../include/dungeoncraft/pixel_geometry_layout.h"
+#define DC_RUNTIME_BODY_STORAGE 1
+#define DC_RUNTIME_BODY_BINDING 1
+#include "rigid_body.glsl"
+uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint PHASE=0u;
 layout(set=0,binding=0,std430) buffer Staging { uint words[]; };
@@ -20,6 +24,7 @@ uint plans() {return graph()+GRAPH_WORDS;}
 uint plan(uint i) {return plans()+i*10u;}
 uint scan(uint parity,uint i) {return plans()+pixels()*10u+parity*pixels()+i;}
 uint output_plan(uint i) {return plans()+pixels()*12u+i*10u;}
+#include "authored/body_slots.glsl"
 void reject(uint i) {atomicOr(words[2],1u);atomicMin(words[20],i);}
 shared uint first_matches,second_matches;
 void check_graph_record() {
@@ -95,6 +100,7 @@ void join(uint a,uint b) {
     }
 }
 void main() {
+    if(PHASE>=9u) {plan_body_slots();return;}
     if(PHASE==8u) {check_graph_record();return;}
     uint i=gl_GlobalInvocationID.x;if(i>=pixels()) return;
     if(PHASE==0u) {
@@ -176,6 +182,6 @@ void main() {
         uint columns=(width+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
         uint rows=(height+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
         words[d+8u]=DC_PIXEL_SHAPE_HEADER_WORDS+columns*rows+words[p+7u]*DC_PIXEL_TILE_WORDS;
-        words[d+9u]=rank;
+        words[d+9u]=INVALID;
     }
 }
