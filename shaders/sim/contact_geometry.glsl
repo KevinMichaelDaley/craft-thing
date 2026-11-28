@@ -77,24 +77,22 @@ bool contact_axis(Polygon a, Polygon b, vec2 edge, inout vec2 normal, inout floa
 bool polygon_axis_rectangle(Polygon p) {
     return p.vertices[0].y==p.vertices[1].y&&p.vertices[1].x==p.vertices[2].x&&
         p.vertices[2].y==p.vertices[3].y&&p.vertices[3].x==p.vertices[0].x&&
-        p.vertices[1].x-p.vertices[0].x==1.0&&p.vertices[2].y-p.vertices[1].y==1.0;
+        p.vertices[1].x>p.vertices[0].x&&p.vertices[2].y>p.vertices[1].y;
 }
+bool quad_contact_axes(Polygon a, Polygon b, Polygon edges, inout vec2 normal, inout float depth) {
+    bool rectangle = polygon_axis_rectangle(edges);
+    for (uint i = 0u; i < 4u; ++i) {
+        if (i == 2u && rectangle) break;
+        vec2 edge = edges.vertices[(i + 1u) % 4u] - edges.vertices[i];
+        if (!contact_axis(a, b, edge, normal, depth)) return false;
+    }
+    return true;
+}
+
 bool polygon_contact(Polygon a, Polygon b, out vec2 normal, out float depth) {
     depth = 1e20; normal = vec2(0);
-    if(CONTACT_PIXEL_ONLY&&a.count==4u&&b.count==4u) {
-        if(!contact_axis(a,b,a.vertices[1]-a.vertices[0],normal,depth)||
-           !contact_axis(a,b,a.vertices[2]-a.vertices[1],normal,depth)) return false;
-        /* Rectangular opposite edges have exactly mirrored projections, so
-         * their candidate cannot improve the earlier strict minimum. */
-        if(!polygon_axis_rectangle(a)&&
-           (!contact_axis(a,b,a.vertices[3]-a.vertices[2],normal,depth)||
-            !contact_axis(a,b,a.vertices[0]-a.vertices[3],normal,depth))) return false;
-        if(!contact_axis(a,b,b.vertices[1]-b.vertices[0],normal,depth)||
-           !contact_axis(a,b,b.vertices[2]-b.vertices[1],normal,depth)) return false;
-        return polygon_axis_rectangle(b)||
-            (contact_axis(a,b,b.vertices[3]-b.vertices[2],normal,depth)&&
-             contact_axis(a,b,b.vertices[0]-b.vertices[3],normal,depth));
-    }
+    if (CONTACT_PIXEL_ONLY && a.count == 4u && b.count == 4u)
+        return quad_contact_axes(a, b, a, normal, depth) && quad_contact_axes(a, b, b, normal, depth);
     for (uint i = 0u; i < a.count; ++i)
         if (!contact_axis(a, b, a.vertices[(i + 1u) % a.count] - a.vertices[i], normal, depth))
             return false;
@@ -104,47 +102,34 @@ bool polygon_contact(Polygon a, Polygon b, out vec2 normal, out float depth) {
     return true;
 }
 
-void quad_support_vertex(vec2 vertex,uint index,vec2 direction,vec2 tangent,float plane,
-                         inout vec2 span,inout uint feature,inout bool found) {
-    if(abs(dot(vertex,direction)-plane)>FEATURE_EPSILON) return;
-    float value=dot(vertex,tangent);
-    span=vec2(min(span.x,value),max(span.y,value));
-    if(!found) {feature=index;found=true;}
-}
-void support_face(Polygon polygon, vec2 direction, vec2 tangent,
-                  out float plane, out vec2 span, out uint feature) {
-    plane = project_polygon(polygon, direction).y;
+void ordered_support_face(Polygon polygon, uint count, vec2 direction, vec2 tangent,
+                          out float plane, out vec2 span, out uint feature) {
+    plane = dot(polygon.vertices[0], direction);
+    for (uint i = 1u; i < count; ++i)
+        plane = max(plane, dot(polygon.vertices[i], direction));
     span = vec2(1e20, -1e20); feature = 0u;
     bool found = false;
-    if(CONTACT_PIXEL_ONLY&&polygon.count==4u) {
-        vec2 a=polygon.vertices[0],b=polygon.vertices[1],c=polygon.vertices[2],d=polygon.vertices[3];
-        quad_support_vertex(a,0u,direction,tangent,plane,span,feature,found);
-        quad_support_vertex(b,1u,direction,tangent,plane,span,feature,found);
-        quad_support_vertex(c,2u,direction,tangent,plane,span,feature,found);
-        quad_support_vertex(d,3u,direction,tangent,plane,span,feature,found);
-        bool sa=abs(dot(a,direction)-plane)<=FEATURE_EPSILON;
-        bool sb=abs(dot(b,direction)-plane)<=FEATURE_EPSILON;
-        bool sc=abs(dot(c,direction)-plane)<=FEATURE_EPSILON;
-        bool sd=abs(dot(d,direction)-plane)<=FEATURE_EPSILON;
-        if(sa&&sb) feature=0x80000000u;
-        else if(sb&&sc) feature=0x80000001u;
-        else if(sc&&sd) feature=0x80000002u;
-        else if(sd&&sa) feature=0x80000003u;
-        return;
-    }
-    for (uint i = 0u; i < polygon.count; ++i) {
+    for (uint i = 0u; i < count; ++i) {
         if (abs(dot(polygon.vertices[i], direction) - plane) > FEATURE_EPSILON) continue;
         float value = dot(polygon.vertices[i], tangent);
         span.x = min(span.x, value); span.y = max(span.y, value);
         if (!found) { feature = i; found = true; }
     }
-    for (uint i = 0u; i < polygon.count; ++i) {
+    for (uint i = 0u; i < count; ++i) {
         if (abs(dot(polygon.vertices[i], direction) - plane) <= FEATURE_EPSILON &&
-            abs(dot(polygon.vertices[(i + 1u) % polygon.count], direction) - plane) <= FEATURE_EPSILON) {
+            abs(dot(polygon.vertices[(i + 1u) % count], direction) - plane) <= FEATURE_EPSILON) {
             feature = 0x80000000u | i;
             break;
         }
     }
+}
+
+void support_face(Polygon polygon, vec2 direction, vec2 tangent,
+                  out float plane, out vec2 span, out uint feature) {
+    if (CONTACT_PIXEL_ONLY && polygon.count == 4u)
+        ordered_support_face(polygon, 4u, direction, tangent, plane, span, feature);
+    else
+        ordered_support_face(polygon, polygon.count, direction, tangent, plane, span, feature);
 }
 
 void contact_witnesses(Polygon a, Polygon b, vec2 normal,

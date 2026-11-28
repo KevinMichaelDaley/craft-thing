@@ -36,6 +36,7 @@ static void test_quad_contacts_match_frozen_ordered_sat_without_dynamic_loops(vo
     ASSERT_EQ(general_cases,cases);ASSERT_EQ(general_errors,0u);
     ASSERT_EQ(rectangle_cases,cases);ASSERT_EQ(pair_cases,cases);
     ASSERT_EQ(rectangle_errors,0u);ASSERT_EQ(pair_errors,0u);
+    ASSERT_TRUE(rectangle_axes<=6u);ASSERT_TRUE(pair_axes<=4u);
     ASSERT_EQ(unit_cases,cases);ASSERT_EQ(unit_pair_cases,cases);
     ASSERT_EQ(unit_errors,0u);ASSERT_EQ(unit_pair_errors,0u);
     ASSERT_TRUE(unit_axes<=6u);ASSERT_TRUE(unit_pair_axes<=4u);PASS();
