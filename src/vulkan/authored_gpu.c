@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ferrum/assets/prop.h"
 #include "ferrum/structural/authoring.h"
 #include "gpu_internal.h"
 
@@ -29,8 +28,7 @@ static bool error(char *err, uint32_t cap, const char *reason) {
     return false;
 }
 
-void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
-    struct dc_gpu_authored_stage *s = gpu->authored_stage;
+static void destroy_stage(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s) {
     if (!s) return;
     for (unsigned i = 0; i < STAGE_PHASES; i++)
         if (s->pipelines[i]) vkDestroyPipeline(gpu->device, s->pipelines[i], NULL);
@@ -43,10 +41,15 @@ void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
     gpu->mapped_local_bytes -= s->local_bytes;
     gpu->mapped_system_bytes -= s->system_bytes;
     free(s);
+}
+
+void dc_gpu_authored_destroy(dc_gpu_t *gpu) {
+    destroy_stage(gpu, gpu->authored_stage);
     gpu->authored_stage = NULL;
 }
 
-static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
+static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_stage **out,
+                       char *err, uint32_t cap) {
     VkDeviceSize bytes = ((VkDeviceSize)STAGE_HEADER_WORDS +
                           (VkDeviceSize)count * (STAGE_WORDS_PER_PIXEL + STAGE_PLAN_WORDS) +
                           DC_STRUCTURAL_GRAPH_WORDS) * sizeof(uint32_t);
@@ -56,7 +59,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
         return error(err, cap, "Authored staging exceeds device buffer range");
     struct dc_gpu_authored_stage *s = calloc(1, sizeof(*s));
     if (!s) return error(err, cap, "Cannot allocate authored staging context");
-    gpu->authored_stage = s;
+    *out = s;
     s->pixels = count;
     void *mapped = NULL;
     uint64_t local_before = gpu->mapped_local_bytes;
@@ -90,7 +93,6 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, char *err, uint32_t cap) {
         .dstSet = s->descriptor, .dstBinding = 0, .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &buffer};
     vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
-    gpu->descriptor_revision++;
     VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 16};
     VkPipelineLayoutCreateInfo layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -132,35 +134,15 @@ static void stage_barrier(dc_gpu_t *gpu, bool host) {
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
-bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
-                             char *err, uint32_t cap) {
-    if (!gpu || !fr_authored_request_valid(r, err, cap)) return false;
-    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
-        return error(err, cap, "Cannot reach authored staging boundary");
-    uint32_t count = r->width * r->height;
-    struct dc_gpu_authored_stage *s = gpu->authored_stage;
-    if (!s || s->pixels != count) {
-        dc_gpu_authored_destroy(gpu);
-        if (!stage_init(gpu, count, err, cap)) {dc_gpu_authored_destroy(gpu);return false;}
-        s = gpu->authored_stage;
-    }
+static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
+                          const fr_authored_request_t *r, char *err, uint32_t cap) {
+    uint32_t count = s->pixels;
     s->ready = false;
-    dc_gpu_fluid_uploads_invalidate(gpu);
     memset(s->mapped, 0, STAGE_HEADER_WORDS * sizeof(uint32_t));
     s->mapped[FR_AUTHORED_TX_LO] = (uint32_t)r->transaction_id;
     s->mapped[FR_AUTHORED_TX_HI] = (uint32_t)(r->transaction_id >> 32);
     s->mapped[20] = UINT32_MAX;
     memcpy(s->mapped + STAGE_HEADER_WORDS, r->physical, r->physical_bytes);
-    if (!gpu->fluid_work_possible) {
-        const uint8_t *physical = r->physical;
-        for (uint32_t i = 0; i < count; i++) {
-            const uint8_t *pixel = physical + (size_t)i * FR_AUTHORED_PHYSICAL_STRIDE;
-            if (pixel[0] == FR_PROP_MATERIAL_WATER && pixel[1] == 0u) {
-                gpu->fluid_work_possible = true;
-                break;
-            }
-        }
-    }
     memcpy(s->mapped + STAGE_HEADER_WORDS + count * 2u, r->appearance, r->appearance_bytes);
     if (r->structure) {
         memcpy(s->mapped + STAGE_HEADER_WORDS + count * 18u, r->member_ownership, r->member_ownership_bytes);
@@ -201,6 +183,26 @@ bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
     if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS || vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "Cannot complete authored staging passes");
     s->ready = true;
+    return true;
+}
+
+bool fr_gpu_prepare_authored(dc_gpu_t *gpu, const fr_authored_request_t *r,
+                             char *err, uint32_t cap) {
+    if (!gpu || !fr_authored_request_valid(r, err, cap)) return false;
+    if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
+        return error(err, cap, "Cannot reach authored staging boundary");
+    uint32_t count = r->width * r->height;
+    if (gpu->authored_stage && gpu->authored_stage->pixels == count)
+        return stage_request(gpu, gpu->authored_stage, r, err, cap);
+    struct dc_gpu_authored_stage *replacement = NULL;
+    if (!stage_init(gpu, count, &replacement, err, cap) ||
+        !stage_request(gpu, replacement, r, err, cap)) {
+        destroy_stage(gpu, replacement);
+        return false;
+    }
+    destroy_stage(gpu, gpu->authored_stage);
+    gpu->authored_stage = replacement;
+    gpu->descriptor_revision++;
     return true;
 }
 
