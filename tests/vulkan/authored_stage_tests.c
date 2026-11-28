@@ -471,7 +471,45 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_destinations_keep_chunk_carries_and_rigid_rest_coordinates(void) {
+    fr_authored_request_t r=request();
+    r.origin=(dc_chunk_coord_t){INT64_C(0xffffffff),INT64_MIN+1};
+    r.origin_x=63; r.pivot_x=1; r.pivot_y=2; r.source_frame=19;
+    pixel(1,1,1,FR_AUTHORED_RIGID,7); pixel(2,1,2,FR_AUTHORED_RIGID,7);
+    pixel(4,4,1,FR_AUTHORED_RIGID,7); pixel(1,2,1,FR_AUTHORED_TERRAIN,3);
+    pixel(3,5,0,FR_AUTHORED_DECORATION,4);
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu); char err[256];
+    fr_authored_destination_t dest[64]; fr_authored_component_plan_t plans[2]; uint32_t count;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_destinations(gpu,dest,64,err,sizeof(err)));
+    ASSERT_EQ(dest[10].role,FR_AUTHORED_RIGID); ASSERT_EQ(dest[10].object,7u);
+    ASSERT_EQ(dest[10].component,plans[0].source_root); ASSERT_EQ(dest[10].body_slot,plans[0].body_slot);
+    ASSERT_EQ(dest[10].geometry_word,plans[0].geometry_word); ASSERT_EQ(dest[10].tile_cell,1u);
+    ASSERT_EQ(dest[10].rest_x,1u); ASSERT_EQ(dest[10].rest_y,0u);
+    ASSERT_EQ(dest[10].chunk.x,INT64_C(0x100000000)); ASSERT_EQ(dest[10].chunk.y,INT64_MIN);
+    ASSERT_EQ(dest[10].local_x,0u); ASSERT_EQ(dest[10].local_y,63u);
+    ASSERT_EQ(dest[10].source_pixel,10u); ASSERT_EQ(dest[10].source_frame,19u);
+    ASSERT_EQ(dest[36].body_slot,plans[1].body_slot); ASSERT_EQ(dest[36].geometry_word,plans[1].geometry_word);
+    ASSERT_EQ(dest[17].role,FR_AUTHORED_TERRAIN); ASSERT_EQ(dest[17].local_x,63u);
+    ASSERT_EQ(dest[17].chunk.y,INT64_MIN+1); ASSERT_EQ(dest[17].local_y,0u);
+    ASSERT_EQ(dest[17].body_slot,UINT32_MAX); ASSERT_EQ(dest[17].geometry_word,UINT32_MAX);
+    ASSERT_EQ(dest[43].role,FR_AUTHORED_DECORATION); ASSERT_EQ(dest[43].body_slot,UINT32_MAX);
+    ASSERT_EQ(dest[43].geometry_word,UINT32_MAX); ASSERT_EQ(dest[43].rest_x,3u); ASSERT_EQ(dest[43].rest_y,5u);
+    ASSERT_EQ(dest[0].role,0u); ASSERT_EQ(dest[0].body_slot,UINT32_MAX);
+    pixel(1,1,255,FR_AUTHORED_RIGID,7);
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    dest[10].source_frame=12345;
+    ASSERT_TRUE(!fr_gpu_read_authored_destinations(gpu,dest,64,err,sizeof(err)));
+    ASSERT_EQ(dest[10].source_frame,12345u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--destinations")) {
+        RUN(test_destinations_keep_chunk_carries_and_rigid_rest_coordinates);
+        return g_fail!=0;
+    }
     if(argc==2 && !strcmp(argv[1],"--geometry-capacity")) {
         RUN(test_component_plan_respects_used_geometry_and_aggregate_demand);
         return g_fail!=0;
@@ -485,6 +523,7 @@ int main(int argc,char **argv) {
         return g_fail!=0;
     }
     RUN(test_structural_references_require_existing_nodes);
+    RUN(test_destinations_keep_chunk_carries_and_rigid_rest_coordinates);
     RUN(test_invalid_interface_mechanics_rejected_before_placement);
     RUN(test_each_declared_member_requires_owned_structural_pixels);
     RUN(test_structural_pixels_use_registered_mechanical_profiles);

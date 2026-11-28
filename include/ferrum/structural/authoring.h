@@ -156,4 +156,8 @@ bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
                                      uint32_t capacity, uint32_t *count,
                                      char *err_buf, uint32_t err_cap);
 
+/** Copy the completed tentative per-source destination map for tools and tests. */
+bool fr_gpu_read_authored_destinations(dc_gpu_t *gpu, fr_authored_destination_t *out,
+                                       uint32_t capacity, char *err, uint32_t err_cap);
+
 #endif

@@ -45,6 +45,12 @@ static uint32_t stage_groups(uint32_t items) {
     return 1u + (items - 1u) / STAGE_LANES;
 }
 
+bool fr_gpu_read_authored_destinations(dc_gpu_t *gpu, fr_authored_destination_t *out,
+                                       uint32_t capacity, char *err, uint32_t cap) {
+    (void)gpu; (void)out; (void)capacity;
+    return error(err,cap,"No staged authored destinations");
+}
+
 static void dispatch_groups(VkCommandBuffer command, uint32_t groups) {
     /* Vulkan guarantees 65,535 groups in each dimension. */
     uint32_t x = groups > 65535u ? 65535u : groups;
