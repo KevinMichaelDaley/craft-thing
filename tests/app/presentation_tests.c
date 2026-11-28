@@ -28,6 +28,8 @@ static unsigned present_calls;
 static struct { void *address; size_t size; } large_clears[128];
 static unsigned clear_count;
 static _Thread_local bool recording_clears;
+static struct {VkBuffer buffer; VkDeviceSize bytes;} zero_fills[32];
+static unsigned fill_count;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #e); ++g_fail; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -35,6 +37,14 @@ static _Thread_local bool recording_clears;
 #define PASS() ++g_pass
 
 void *__real_memset(void *, int, size_t);
+void __real_vkCmdFillBuffer(VkCommandBuffer,VkBuffer,VkDeviceSize,VkDeviceSize,uint32_t);
+void __wrap_vkCmdFillBuffer(VkCommandBuffer command,VkBuffer buffer,VkDeviceSize offset,VkDeviceSize bytes,uint32_t value) {
+    if (recording_clears && !offset && !value && fill_count<32) {
+        zero_fills[fill_count].buffer=buffer;
+        zero_fills[fill_count++].bytes=bytes;
+    }
+    __real_vkCmdFillBuffer(command,buffer,offset,bytes,value);
+}
 void *__wrap_memset(void *ptr, int value, size_t bytes) {
     if (recording_clears && value == 0 && bytes >= 1048576 && clear_count < 128) {
         large_clears[clear_count].address = ptr;
@@ -122,6 +132,7 @@ static int window_cycle(void) {
     char err[256]={0}; dc_gpu_t *g=NULL;
     uint64_t start=SDL_GetPerformanceCounter();
     clear_count=0;
+    fill_count=0;
     recording_clears=true;
     if(!dc_test_create_window(&g,64,64,256,256,"build/shaders/pattern.comp.spv",err,sizeof(err))) {
         recording_clears=false;
@@ -133,8 +144,12 @@ static int window_cycle(void) {
     unsigned shape=constructor_clears(g->shape_color_mapped,terrain+2u*dc_gpu_color_bank_bytes(g));
     size_t bulk_size=(size_t)dc_gpu_slot_capacity(g)*sizeof(fr_bulk_phase_chunk_t);
     unsigned bulk=constructor_clears(g->bulk_phase_mapped,bulk_size);
-    if (water>1 || shape>1 || bulk>1) {
-        fprintf(stderr,"Repeated constructor clears: water %u, appearance %u, bulk %u\n",water,shape,bulk);
+    bool water_filled=false;
+    for (unsigned i=0;i<fill_count;++i) water_filled |= zero_fills[i].buffer==g->water_color_buffer &&
+        (zero_fills[i].bytes==terrain || zero_fills[i].bytes==VK_WHOLE_SIZE);
+    if (!water_filled || water!=0 || shape>1 || bulk>1) {
+        fprintf(stderr,"Constructor clears: water transfer %u, host water %u, appearance %u, bulk %u\n",
+            water_filled,water,shape,bulk);
         dc_gpu_destroy(g); return 12;
     }
     window_gpu=g;
@@ -307,7 +322,8 @@ static void test_gas_tick_progress_survives_acquire_timeout(void) {
     PASS();
 }
 
-int main(void) {
+int main(int argc,char **argv) {
+    if (argc==2 && strcmp(argv[1],"--one-window")==0) return window_cycle();
     RUN(test_combined_tick_progress_follows_fence_completion);
     RUN(test_gas_tick_progress_survives_acquire_timeout);
     if (!getenv("DC_TEST_PRESENT_PROGRESS_ONLY")) {
