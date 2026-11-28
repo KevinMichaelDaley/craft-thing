@@ -61,8 +61,9 @@ bool appearance_valid(uint index) {
 uint member_index(uint index,uint material) {
     if(params.has_graph==0u) return INVALID;
     uint owner=words[members(index)],g=graph();
-    if(owner==0u) return INVALID;
-    uint profile=material==1u?0u:material==3u?2u:1u;
+    if(owner==0u || material<1u || material>3u) return INVALID;
+    // Canonical stone, wood and mortar have registered structural profiles in that order.
+    uint profile=material-1u;
     for(uint m=0u;m<words[g+1u];m++) {
         uint p=g+GRAPH_MEMBERS+m*8u;
         if(words[p]==owner) return words[p+4u]==profile?m:INVALID;
