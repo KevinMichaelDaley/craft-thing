@@ -783,6 +783,22 @@ static void check_replaced_water_owner(bool shift) {
 static void test_upload_replaces_current_water_faces(void) {check_replaced_water_owner(false);}
 static void test_upload_between_shift_and_remap_keeps_new_owner(void) {check_replaced_water_owner(true);}
 
+static void test_far_camera_shift_clears_faces_and_preserves_the_source(void) {
+    char err[256]={0};
+    dc_chunk_t left={0},right={.coord={1,0}},saved={0};
+    dc_gpu_t *gpu=make_grid(&left,&right,err,sizeof(err));
+    ASSERT_TRUE(gpu);
+    dc_face_velocity_t *faces=gpu->velocity_mapped;
+    faces[0]=(dc_face_velocity_t){.75f,-.5f};
+    ASSERT_TRUE(dc_gpu_shift_velocity(gpu,1<<26,-(1<<26),err,sizeof(err)));
+    ASSERT_EQ(faces[0].x,0.f);ASSERT_EQ(faces[0].y,0.f);
+    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,UINT32_MAX,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,&saved,err,sizeof(err)));
+    ASSERT_EQ(saved.face_velocity[0].x,.75f);ASSERT_EQ(saved.face_velocity[0].y,-.5f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+
 static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
     char err[256] = {0};
     dc_chunk_t *chunks = calloc(24, sizeof(*chunks));
@@ -1108,6 +1124,7 @@ int main(int argc,char **argv) {
     RUN(test_camera_shift_retains_evicted_water_velocity);
     RUN(test_upload_replaces_current_water_faces);
     RUN(test_upload_between_shift_and_remap_keeps_new_owner);
+    RUN(test_far_camera_shift_clears_faces_and_preserves_the_source);
     if(argc==2 && strcmp(argv[1],"--cached-velocity")==0) return g_fail!=0;
     RUN(test_rigid_displacement_raises_water_without_losing_volume);
     RUN(test_closed_displacement_retains_and_reports_overflow);
