@@ -358,6 +358,11 @@ static void record_mass_relaxation(dc_gpu_t *gpu, VkDescriptorSet descriptor, Vk
         push[2] = modes[i];
         record_mass_pass(gpu, descriptor, pipeline, slots, push);
     }
+    /* A timed tick can start the next projection in the same submission.
+     * Its velocity snapshot reads the faces damped by the final mass pass. */
+    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 }
 
 static void record_fluid_correction(dc_gpu_t *gpu) {
