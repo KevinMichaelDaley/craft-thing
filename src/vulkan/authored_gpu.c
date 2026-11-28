@@ -10,7 +10,10 @@
 enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
        STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 23, STAGE_GRAPH_REFERENCES = 8,
        STAGE_BODY_MASKS = 9, STAGE_BODY_PREFIX = 10, STAGE_BODY_SLOTS = 11,
-       STAGE_BODY_GROUP_WORDS = 6, STAGE_LANES = 128, STAGE_PHASES = 12 };
+       STAGE_BODY_GROUP_WORDS = 6, STAGE_LANES = 128, STAGE_PHASES = 13,
+       STAGE_PUSH_WORDS = 14 };
+_Static_assert(sizeof(fr_authored_destination_t)==16u*sizeof(uint32_t),
+               "Authored destination GPU layout changed");
 _Static_assert(sizeof(fr_authored_component_plan_t) == 11u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
 _Static_assert(DC_GPU_PIXEL_POOL_HEADER_WORDS == DC_PIXEL_POOL_HEADER_WORDS,
@@ -31,7 +34,7 @@ struct dc_gpu_authored_stage {
     VkDescriptorSet descriptor;
     VkPipelineLayout layout;
     VkPipeline pipelines[STAGE_PHASES];
-    uint32_t pixels, body_groups;
+    uint32_t pixels, body_groups, destination_offset;
     uint64_t local_bytes, system_bytes;
     bool ready;
 };
@@ -47,8 +50,13 @@ static uint32_t stage_groups(uint32_t items) {
 
 bool fr_gpu_read_authored_destinations(dc_gpu_t *gpu, fr_authored_destination_t *out,
                                        uint32_t capacity, char *err, uint32_t cap) {
-    (void)gpu; (void)out; (void)capacity;
-    return error(err,cap,"No staged authored destinations");
+    struct dc_gpu_authored_stage *s=gpu ? gpu->authored_stage : NULL;
+    if(!s || !s->ready || !out || capacity<s->pixels)
+        return error(err,cap,"Invalid authored destination readback");
+    if(s->mapped[FR_AUTHORED_FAILURE])
+        return error(err,cap,"Authored preflight rejected the destination map");
+    memcpy(out,s->mapped+s->destination_offset,(size_t)s->pixels*sizeof(*out));
+    return true;
 }
 
 static void dispatch_groups(VkCommandBuffer command, uint32_t groups) {
@@ -85,6 +93,9 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
                           DC_STRUCTURAL_GRAPH_WORDS+(VkDeviceSize)body_groups*STAGE_BODY_GROUP_WORDS) * sizeof(uint32_t);
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(gpu->physical, &properties);
+    VkDeviceSize alignment=properties.limits.minStorageBufferOffsetAlignment;
+    VkDeviceSize destination=(bytes+alignment-1u)&~(alignment-1u);
+    bytes=destination+(VkDeviceSize)count*sizeof(fr_authored_destination_t);
     if (bytes > properties.limits.maxStorageBufferRange)
         return error(err, cap, "Authored staging exceeds device buffer range");
     struct dc_gpu_authored_stage *s = calloc(1, sizeof(*s));
@@ -92,6 +103,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
     *out = s;
     s->pixels = count;
     s->body_groups = body_groups;
+    s->destination_offset = (uint32_t)(destination/sizeof(uint32_t));
     void *mapped = NULL;
     uint64_t local_before = gpu->mapped_local_bytes;
     uint64_t system_before = gpu->mapped_system_bytes;
@@ -126,7 +138,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
         .dstSet = s->descriptor, .dstBinding = 0, .descriptorCount = 2,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = buffers};
     vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
-    VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 24};
+    VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, STAGE_PUSH_WORDS*sizeof(uint32_t)};
     VkPipelineLayoutCreateInfo layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &s->set_layout,
@@ -190,8 +202,15 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
         return error(err, cap, "Cannot begin authored command buffer");
     stage_barrier(gpu, true);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, s->layout, 0, 1, &s->descriptor, 0, NULL);
-    uint32_t push[] = {r->width, r->height, r->structure != NULL, 0,
-                       dc_gpu_pixel_pool_word_offset(gpu), dc_gpu_pixel_pool_capacity(gpu)};
+    dc_chunk_coord_t delta;
+    uint32_t local_x,local_y;
+    dc_cell_address((int64_t)r->origin_x-r->pivot_x,(int64_t)r->origin_y-r->pivot_y,
+                    &delta,&local_x,&local_y);
+    uint64_t chunk_x=(uint64_t)(r->origin.x+delta.x),chunk_y=(uint64_t)(r->origin.y+delta.y);
+    uint32_t push[STAGE_PUSH_WORDS] = {r->width, r->height, r->structure != NULL, 0,
+                       dc_gpu_pixel_pool_word_offset(gpu), dc_gpu_pixel_pool_capacity(gpu),
+                       s->destination_offset,r->source_frame,(uint32_t)chunk_x,(uint32_t)(chunk_x>>32),
+                       (uint32_t)chunk_y,(uint32_t)(chunk_y>>32),local_x,local_y};
     vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     for (uint32_t phase = 0; phase < STAGE_PHASES; phase++) {
         uint32_t groups = stage_groups(count);
