@@ -24,7 +24,7 @@ bool dc_gpu_colors_init(dc_gpu_t *g,char *err,uint32_t cap) {
     g->shape_color_mapped=colors.mapped;g->shape_color_address=colors.address;
     g->shape_color_allocation_bytes=colors.allocation_bytes;
     g->shape_color_device_local=colors.device_local;
-    memset(g->shape_color_mapped,0,(size_t)(terrain+2*bank));return true;
+    return true;
 }
 void dc_gpu_colors_destroy(dc_gpu_t *g) {
     free(g->checkpoint_colors);

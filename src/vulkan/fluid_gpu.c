@@ -42,14 +42,11 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize color_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_CHUNK_CELLS*16;
     if(!dc_gpu_make_mapped_buffer(gpu,color_bytes,&gpu->water_color_buffer,
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
-    memset(gpu->water_color_mapped,0,(size_t)color_bytes);
     VkDeviceSize bulk_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*sizeof(fr_bulk_phase_chunk_t);
     if(!dc_gpu_make_hydro_buffer(gpu,DC_HYDRO_BULK,bulk_bytes,&gpu->bulk_phase_buffer,
         &gpu->bulk_phase_memory,&gpu->bulk_phase_mapped,err,cap)) return false;
-    memset(gpu->bulk_phase_mapped,0,(size_t)bulk_bytes);
     if(!dc_gpu_make_mapped_buffer(gpu,DC_HYDRO_CONTROL_BYTES,&gpu->thermal_control_buffer,
         &gpu->thermal_control_memory,&gpu->thermal_control_mapped,err,cap)) return false;
-    memset(gpu->thermal_control_mapped,0,DC_HYDRO_CONTROL_BYTES);
     if(!dc_gpu_colors_init(gpu,err,cap)) return false;
     return dc_gpu_make_device_buffer(gpu, 2u * bytes, &gpu->aperture_prefix_buffer,
                &gpu->aperture_prefix_memory, err, cap) &&
