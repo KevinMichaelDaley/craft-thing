@@ -1,6 +1,6 @@
 ---
 id: ctowpe-attc
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-28T05:21:57Z
@@ -23,3 +23,7 @@ Exact repeated GPU mixed-liquid cells, face velocities and phase state; unchange
 **2026-11-28T05:38:33Z**
 
 All 22 bulk material tests passed after separating face writes from transverse shear reads, but a parked-room replay still failed. Five stage snapshots from a failing physical tick showed identical cells, bulk and faces through rigid processing. A single pressure and two velocities first differed inside the first scheduled water run, before any bulk exchange. Generic pressure also reproduced the mismatch. A new command-recording regression exposed the damped velocity write at the end of a water cycle followed by the next projection snapshot without a compute write-to-read dependency. The added barrier passes the ordering regression; repeated exact replay remains under test.
+
+**2026-11-28T06:46:57Z**
+
+The integrated native snapshot suite now passes the parked-room reopen comparison for mixed water, oil and slime. Sixteen additional exact replays passed across specialized and generic pipelines. Pressure and bulk suites passed 10/10 and 22/22. The integrated total was 44 passed and one separate saturated camera admission timeout, tracked as ctowpe-qtwp; that case also passed when run alone from the identical binary.
