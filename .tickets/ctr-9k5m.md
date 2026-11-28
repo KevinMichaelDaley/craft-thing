@@ -23,3 +23,7 @@ One-pixel walls block, holes pass light, rotated bodies update, unknown pages ca
 **2026-10-14T04:28:32Z**
 
 GPU hierarchy and scene optical-channel generation validated; odd dimensions, thin walls and unknown residency block conservatively. Frame integration uses exact body overlap and material coverage independently of color. Paused scene skips hierarchy/lighting via GPU dirty masks and indirect dispatch. Moving/rotating concave display cases and measured costs remain pending.
+
+**2026-11-28T04:55:34Z**
+
+Real 480x270 Xephyr render: body rotation cleared 141 previously opaque samples and occupied 140 new ones. All 7,320 opacity samples remained exact when restyling the physical shapes as brick and wood rings changed their rendered colors. The 90-frame motion took 0.879s and four paused captures matched. The explicit hierarchy builder still recomputes clean tiles after an isolated change; a focused regression is underway.
