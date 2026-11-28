@@ -5,6 +5,7 @@ layout(set=0,binding=0,std430) buffer Staging { uint words[]; };
 layout(push_constant) uniform Params { uint width,height,has_graph,padding; } params;
 const uint INVALID=0xffffffffu;
 const uint GRAPH_WORDS=2320u;
+const uint MEMBER_COVERAGE_WORD=21u;
 uint pixels() {return params.width*params.height;}
 uint physical(uint i) {return 24u+i*2u;}
 uint appearance(uint i) {return 24u+pixels()*2u+i*16u;}
@@ -28,16 +29,16 @@ bool appearance_valid(uint index) {
     vec3 normal=vec3(uintBitsToFloat(words[a+4u]),uintBitsToFloat(words[a+5u]),uintBitsToFloat(words[a+6u]));
     return (words[a+15u]&1u)==0u||abs(dot(normal,normal)-1.)<=.001;
 }
-bool member_valid(uint index,uint material) {
-    if(params.has_graph==0u) return false;
+uint member_index(uint index,uint material) {
+    if(params.has_graph==0u) return INVALID;
     uint owner=words[members(index)],g=graph();
-    if(owner==0u) return false;
+    if(owner==0u) return INVALID;
     uint profile=material==1u?0u:material==3u?2u:1u;
     for(uint m=0u;m<words[g+1u];m++) {
         uint p=g+400u+m*8u;
-        if(words[p]==owner) return words[p+4u]==profile;
+        if(words[p]==owner) return words[p+4u]==profile?m:INVALID;
     }
-    return false;
+    return INVALID;
 }
 uint root(uint index) {
     uint parent=atomicAdd(words[label(index)],0u);
@@ -61,17 +62,28 @@ void main() {
         uint packed=words[physical(i)],material=packed&65535u,role=(packed>>16u)&255u,anchor=packed>>24u;
         bool valid=material<=12u&&role<=4u&&anchor<=1u&&words[physical(i)+1u]<=0xffffffu&&(anchor==0u||role==2u)&&
             (material==0u?(role==0u||role==4u):role==1u?terrain_material(material):(role==2u||role==3u)&&body_material(material))&&appearance_valid(i);
-        if(role==2u&&!member_valid(i,material)) valid=false;
+        uint member=INVALID;
+        if(role==2u) {
+            member=member_index(i,material);
+            if(member==INVALID) valid=false;
+        }
         if(params.has_graph!=0u&&role!=2u&&words[members(i)]!=0u) valid=false;
         if(!valid) reject(i);
         words[label(i)]=valid&&role==3u?i:INVALID;
         if(valid) {
             if(role==3u) atomicAdd(words[16],1u);
-            if(role==2u) atomicAdd(words[17],1u);
+            if(role==2u) {
+                atomicOr(words[MEMBER_COVERAGE_WORD],1u<<member);
+                atomicAdd(words[17],1u);
+            }
             if(role==1u) atomicAdd(words[18],1u);
             if(role==4u) atomicAdd(words[19],1u);
         }
         return;
+    }
+    if(PHASE==1u && i==0u && params.has_graph!=0u) {
+        uint expected=(1u<<words[graph()+1u])-1u;
+        if(words[MEMBER_COVERAGE_WORD]!=expected) reject(INVALID);
     }
     uint owner=atomicAdd(words[label(i)],0u);
     if(PHASE==3u) {
