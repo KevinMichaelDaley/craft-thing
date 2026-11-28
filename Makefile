@@ -259,12 +259,15 @@ build/shaders/structural.comp.spv: shaders/sim/rigid_fragment.glsl shaders/sim/p
 build/shaders/structural.comp.spv: shaders/sim/body_carve.glsl
 build/shaders/structural.comp.spv: shaders/sim/pixel_carve_parallel.glsl shaders/sim/pixel_properties.glsl
 STRUCTURAL_PHASE_FILES := $(addsuffix .comp.spv,$(addprefix structural_phase_,0 1 2 3 4 5))
+SPECIALIZE_STRUCTURAL_PHASE = spirv-opt --set-spec-const-default-value "0:$*" \
+	--freeze-spec-const --fold-spec-const-op-composite --eliminate-dead-branches \
+	--eliminate-dead-functions --eliminate-dead-code-aggressive $< -o $@
 build/shaders/structural_carve.comp.spv: | $(addprefix build/shaders/,$(STRUCTURAL_PHASE_FILES))
 build/shaders/runtime/structural_carve.comp.spv: | $(addprefix build/shaders/runtime/,$(STRUCTURAL_PHASE_FILES))
 build/shaders/structural_phase_%.comp.spv: build/shaders/structural.comp.spv
-	spirv-opt --set-spec-const-default-value "0:$*" --freeze-spec-const --fold-spec-const-op-composite --eliminate-dead-branches --eliminate-dead-functions --eliminate-dead-code-aggressive $< -o $@
+	$(SPECIALIZE_STRUCTURAL_PHASE)
 build/shaders/runtime/structural_phase_%.comp.spv: build/shaders/runtime/structural.comp.spv
-	spirv-opt --set-spec-const-default-value "0:$*" --freeze-spec-const --fold-spec-const-op-composite --eliminate-dead-branches --eliminate-dead-functions --eliminate-dead-code-aggressive $< -o $@
+	$(SPECIALIZE_STRUCTURAL_PHASE)
 build/shaders/structural_carve.comp.spv: shaders/sim/structural.comp $(wildcard shaders/sim/*.glsl)
 	mkdir -p build/shaders
 	$(GLSLANG) -DDC_CARVE_MODULE=1 -V --target-env vulkan1.3 $< -o $@
