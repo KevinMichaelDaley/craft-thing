@@ -3,6 +3,17 @@
 #include <string.h>
 
 #include "ferrum/structural/authoring.h"
+#include "ferrum/assets/prop.h"
+#include "../../src/vulkan/gpu_internal.h"
+
+static bool fail_descriptor_pool;
+VKAPI_ATTR VkResult VKAPI_CALL __real_vkCreateDescriptorPool(VkDevice, const VkDescriptorPoolCreateInfo *,
+    const VkAllocationCallbacks *, VkDescriptorPool *);
+VKAPI_ATTR VkResult VKAPI_CALL __wrap_vkCreateDescriptorPool(VkDevice device, const VkDescriptorPoolCreateInfo *info,
+    const VkAllocationCallbacks *allocator, VkDescriptorPool *pool) {
+    if (fail_descriptor_pool) return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    return __real_vkCreateDescriptorPool(device, info, allocator, pool);
+}
 
 static int g_pass, g_fail;
 #define RUN(fn) do { printf("RUN %s\n", #fn); fn(); } while (0)
@@ -166,7 +177,44 @@ static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
     dc_gpu_destroy(gpu); free(p); free(a); PASS();
 }
 
+static void test_failed_resize_preserves_ready_component_plan(void) {
+    fr_authored_request_t r = request();
+    pixel(2, 1, 1, 3, 7);
+    dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    dc_gpu_memory_stats_t before, after;
+    ASSERT_TRUE(dc_gpu_memory_stats(gpu, &before));
+    r.width = r.height = 1;
+    r.physical_bytes = 8; r.appearance_bytes = 64;
+    fail_descriptor_pool = true;
+    bool prepared = fr_gpu_prepare_authored(gpu, &r, err, sizeof(err));
+    fail_descriptor_pool = false;
+    ASSERT_TRUE(!prepared);
+    ASSERT_TRUE(strstr(err, "descriptor pool"));
+    fr_authored_component_plan_t plan;
+    uint32_t count;
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu, &plan, 1, &count, err, sizeof(err)));
+    ASSERT_EQ(count, 1u); ASSERT_EQ(plan.source_root, 10u); ASSERT_EQ(plan.object, 7u);
+    ASSERT_TRUE(dc_gpu_memory_stats(gpu, &after));
+    ASSERT_EQ(before.mapped_system_bytes, after.mapped_system_bytes);
+    ASSERT_EQ(before.mapped_local_bytes, after.mapped_local_bytes);
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    dc_gpu_destroy(gpu); PASS();
+}
+
+static void test_unpublished_water_keeps_dry_world_asleep(void) {
+    fr_authored_request_t r = request();
+    pixel(1, 1, FR_PROP_MATERIAL_WATER, 1, 0);
+    dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
+    ASSERT_TRUE(!gpu->fluid_work_possible);
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu, &r, err, sizeof(err)));
+    ASSERT_TRUE(!gpu->fluid_work_possible);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 int main(void) {
+    RUN(test_failed_resize_preserves_ready_component_plan);
+    RUN(test_unpublished_water_keeps_dry_world_asleep);
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
     RUN(test_diagonal_pixels_remain_independent);
     RUN(test_invalid_role_material_and_fabricated_structure_are_diagnosed);

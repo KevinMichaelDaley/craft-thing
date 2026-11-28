@@ -234,7 +234,7 @@ build/shaders/pressure_work.comp.spv: shaders/sim/pressure_work.comp
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_material.o build/authored_request.o build/prop_asset.o build/reactive_state.o build/reactive_snapshot.o build/reactive_material.o build/reactive_chunk.o build/thermal_model.o build/gas_model.o build/reactive_archive_model.o build/thermal_checkpoint_model.o,$(GPU_OBJ))) src/structural/material.c src/structural/authoring.c src/assets/prop.c src/fire/reactive_chunk.c src/fire/thermal.c src/fire/gas.c src/fire/reactive_archive.c src/fire/thermal_checkpoint.c $(REACTIVE_STATE_SRC)
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCreateDescriptorPool
 test: build/authored_stage_tests
 build/shaders/authored.comp.spv: shaders/sim/authored.comp
 	mkdir -p build/shaders
