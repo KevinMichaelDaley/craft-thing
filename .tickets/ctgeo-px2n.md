@@ -1,6 +1,6 @@
 ---
 id: ctgeo-px2n
-status: in_progress
+status: closed
 deps: []
 links: [ctgc-tteu]
 created: 2026-11-26T19:16:08Z
@@ -31,3 +31,7 @@ Native gas transport checks passed on the refactor for standalone explicit, gene
 **2026-11-26T19:33:53Z**
 
 The first matrix omitted DC_GAS_FUSED_AXIS. The rerun pinned DC_GAS_FUSED_AXIS=1 and DC_GAS_FUSED_METADATA=1 and again completed all 16 focused cases with zero failures or skips. Separate native admission comparisons confirmed generic versus fixed-axis dispatches with exact snapshots and 94 versus 94 pressure tiles with exact packets when cached local stages were enabled.
+
+**2026-11-28T03:59:05Z**
+
+Re-ran the compiled SPIR-V explicit-order regression on the current branch. Both call-graph checks passed. Verified 16 native comparisons across standalone, hybrid, fixed-axis and selected local-stage paths with zero failures and zero skips. The subsequent 264-command aggregate at d105fc10 exited zero.
