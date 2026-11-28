@@ -67,6 +67,7 @@ void main() {
         return;
     }
     if(words[0]!=0u) return;
+    if(material==6u) atomicOr(words[1],1u);
     uint slot=page-1u,local=(position.y%64u)*64u+position.x%64u,atlas=slot*4096u+local;
     uint first=slot*8192u+local,second=first+4096u;
     if(particles[first].mass_fp!=0u) atomicAdd(counts[slot],uint(-1));

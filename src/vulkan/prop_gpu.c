@@ -66,15 +66,7 @@ static bool terrain_prop_operation(dc_gpu_t *g, const fr_prop_asset_t *asset,
         okay=placement_error(err,cap,"Terrain prop preflight rejected role, unknown cell or body overlap");
     if (okay) {
         dc_gpu_fluid_uploads_invalidate(g);
-        if (!restore_bonds && !g->fluid_work_possible) {
-            for (uint32_t i = 0; i < count; i++) {
-                fr_prop_pixel_t pixel;
-                if (fr_prop_pixel(&validated,frame,i,&pixel) && pixel.material == FR_PROP_MATERIAL_WATER) {
-                    g->fluid_work_possible = true;
-                    break;
-                }
-            }
-        }
+        if (((const uint32_t *)mapped)[1]) g->fluid_work_possible = true;
         g->body_refresh_pending=true;
         g->component_baseline_pending=true;
         g->fluid_snapshot_valid=false;
