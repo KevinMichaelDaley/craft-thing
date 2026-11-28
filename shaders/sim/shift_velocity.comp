@@ -23,7 +23,13 @@ void main() {
         return;
     }
     ivec2 p = ivec2(int(index % params.width), int(index / params.width));
-    ivec2 old = p + ivec2(params.chunk_dx, params.chunk_dy) * 64;
+    ivec2 shift=ivec2(params.chunk_dx,params.chunk_dy);
+    ivec2 tiles=ivec2((params.width+63u)/64u,(params.height+63u)/64u);
+    if(any(greaterThanEqual(shift,tiles)) || any(lessThanEqual(shift,-tiles))) {
+        velocity[index]=vec2(0.0);
+        return;
+    }
+    ivec2 old = p + shift * 64;
     if (old.x < 0 || old.y < 0 || old.x >= int(params.width) ||
         old.y >= int(params.height)) {
         velocity[index] = vec2(0.0);
