@@ -1,6 +1,6 @@
 ---
 id: ctlo-70tf
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T07:53:42Z
@@ -23,3 +23,7 @@ RED: cached128x64 solver maps62382764 bytes versus62218924 for dense reference; 
 **2026-10-24T08:04:56Z**
 
 GREEN exact aperture-bit packing in separate device-only storage: focused5/5 with actual sync validation, noVUID/hazard; mapped cache and dense solver allocations match. Full graphical material fixture3/3:83.557MiB mapped and111.571MiB device, satisfying original thresholds. Reused identically flagged quarter GPU objects for this visual target; DC_STRUCTURAL_PRESENTATION_TEST is test-source-only.
+
+**2026-11-28T03:55:51Z**
+
+Verified the stencil uses device-only storage and four words per cell. Current cached and dense solvers both mapped 72,737,632 bytes. All eight pressure work tests passed, including dense byte parity with partial faces, activation after edits and cache lifecycle. The exhaustive packing test and full aggregate passed. The original displayed memory limits and measured values are recorded above.

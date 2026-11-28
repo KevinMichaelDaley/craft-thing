@@ -1,6 +1,6 @@
 ---
 id: ctlo-0clo
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T11:14:02Z
@@ -19,3 +19,7 @@ GPU regression first proves material brushing redraws unrelated display pixels a
 **2026-10-24T11:22:53Z**
 
 RED actual Vulkan: radius3 changes8163 unrelated image pixels and launches32 workgroups on128x64. GREEN actual core+synchronization validation checks circular edits across a chunk seam and both viewport corners: one workgroup, zero unrelated image changes, all selected atlas materials correct. Body-carve regression12/12 passes including colored concave bodies, rotation, repeated splits, leaves and structural members. Full displayed measurement running.
+
+**2026-11-28T03:55:51Z**
+
+Verified the shader rejects pixels outside the clipped circle before writes. The Xephyr aggregate on d105fc10 dispatched one workgroup for each of three seam and corner cases, with zero unrelated display changes and exact selected atlas materials. All 13 body-carving cases passed on that revision. The full run exited zero.
