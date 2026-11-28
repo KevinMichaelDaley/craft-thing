@@ -15,4 +15,7 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
     dc_gpu_address_buffer_t *out,char *err,uint32_t cap);
 /** Release an address resource only after its final GPU use has completed. */
 void dc_gpu_address_buffer_destroy(dc_gpu_t *gpu,dc_gpu_address_buffer_t *buffer);
+/** Allocate mapped storage whose first access will be a complete GPU transfer fill. */
+bool dc_gpu_address_buffer_create_for_fill(dc_gpu_t *gpu,VkDeviceSize bytes,
+    dc_gpu_address_buffer_t *out,char *err,uint32_t cap);
 #endif

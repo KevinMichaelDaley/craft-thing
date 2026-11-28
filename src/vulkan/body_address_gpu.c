@@ -15,7 +15,7 @@ static void release_partial(dc_gpu_t *gpu,dc_gpu_address_buffer_t *buffer) {
     if(buffer->buffer) vkDestroyBuffer(gpu->device,buffer->buffer,NULL);
     if(buffer->memory) vkFreeMemory(gpu->device,buffer->memory,NULL);
 }
-bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_visible,
+static bool create_buffer(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_visible,bool transfer_initialized,
     dc_gpu_address_buffer_t *out,char *err,uint32_t cap) {
     if(!gpu||!out||!bytes||out->buffer||out->memory) return error(err,cap,"Invalid address buffer destination or size");
     dc_gpu_address_buffer_t pending={.bytes=bytes,.host_visible=host_visible};
@@ -30,7 +30,7 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
     VkMemoryPropertyFlags needed=host_visible?VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT:VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     VkMemoryAllocateFlagsInfo flags={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,.flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT};
     VkMemoryAllocateInfo allocation={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,.pNext=&flags,.allocationSize=requirements.size};
-    bool prefer_local=host_visible&&bytes>=DC_MAPPED_LOCAL_MIN_BYTES;
+    bool prefer_local=host_visible&&(transfer_initialized||bytes>=DC_MAPPED_LOCAL_MIN_BYTES);
     for(uint32_t pass=0;pass<(host_visible?2u:1u)&&!pending.memory;pass++) {
         for(uint32_t type=0;type<properties.memoryTypeCount;type++) {
             VkMemoryPropertyFlags available=properties.memoryTypes[type].propertyFlags;
@@ -55,7 +55,7 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
     if(!pending.address) {release_partial(gpu,&pending);return error(err,cap,"Addressable GPU buffer has no device address");}
     pending.allocation_bytes=requirements.size;
     if(host_visible) {
-        memset(pending.mapped,0,(size_t)bytes);
+        if(!transfer_initialized) memset(pending.mapped,0,(size_t)bytes);
         if(pending.device_local) gpu->mapped_local_bytes+=requirements.size;
         else gpu->mapped_system_bytes+=requirements.size;
     } else gpu->device_only_bytes+=requirements.size;
@@ -64,6 +64,14 @@ bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_vis
             (double)bytes/1048576.,pending.device_local?"local":"system",allocation.memoryTypeIndex,
             (double)gpu->mapped_local_bytes/1048576.,(double)gpu->mapped_system_bytes/1048576.);
     *out=pending;return true;
+}
+bool dc_gpu_address_buffer_create(dc_gpu_t *gpu,VkDeviceSize bytes,bool host_visible,
+    dc_gpu_address_buffer_t *out,char *err,uint32_t cap) {
+    return create_buffer(gpu,bytes,host_visible,false,out,err,cap);
+}
+bool dc_gpu_address_buffer_create_for_fill(dc_gpu_t *gpu,VkDeviceSize bytes,
+    dc_gpu_address_buffer_t *out,char *err,uint32_t cap) {
+    return create_buffer(gpu,bytes,true,true,out,err,cap);
 }
 void dc_gpu_address_buffer_destroy(dc_gpu_t *gpu,dc_gpu_address_buffer_t *buffer) {
     if(!gpu||!buffer||!buffer->buffer) return;

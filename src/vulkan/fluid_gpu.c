@@ -4,6 +4,7 @@
 
 #include "dungeoncraft/liquid_seam.h"
 #include "ferrum/fire/bulk_phase.h"
+#include "body_address_gpu.h"
 #include "fluid_schedule.h"
 #include "fluid_transport_limits.h"
 #include "gpu_internal.h"
@@ -43,8 +44,12 @@ bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     if(!dc_gpu_make_transfer_initialized_buffer(gpu,color_bytes,&gpu->water_color_buffer,
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
     VkDeviceSize bulk_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*sizeof(fr_bulk_phase_chunk_t);
-    if(!dc_gpu_make_hydro_buffer(gpu,DC_HYDRO_BULK,bulk_bytes,&gpu->bulk_phase_buffer,
-        &gpu->bulk_phase_memory,&gpu->bulk_phase_mapped,err,cap)) return false;
+    dc_gpu_address_buffer_t bulk={0};
+    if(!dc_gpu_address_buffer_create_for_fill(gpu,bulk_bytes,&bulk,err,cap)) return false;
+    gpu->bulk_phase_buffer=bulk.buffer;
+    gpu->bulk_phase_memory=bulk.memory;
+    gpu->bulk_phase_mapped=bulk.mapped;
+    gpu->hydro_addresses[DC_HYDRO_BULK]=bulk.address;
     if(!dc_gpu_make_mapped_buffer(gpu,DC_HYDRO_CONTROL_BYTES,&gpu->thermal_control_buffer,
         &gpu->thermal_control_memory,&gpu->thermal_control_mapped,err,cap)) return false;
     if(!dc_gpu_colors_init(gpu,err,cap)) return false;
@@ -390,6 +395,8 @@ bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {
                            gpu->pressure_a_buffer, gpu->fluid_previous_buffer};
     for (unsigned i = 0; i < 4; i++) vkCmdFillBuffer(gpu->command, buffers[i], 0, bytes, 0);
     vkCmdFillBuffer(gpu->command,gpu->water_color_buffer,0,VK_WHOLE_SIZE,0);
+    vkCmdFillBuffer(gpu->command,gpu->shape_color_buffer,0,VK_WHOLE_SIZE,0);
+    vkCmdFillBuffer(gpu->command,gpu->bulk_phase_buffer,0,VK_WHOLE_SIZE,0);
     VkDeviceSize particle_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
     vkCmdFillBuffer(gpu->command,gpu->mpm_output_buffer,0,particle_bytes,0);
     vkCmdFillBuffer(gpu->command,gpu->particle_buffer,0,particle_bytes,0);

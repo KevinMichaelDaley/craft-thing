@@ -19,7 +19,7 @@ bool dc_gpu_colors_init(dc_gpu_t *g,char *err,uint32_t cap) {
         snprintf(err,cap,"Pixel appearance exceeds device storage-buffer range");return false;
     }
     dc_gpu_address_buffer_t colors={0};
-    if(!dc_gpu_address_buffer_create(g,terrain+2*bank,true,&colors,err,cap)) return false;
+    if(!dc_gpu_address_buffer_create_for_fill(g,terrain+2*bank,&colors,err,cap)) return false;
     g->shape_color_buffer=colors.buffer;g->shape_color_memory=colors.memory;
     g->shape_color_mapped=colors.mapped;g->shape_color_address=colors.address;
     g->shape_color_allocation_bytes=colors.allocation_bytes;
