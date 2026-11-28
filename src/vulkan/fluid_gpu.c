@@ -249,6 +249,12 @@ static void fluid_barrier(dc_gpu_t *gpu, VkPipelineStageFlags2 source_stage,
     vkCmdPipelineBarrier2(gpu->command, &dependency);
 }
 
+static void publish_fluid_compute_writes(dc_gpu_t *gpu) {
+    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+}
+
 bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
                            char *err, uint32_t cap) {
     if (!gpu) return error(err, cap, "Invalid GPU velocity shift");
@@ -276,10 +282,7 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         vkCmdDispatch(gpu->command,
             (gpu->width * gpu->height + 255u) / 256u, 1u, 1u);
-        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        publish_fluid_compute_writes(gpu);
     }
     if (vkEndCommandBuffer(gpu->command) != VK_SUCCESS)
         return error(err, cap, "Cannot end velocity shift command buffer");
@@ -311,10 +314,7 @@ void dc_gpu_record_fluid_transport(dc_gpu_t *gpu, uint32_t first,
             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         vkCmdDispatch(gpu->command, DC_CHUNK_CELLS / 64u, 1u, dc_gpu_water_slot_extent(gpu));
         gpu->fluid_snapshot_valid = true;
-        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        publish_fluid_compute_writes(gpu);
     }
     VkExtent2D extent = dc_gpu_water_transport_extent(gpu);
     for (uint32_t mode = first; mode < stop; ++mode) {
@@ -352,17 +352,13 @@ static void record_mass_relaxation(dc_gpu_t *gpu, VkDescriptorSet descriptor, Vk
     const uint32_t modes[] = {4u, 6u, 7u, 8u, 9u, 5u};
     const uint32_t count = sizeof(modes) / sizeof(modes[0]);
     for (uint32_t i = gpu->marker_correction ? 0u : count - 1u; i < count; ++i) {
-        fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        publish_fluid_compute_writes(gpu);
         push[2] = modes[i];
         record_mass_pass(gpu, descriptor, pipeline, slots, push);
     }
     /* A timed tick can start the next projection in the same submission.
      * Its velocity snapshot reads the faces damped by the final mass pass. */
-    fluid_barrier(gpu, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    publish_fluid_compute_writes(gpu);
 }
 
 static void record_fluid_correction(dc_gpu_t *gpu) {
