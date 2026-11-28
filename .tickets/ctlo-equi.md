@@ -23,3 +23,7 @@ RED graphical test compiles and now paints before each of90 frames, with hide/sh
 **2026-10-24T10:28:54Z**
 
 GREEN normal Wayland recreation/hide/show test now1/1 across270 physics-and-brush frames under unchanged15sec watchdog. Each cycle records90 brush fence waits and zero queue-idle calls; kinematic motion, finite acquire, image dependencies and per-image semaphores all remain correct. Startup additionally needed deferred graph pipelines underctlo-6waf. Sync-validated replay pending after structural tests; total500-frame scene remains above30ms.
+
+**2026-11-28T04:54:07Z**
+
+Native Wayland on a GL Weston compositor nested in persistent Xephyr :93 advertised RTX A2000 Wayland presentation. Both real progress paths passed: a failed present retained two completed ticks and the gas acquire timeout retained both physical steps without a duplicate retry. The three-cycle recreation/brush test still exceeded its unchanged 15-second watchdog on this setup. The enclosing make -k test_ui is running. The earlier pixman-only nested compositor could not present from the NVIDIA device.
