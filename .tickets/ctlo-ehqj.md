@@ -67,3 +67,7 @@ The offscreen-active full run at 2375074c1df21f8e180948a3710476b23a41a934 also e
 **2026-11-27T14:09:57Z**
 
 The supervised full-suite run at 274d015c reached 180 simulated seconds in still air, then failed forest_bonfire_tests.c:559 (warm). The 70-second probe measured 296.64 K against the 298.15 K runtime lower bound. The run also recorded 5 of 11 samples outside the locked band. This failure preceded the gas-domain implementation.
+
+**2026-11-28T06:55:26Z**
+
+Matched 180-second RTX comparison completed under ctfls-xxfd. The locked still-air probe fell outside the manifest range at scheduled seconds 20, 50 and 70. The archived comparison had six outside-band samples. Both had zero outside flame at every scheduled sample. The strict warmth requirement remains open.

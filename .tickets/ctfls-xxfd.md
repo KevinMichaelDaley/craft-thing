@@ -1,6 +1,6 @@
 ---
 id: ctfls-xxfd
-status: in_progress
+status: closed
 deps: []
 links: [ctlo-ehqj, ct-e6fr, ctgwpe-1n73]
 created: 2026-11-26T23:46:13Z
@@ -32,3 +32,7 @@ The actual NVIDIA RED confirmed undeclared material at (238,206) in the otherwis
 **2026-11-27T00:07:02Z**
 
 Exact 19ca2597 passed the NVIDIA cold acceptance fixture. The undeclared pit cell was air, 37 authored parcels were lit and their measured starter heat was 11999.999481. The live ember was 980.3 K. Long still, historical and spread comparisons remain open.
+
+**2026-11-28T06:55:26Z**
+
+Completed both 180-second still-air comparisons using the same frozen RTX executable (SHA256 25e3e4d470b31075f67831b91f2298e2825a8c3f77b17360616f94a51a29315c), physics, probe, clocks and containment checks. The live cold inventory measured 37 lit parcels and 11999.999481 energy. Both runs yielded all 19 scheduled samples and zero outside flame in every sample. The locked configuration missed the manifest warmth band in 3 of 11 samples (292.49 to 327.74 K); the named archived control missed in 6 of 11 (293.51 to 349.18 K). Mass deltas were -0.0007 and -0.0004 respectively. The locked east and west containment controls also completed 180 seconds. Fixture restoration and comparison are complete. Warmth remains open under ctlo-ehqj and spread remains in progress under ct-e6fr, with its dedicated control run started.
