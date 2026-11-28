@@ -123,7 +123,7 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
         all(lessThan(tile, ivec2(page_extent())))) page = pages[uint(cy) * page_extent().x + uint(cx)];
     uint cached_page=0u;
 #ifdef DC_RUNTIME_BODY_STORAGE
-    if(kind==BOUNDARY_CONTACT && pixel_body(body) &&
+    if(kind==TERRAIN_CONTACT && pixel_body(body) &&
        all(greaterThanEqual(tile,ivec2(-1))) && all(lessThanEqual(tile,ivec2(page_extent()))) &&
        (any(lessThan(tile,ivec2(0))) || any(greaterThanEqual(tile,ivec2(page_extent()))))) {
         uint bucket=uint(cy+1)*(page_extent().x+2u)+uint(cx+1);

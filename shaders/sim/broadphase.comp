@@ -123,7 +123,12 @@ void runtime_broadphase() {
     uint kind=PAIR_BOUNDARY;
     if(all(greaterThanEqual(chunk,ivec2(0)))&&all(lessThan(chunk,ivec2(page_extent()))))
         if(pages[uint(chunk.y)*page_extent().x+uint(chunk.x)]!=0u) kind=PAIR_TERRAIN;
-    Body first=DC_BODY(a);emit_pair(first.id,0u,kind,chunk);
+    Body first=DC_BODY(a);
+    if(kind==PAIR_BOUNDARY && pixel_body(first)) {
+        uint page=DC_DATA(HEADER_WORDS+2u*bucket);
+        if(page!=0u && page!=0xffffffffu) kind=PAIR_TERRAIN;
+    }
+    emit_pair(first.id,0u,kind,chunk);
     ivec2 first_low,first_high,first_bucket_low,first_bucket_high;
     bounds(first,first_low,first_high);bucket_bounds(first,first_bucket_low,first_bucket_high);
     for(uint word=a/32u;word<words;word++) {
