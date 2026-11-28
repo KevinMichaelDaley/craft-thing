@@ -219,6 +219,8 @@ static void test_chunk_and_particle_state_use_separate_stream_staging(void) {
     ASSERT_TRUE(gpu->particle_buffer != gpu->particle_staging_buffer);
     VkDeviceSize staging_size = buffer_allocation(gpu, gpu->particle_staging_buffer);
     ASSERT_TRUE(staging_size < 2u * sizeof(((dc_chunk_t *)0)->particles));
+    VkDeviceSize particles = (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_MPM_PARTICLES_PER_CHUNK;
+    ASSERT_TRUE(buffer_allocation(gpu, gpu->mpm_accept_buffer) <= particles / 4u);
     ASSERT_TRUE(gpu->mpm_force_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->mpm_velocity_staging_buffer != VK_NULL_HANDLE);
     ASSERT_TRUE(gpu->mpm_force_buffer != gpu->mpm_force_staging_buffer);
