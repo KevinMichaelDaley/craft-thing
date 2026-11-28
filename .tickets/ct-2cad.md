@@ -17,3 +17,9 @@ make-tested display variant build/combustion_gpu_display_tests reports 16 passed
 
 All three assertions pass in build/combustion_body_feedback_display_tests sibling build on the same GPU; combustion_gpu_display_tests reports 19 passed, 0 failed; no regression in make test.
 
+
+## Notes
+
+**2026-11-28T05:03:19Z**
+
+The native Wayland UI run on Weston GL inside Xephyr reproduces at least the retained-char cache_valid and empty-air direct-light total/light failures on the RTX A2000. This rules out an X11-only cause for these two failures. Other UI cases are still running.

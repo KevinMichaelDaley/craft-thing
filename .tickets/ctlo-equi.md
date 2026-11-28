@@ -27,3 +27,7 @@ GREEN normal Wayland recreation/hide/show test now1/1 across270 physics-and-brus
 **2026-11-28T04:54:07Z**
 
 Native Wayland on a GL Weston compositor nested in persistent Xephyr :93 advertised RTX A2000 Wayland presentation. Both real progress paths passed: a failed present retained two completed ticks and the gas acquire timeout retained both physical steps without a duplicate retry. The three-cycle recreation/brush test still exceeded its unchanged 15-second watchdog on this setup. The enclosing make -k test_ui is running. The earlier pixman-only nested compositor could not present from the NVIDIA device.
+
+**2026-11-28T05:03:19Z**
+
+Repeated native Wayland on a fresh, private device cache. All three 90-frame cycles reported exactly 90 brush fence waits, zero queue-idle calls, finite acquire, safe per-image semaphores and both checked transfer dependencies. The child still exceeded the unchanged 15-second aggregate watchdog; the second/third starts were 3.85s apart. The 18.8MB private cache reloaded, so the prior near-limit shared cache alone cannot explain the deadline.
