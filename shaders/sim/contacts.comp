@@ -38,6 +38,7 @@ uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width, height, mode, body_count;
     uvec2 origin_x, origin_y;
+    uint registry,slot_capacity;
 } params;
 
 const uint HEADER_WORDS = 8u, PAIR_WORDS = 8u;
@@ -53,6 +54,7 @@ shared uint body_kinds[64];
 #define DC_CONTACT_TERRAIN_CACHE 1
 #endif
 #ifdef DC_RUNTIME_BODY_STORAGE
+#include "cached_chunk.glsl"
 uint terrain_cache_base() {return 4u+DC_LAYOUT_PAIR_CAPACITY*DC_CONTACT_PIXEL_GROUPS*2u;}
 void cache_terrain_presence() {
     uint lane=gl_LocalInvocationIndex;
@@ -130,6 +132,8 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
         uint candidate=DC_DATA(HEADER_WORDS+2u*bucket);
         if(candidate!=0xffffffffu) cached_page=candidate;
     }
+    if(kind==TERRAIN_CONTACT && body.visible==0u && pixel_body(body) && page==0u && cached_page==0u)
+        cached_page=cached_chunk_page(params.registry,params.slot_capacity,chunk_x,chunk_y);
 #endif
     bool found = false;
     for (int y = low.y; y < high.y; ++y) for (int x = low.x; x < high.x; ++x) {

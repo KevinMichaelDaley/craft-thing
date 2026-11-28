@@ -46,14 +46,8 @@ void bucket_bounds(Body body, out ivec2 low, out ivec2 high) {
     high = clamp((high - 1) >> 6, ivec2(-1), ivec2(page_extent()));
 }
 
-void emit_pair(uint a, uint b, uint kind, ivec2 chunk) {
+void emit_world_pair(uint a,uint b,uint kind,uvec2 x,uvec2 y) {
     if(kind==PAIR_BODY&&revolute_suppresses_collision(a,b)) return;
-    uvec2 x, y;
-    if (!shifted_chunk(params.origin_x, chunk.x, x) ||
-        !shifted_chunk(params.origin_y, chunk.y, y)) {
-        atomicOr(DC_DATA(2), 2u);
-        return;
-    }
     uint index = atomicAdd(DC_DATA(1), 1u);
     if (index >= DC_DATA(3)) {
         atomicOr(DC_DATA(2), 1u);
@@ -70,11 +64,37 @@ void emit_pair(uint a, uint b, uint kind, ivec2 chunk) {
     atomicAdd(DC_DATA(0), 1u);
 }
 
+void emit_pair(uint a,uint b,uint kind,ivec2 chunk) {
+    uvec2 x,y;
+    if (!shifted_chunk(params.origin_x,chunk.x,x) || !shifted_chunk(params.origin_y,chunk.y,y)) {
+        atomicOr(DC_DATA(2),2u);
+        return;
+    }
+    emit_world_pair(a,b,kind,x,y);
+}
+
 bool member(uvec2 bits, uint slot) {
     return (bits[slot / 32u] & (1u << (slot % 32u))) != 0u;
 }
 
 #ifdef DC_RUNTIME_BODY_STORAGE
+#include "cached_chunk.glsl"
+void cached_terrain_pairs(Body body) {
+    vec2 low,high;
+    body_bounds(body,low,high);
+    vec2 anchor=vec2(body.local_fp)/65536.;
+    ivec2 first=(ivec2(floor(anchor+low))-CONTACT_SKIN)>>6;
+    ivec2 last=(ivec2(ceil(anchor+high))+CONTACT_SKIN-1)>>6;
+    for(int dy=first.y;dy<=last.y;++dy) for(int dx=first.x;dx<=last.x;++dx) {
+        uvec2 x,y;
+        if(!shifted_chunk(body.chunk_x,dx,x) || !shifted_chunk(body.chunk_y,dy,y)) {
+            atomicOr(DC_DATA(2),2u);
+            continue;
+        }
+        uint page=cached_chunk_page(params.registry,params.slot_capacity,x,y);
+        emit_world_pair(body.id,0u,page==0u?PAIR_BOUNDARY:PAIR_TERRAIN,x,y);
+    }
+}
 void register_cached_neighbor(uint slot,uvec2 extent) {
     uint record=params.registry+32u+8u*slot;
     if(DC_DATA(record+5u)==0u) return;
@@ -105,7 +125,12 @@ void runtime_broadphase() {
         if(index<params.slot_capacity) register_cached_neighbor(index,page_extent());
         if(index>=params.body_count) return;
         Body body=DC_BODY(index);
-        if(body.enabled==0u||body.visible==0u) return;
+        if(body.enabled==0u) return;
+        if(body.visible==0u) {
+            if(pixel_body(body) && cached_chunk_page(params.registry,params.slot_capacity,body.chunk_x,body.chunk_y)!=0u)
+                cached_terrain_pairs(body);
+            return;
+        }
         atomicAdd(DC_DATA(4),1u);
         ivec2 low,high;bucket_bounds(body,low,high);
         for(int y=low.y;y<=high.y;y++) for(int x=low.x;x<=high.x;x++) {
