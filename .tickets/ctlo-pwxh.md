@@ -23,3 +23,7 @@ RED on Iris Xe: 13,824 clipping cases match the original scalar oracle exactly, 
 **2026-10-24T04:00:15Z**
 
 GREEN: all 55,296 rotated sparse/concave mixed-material volume, centroid and face cases match the frozen scalar oracle bit for bit. Maximum geometry reads are five for both volume and face queries, compared with 16 and 64 before caching. Current complete-frame workload remains above its limit; an isolated graphical comparison is still needed before attributing a frame-time improvement to this kernel.
+
+**2026-11-28T04:23:09Z**
+
+On the RTX A2000 the restored bitwise assertion failed for 2202 of the first 13824 face cases, although all were within the existing tolerance. Caching the occupied cell once and retaining the ordered edge arithmetic now passes all 55296 volume, centroid, face and overlap checks with five geometry reads and zero bit mismatches. Frozen reference and numeric-tolerance checks remain intact. Displayed performance for this change is pending.

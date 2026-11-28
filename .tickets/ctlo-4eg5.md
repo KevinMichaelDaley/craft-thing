@@ -27,3 +27,7 @@ Array implementation was exact but displayed35.016ms mean /41.911ms worst. Intel
 **2026-10-24T06:37:01Z**
 
 Scalar quad displayed benchmark: 500 real-time Wayland frames, 33.732ms mean /42.668ms worst; four paused captures identical. Geometry read bound achieved, full-frame target still open. Extended instrumented raster reference cold pipeline compilation remains pending; initial typed/generic five-plane/contact comparisons pass.
+
+**2026-11-28T04:23:09Z**
+
+Current synchronization-validated clipping probe passed four rotated sparse/concave patterns: 55296 overlap comparisons, all exact, and at most five geometry reads. The adjoining face-coverage comparison is now bit-exact too (ctlo-pwxh).
