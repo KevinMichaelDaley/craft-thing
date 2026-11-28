@@ -1,6 +1,6 @@
 ---
 id: ctlo-4eg5
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T05:49:07Z
@@ -31,3 +31,7 @@ Scalar quad displayed benchmark: 500 real-time Wayland frames, 33.732ms mean /42
 **2026-11-28T04:23:09Z**
 
 Current synchronization-validated clipping probe passed four rotated sparse/concave patterns: 55296 overlap comparisons, all exact, and at most five geometry reads. The adjoining face-coverage comparison is now bit-exact too (ctlo-pwxh).
+
+**2026-11-28T04:44:37Z**
+
+Displayed quarter-native RTX check passed on the persistent Xephyr server: the stock two-body, sun and four-light renderer fixture completed 90 physics/render frames in 0.907s, with exact masses and four byte-identical paused frames. The separate 180-tick concave dynamics display also passed in 3.233s including fixture pacing and readbacks. Coupled with the 55,296 exact frozen-oracle cases and maximum five geometry fetches, this checks the implemented change at actual resolution and cadence. No isolated timing gain or saved-scene worst-frame result is inferred.

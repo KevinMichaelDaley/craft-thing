@@ -1,6 +1,6 @@
 ---
 id: ctlo-pwxh
-status: in_progress
+status: closed
 deps: []
 links: [ctlo-jnt7]
 created: 2026-10-24T03:13:46Z
@@ -27,3 +27,7 @@ GREEN: all 55,296 rotated sparse/concave mixed-material volume, centroid and fac
 **2026-11-28T04:23:09Z**
 
 On the RTX A2000 the restored bitwise assertion failed for 2202 of the first 13824 face cases, although all were within the existing tolerance. Caching the occupied cell once and retaining the ordered edge arithmetic now passes all 55296 volume, centroid, face and overlap checks with five geometry reads and zero bit mismatches. Frozen reference and numeric-tolerance checks remain intact. Displayed performance for this change is pending.
+
+**2026-11-28T04:44:37Z**
+
+Displayed quarter-native RTX check passed on the persistent Xephyr server: the stock two-body, sun and four-light renderer fixture completed 90 physics/render frames in 0.907s, with exact masses and four byte-identical paused frames. The separate 180-tick concave dynamics display also passed in 3.233s including fixture pacing and readbacks. Coupled with the 55,296 exact frozen-oracle cases and maximum five geometry fetches, this checks the implemented change at actual resolution and cadence. No isolated timing gain or saved-scene worst-frame result is inferred.
