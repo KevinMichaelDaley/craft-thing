@@ -60,6 +60,13 @@ static unsigned constructor_clears(const void *ptr, size_t bytes) {
     return count;
 }
 
+static bool constructor_filled(VkBuffer buffer,VkDeviceSize bytes) {
+    for (unsigned i=0;i<fill_count;++i)
+        if(zero_fills[i].buffer==buffer && (zero_fills[i].bytes==bytes || zero_fills[i].bytes==VK_WHOLE_SIZE))
+            return true;
+    return false;
+}
+
 VkResult __real_vkCreateSwapchainKHR(VkDevice, const VkSwapchainCreateInfoKHR *, const VkAllocationCallbacks *, VkSwapchainKHR *);
 VkResult __wrap_vkCreateSwapchainKHR(VkDevice d, const VkSwapchainCreateInfoKHR *i, const VkAllocationCallbacks *a, VkSwapchainKHR *s) {
     mode=i->presentMode;
@@ -144,12 +151,12 @@ static int window_cycle(void) {
     unsigned shape=constructor_clears(g->shape_color_mapped,terrain+2u*dc_gpu_color_bank_bytes(g));
     size_t bulk_size=(size_t)dc_gpu_slot_capacity(g)*sizeof(fr_bulk_phase_chunk_t);
     unsigned bulk=constructor_clears(g->bulk_phase_mapped,bulk_size);
-    bool water_filled=false;
-    for (unsigned i=0;i<fill_count;++i) water_filled |= zero_fills[i].buffer==g->water_color_buffer &&
-        (zero_fills[i].bytes==terrain || zero_fills[i].bytes==VK_WHOLE_SIZE);
-    if (!water_filled || water!=0 || shape>1 || bulk>1) {
-        fprintf(stderr,"Constructor clears: water transfer %u, host water %u, appearance %u, bulk %u\n",
-            water_filled,water,shape,bulk);
+    bool water_filled=constructor_filled(g->water_color_buffer,terrain);
+    bool shape_filled=constructor_filled(g->shape_color_buffer,terrain+2u*dc_gpu_color_bank_bytes(g));
+    bool bulk_filled=constructor_filled(g->bulk_phase_buffer,bulk_size);
+    if (!water_filled || !shape_filled || !bulk_filled || water || shape || bulk) {
+        fprintf(stderr,"Water, appearance and bulk clears: transfer %u/%u/%u, host %u/%u/%u\n",
+            water_filled,shape_filled,bulk_filled,water,shape,bulk);
         dc_gpu_destroy(g); return 12;
     }
     window_gpu=g;
