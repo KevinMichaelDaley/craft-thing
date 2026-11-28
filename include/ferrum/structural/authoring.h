@@ -146,8 +146,9 @@ typedef struct {
     uint32_t low_x, low_y, width, height, tiles, geometry_words, body_slot;
 } fr_authored_component_plan_t;
 
-/** Opt-in component-plan readback; sorted by canonical source root. Saturated
- * plans remain unpublished and expose shared failure flags through diagnostics.
+/** Read plans in source-root order. On slot shortage, count receives the
+ * component demand and the caller's plans remain untouched. The stage
+ * diagnostic exposes the failure flags for the whole request.
  */
 bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
                                      fr_authored_component_plan_t *components,

@@ -266,8 +266,8 @@ bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
         return error(err_buf, err_cap, "Invalid authored component readback");
     if (vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err_buf, err_cap, "Cannot read authored component plans");
-    *count = s->mapped[4];
-    uint32_t failures=s->mapped[FR_AUTHORED_FAILURE];
+    *count = s->mapped[FR_AUTHORED_BODY_DEMAND];
+    uint32_t failures = s->mapped[FR_AUTHORED_FAILURE];
     if (failures == FR_AUTHORED_FAIL_CAPACITY)
         return error(err_buf, err_cap, "Insufficient free body slots for the authored components");
     if (failures) return error(err_buf, err_cap, "Authored staging contains invalid input");
