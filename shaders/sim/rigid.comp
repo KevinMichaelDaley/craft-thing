@@ -63,21 +63,31 @@ layout(push_constant) uniform Params {
 bool locate_body(inout Body body) {
     ivec2 old_position=ivec2(body.x_fp,body.y_fp);
     int x = 0, y = 0;
-    bool nearby = relative_chunk(body.chunk_x, params.origin_x, x) &&
-                  relative_chunk(body.chunk_y, params.origin_y, y);
-    nearby = nearby && x >= -1 && y >= -1 &&
-        x < int((params.width + 63u) / 64u) && y < int((params.height + 63u) / 64u);
-    body.x_fp = nearby ? x * (64 << 16) + body.local_fp.x : -(16 << 16);
-    body.y_fp = nearby ? y * (64 << 16) + body.local_fp.y : -(16 << 16);
+    // Signed 16.16 coordinates contain ten signed chunk bits and 22 local bits.
+    bool representable = relative_chunk(body.chunk_x, params.origin_x, x) &&
+                         relative_chunk(body.chunk_y, params.origin_y, y) &&
+                         x >= -512 && x <= 511 && y >= -512 && y <= 511;
+    ivec2 origin = representable ? ivec2(x,y)*64 : ivec2(-16);
+    ivec2 local = representable ? body.local_fp : ivec2(0);
+    // Compute shape extents before translation so a far edge can cross the
+    // fixed-point limit while its integer cell bounds remain representable.
+    body.x_fp=body.previous_x_fp=local.x;
+    body.y_fp=body.previous_y_fp=local.y;
+    body.previous_angle=body.angle;
+    body_cache_bounds(body);
+    body.bounds_low+=origin;
+    body.bounds_high+=origin;
+    body.swept_low+=origin;
+    body.swept_high+=origin;
+    body.x_fp = origin.x * 65536 + local.x;
+    body.y_fp = origin.y * 65536 + local.y;
     if(body.rest_ticks!=0u) {
-        if(nearby && body.visible!=0u)
+        if(representable && body.visible!=0u)
             body.rest_position+=ivec2(body.x_fp,body.y_fp)-old_position;
         else body.rest_ticks=0u;
     }
-    vec2 low,high; body_bounds(body,low,high);
-    vec2 position = vec2(body.x_fp,body.y_fp)/65536.0;
-    body.visible = uint(nearby && all(lessThan(position+low,vec2(params.width,params.height))) &&
-        all(greaterThan(position+high,vec2(0))));
+    body.visible = uint(representable && all(lessThan(body.bounds_low,ivec2(params.width,params.height))) &&
+        all(greaterThan(body.bounds_high,ivec2(0))));
     body.previous_x_fp = body.x_fp;
     body.previous_y_fp = body.y_fp;
     body.previous_angle = body.angle;
@@ -110,7 +120,6 @@ void integrate_body(uint index) {
     }
     body_properties(body);
     bool visible = locate_body(body);
-    body_cache_bounds(body);
     if (!visible || params.mode == PREPARE_MODE ||
         !resident_at(clamp(body.x_fp >> 16, 0, int(params.width) - 1),
                      clamp(body.y_fp >> 16, 0, int(params.height) - 1))) {
