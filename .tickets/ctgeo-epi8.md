@@ -1,6 +1,6 @@
 ---
 id: ctgeo-epi8
-status: in_progress
+status: closed
 deps: []
 links: [ctsg-6060]
 created: 2026-11-26T19:23:42Z
@@ -34,3 +34,7 @@ The corrected displayed fixture passes both with default options and with sparse
 **2026-11-26T19:58:16Z**
 
 The exact b1ea20ab displayed suite confirmed lazy clear ran and produced exact snapshots at 53 versus 53 dispatches. It completed with 93 passed, 4 failed and 10 capability skips. The remaining failures are the three fused submit counts and the subgrid momentum check, which have separate tickets. Whole-project make test remains queued.
+
+**2026-11-28T04:03:49Z**
+
+Reverified the displayed lazy-clear comparison in the persistent Xephyr session with Vulkan synchronization validation. Both the default and inherited-zero sparse configurations passed with zero skips, 53 dispatches per mode and identical snapshots. The full project test run at d105fc10 passed. The prior displayed suite recorded four unrelated failures tracked separately.
