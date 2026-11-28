@@ -10,8 +10,18 @@ layout(set=0,binding=37,std430) buffer HydroBulk { uint hydro_bulk[]; };
    so even complete immersion damps relative velocity by at most 1/20 per tick. */
 const float WATER_DRAG_RATE=.03;
 
-ivec2 hydro_low() {return hydro_control[DC_HYDRO_PEER_WIDTH]==0u?ivec2(0):min(ivec2(0),-hydro_offset());}
+#ifdef DC_CACHED_PIXEL_HYDRO
+#include "cached_pixel_hydro.glsl"
+#endif
+ivec2 hydro_low() {
+#ifdef DC_CACHED_PIXEL_HYDRO
+    if(cached_domain) return cached_low;
+#endif
+    return hydro_control[DC_HYDRO_PEER_WIDTH]==0u?ivec2(0):min(ivec2(0),-hydro_offset());}
 ivec2 hydro_high() {
+#ifdef DC_CACHED_PIXEL_HYDRO
+    if(cached_domain) return cached_high;
+#endif
     ivec2 size=ivec2(params.width,params.height);
     return hydro_control[DC_HYDRO_PEER_WIDTH]==0u?size:max(size,hydro_peer_size()-hydro_offset());
 }
@@ -20,12 +30,29 @@ uint hydro_page(ivec2 p) {
         uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
         if(page!=0u) return page;
     }
-    return hydro_peer_page(p);
+    uint peer=hydro_peer_page(p);
+#ifdef DC_CACHED_PIXEL_HYDRO
+    if(peer==0u && cached_domain) {
+        uvec2 x,y;
+        if(shifted_chunk(params.origin_x,p.x>>6,x) && shifted_chunk(params.origin_y,p.y>>6,y)) {
+            uint registry=structural_base();
+            uint page=cached_chunk_page(registry,DC_DATA(registry+1u),x,y);
+            if(page!=0u) return CACHED_HYDRO_PAGE|page;
+        }
+    }
+#endif
+    return peer;
 }
 uint hydro_atlas(ivec2 p,uint page) {
+#ifdef DC_CACHED_PIXEL_HYDRO
+    page&=~CACHED_HYDRO_PAGE;
+#endif
     return (page&HYDRO_PEER)|(((page&~HYDRO_PEER)-1u)*4096u+(uint(p.y)&63u)*64u+(uint(p.x)&63u));
 }
 uint hydro_index(ivec2 p,uint page) {
+#ifdef DC_CACHED_PIXEL_HYDRO
+    if((page&CACHED_HYDRO_PAGE)!=0u) return CACHED_HYDRO_PAGE|hydro_atlas(p,page);
+#endif
     if((page&HYDRO_PEER)==0u) return uint(p.y)*params.width+uint(p.x);
     p+=hydro_offset();
     return HYDRO_PEER|(uint(p.y)*hydro_control[DC_HYDRO_PEER_WIDTH]+uint(p.x));
@@ -35,10 +62,17 @@ uvec2 hydro_cell(uint at) {
     return HydroPairs(hydro_address(DC_HYDRO_CELLS)).pairs[at&~HYDRO_PEER];
 }
 uint hydro_occupied(uint at) {
+#ifdef DC_CACHED_PIXEL_HYDRO
+    if((at&CACHED_HYDRO_PAGE)!=0u) return cached_hydro_occupant(at&~CACHED_HYDRO_PAGE);
+#endif
     if((at&HYDRO_PEER)==0u) return hydro_occupancy[at];
     return HydroWords(hydro_address(DC_HYDRO_OCCUPANCY)).words[at&~HYDRO_PEER];
 }
 vec2 hydro_flow(uint at) {
+#ifdef DC_CACHED_PIXEL_HYDRO
+    if((at&CACHED_HYDRO_PAGE)!=0u)
+        return uintBitsToFloat(HydroPairs(params.cached_velocity).pairs[at&~CACHED_HYDRO_PAGE]);
+#endif
     if((at&HYDRO_PEER)==0u) return hydro_velocity[at];
     return uintBitsToFloat(HydroPairs(hydro_address(DC_HYDRO_VELOCITY)).pairs[at&~HYDRO_PEER]);
 }

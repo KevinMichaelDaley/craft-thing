@@ -227,11 +227,12 @@ static void push_liquid_densities(uint32_t push[10]) {
 }
 static void record_pixel_hydro(dc_gpu_t *gpu) {
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[10] = {gpu->width,  gpu->height,
+    uint32_t push[12] = {gpu->width,  gpu->height,
                         0,           dc_gpu_runtime_body_count(gpu),
                         (uint32_t)x, (uint32_t)(x >> 32),
                         (uint32_t)y, (uint32_t)(y >> 32)};
     push_liquid_densities(push);
+    memcpy(push+10,&gpu->chunk_velocity_address,sizeof(gpu->chunk_velocity_address));
     const uint32_t phases[] = {0, 3, 1, 2, 4};
     for (unsigned stage = 0; stage < sizeof(phases) / sizeof(*phases);
          ++stage) {

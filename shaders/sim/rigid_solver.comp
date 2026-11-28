@@ -104,8 +104,17 @@ bool publish(inout Body b, vec2 p) {
     return true;
 }
 bool awake(Body b) {
-    if (b.enabled == 0u || b.visible == 0u)
+    if(b.enabled==0u) return false;
+    if(b.visible==0u) {
+#ifdef DC_RUNTIME_BODY_STORAGE
+        uvec2 x,y;
+        if(!pixel_body(b) || !shifted_chunk(params.origin_x,b.x_fp>>22,x) ||
+           !shifted_chunk(params.origin_y,b.y_fp>>22,y) || any(notEqual(x,b.chunk_x)) ||
+           any(notEqual(y,b.chunk_y))) return false;
+#else
         return false;
+#endif
+    }
     ivec2 p = clamp(ivec2(b.x_fp, b.y_fp) >> 16, ivec2(0), ivec2(params.width, params.height) - 1);
     ivec2 extent=ivec2((params.width+63u)/64u,(params.height+63u)/64u);
     if(!pixel_body(b)) return pages[uint(p.y>>6)*uint(extent.x)+uint(p.x>>6)]!=0u;
@@ -122,9 +131,7 @@ bool awake(Body b) {
         end=page;
     } else {
 #ifdef DC_RUNTIME_BODY_STORAGE
-        // Exterior terrain candidates cover the one-chunk broadphase halo.
-        if(any(lessThan(tile,ivec2(-1))) || any(greaterThan(tile,extent)) ||
-           (all(greaterThanEqual(tile,ivec2(0))) && all(lessThan(tile,extent)))) return false;
+        if(all(greaterThanEqual(tile,ivec2(0))) && all(lessThan(tile,extent))) return false;
 #else
         return false;
 #endif

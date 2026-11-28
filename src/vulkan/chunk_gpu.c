@@ -192,10 +192,14 @@ bool dc_gpu_make_hydro_buffer(dc_gpu_t *gpu, uint32_t field, VkDeviceSize bytes,
 }
 
 bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
-    gpu->chunk_velocity = calloc((size_t)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS,
-                                  sizeof(*gpu->chunk_velocity));
-    if (!gpu->chunk_velocity)
-        return error(err, cap, "Cannot allocate streamed chunk velocity staging");
+    VkDeviceSize face_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_CHUNK_CELLS*sizeof(*gpu->chunk_velocity);
+    void *faces=NULL;
+    if(!make_mapped_buffer(gpu,face_bytes,&gpu->chunk_velocity_buffer,&gpu->chunk_velocity_memory,
+                           &faces,MAPPED_STAGING,true,err,cap)) return false;
+    gpu->chunk_velocity=faces;
+    VkBufferDeviceAddressInfo address={.sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer=gpu->chunk_velocity_buffer};
+    gpu->chunk_velocity_address=vkGetBufferDeviceAddress(gpu->device,&address);
+    if(!gpu->chunk_velocity_address) return error(err,cap,"Cannot address cached water velocity");
     VkDeviceSize chunk_bytes = (VkDeviceSize)dc_gpu_slot_capacity(gpu) * DC_CHUNK_CELLS * sizeof(dc_cell_t);
     VkDeviceSize page_bytes = (VkDeviceSize)gpu->page_width * gpu->page_height * sizeof(uint32_t);
     VkDeviceSize particle_bytes = (VkDeviceSize)dc_gpu_slot_capacity(gpu) *
@@ -220,7 +224,9 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
 }
 
 void dc_gpu_chunks_destroy(dc_gpu_t *gpu) {
-    free(gpu->chunk_velocity);
+    if(gpu->chunk_velocity) vkUnmapMemory(gpu->device,gpu->chunk_velocity_memory);
+    if(gpu->chunk_velocity_buffer) vkDestroyBuffer(gpu->device,gpu->chunk_velocity_buffer,NULL);
+    if(gpu->chunk_velocity_memory) vkFreeMemory(gpu->device,gpu->chunk_velocity_memory,NULL);
     dc_gpu_halo_destroy(gpu);
     dc_gpu_fluid_destroy(gpu);
     dc_gpu_marker_destroy(gpu);

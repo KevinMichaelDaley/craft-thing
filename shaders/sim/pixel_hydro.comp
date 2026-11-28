@@ -16,9 +16,12 @@ layout(set=0,binding=29,std430) buffer Scratch {uint scratch[];};
 uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width,height,mode,body_count;uvec2 origin_x,origin_y;
-    float oil_density,slime_density;
+    float oil_density,slime_density; uvec2 cached_velocity;
 } params;
 #include "structural_load.glsl"
+#ifdef DC_RUNTIME_BODY_STORAGE
+#define DC_CACHED_PIXEL_HYDRO 1
+#endif
 #include "rigid_hydro.glsl"
 uint body_state(uint slot) {
 #ifdef DC_RUNTIME_BODY_STORAGE
@@ -58,7 +61,7 @@ void main() {
         uint wet=uint(DC_HYDRO_WORD(s)!=0u),cells=0u;
         if((params.mode>>8u)==0u) {
             if(wet!=0u) {
-                Body planned=DC_BODY(i);vec2 lo,hi;body_bounds(planned,lo,hi);
+                Body planned=DC_BODY(i);select_hydro_domain(planned);vec2 lo,hi;body_bounds(planned,lo,hi);
                 vec2 origin=vec2(planned.x_fp,planned.y_fp)/65536.;
                 ivec2 begin=max(ivec2(floor(lo+origin)),hydro_low());
                 ivec2 end=min(ivec2(ceil(hi+origin)),hydro_high());
@@ -133,6 +136,9 @@ void main() {
         if(lane==0u) {DC_HYDRO_WORD(s)=0u;DC_HYDRO_WORD(s+80u)=0u;DC_HYDRO_WORD(s+81u)=0u;DC_HYDRO_WORD(s+82u)=0u;DC_HYDRO_WORD(s+83u)=b.id;}
     }
     if(slot>=params.body_count||b.enabled==0u||(b.piece_count&PIXEL_BODY_FLAG)==0u||DC_SOLVER_DATA(body_state(slot)+13u)==0u) return;
+#ifdef DC_CACHED_PIXEL_HYDRO
+    select_hydro_domain(b);
+#endif
     vec2 low,high;body_bounds(b,low,high);vec2 origin=vec2(b.x_fp,b.y_fp)/65536.;low+=origin;high+=origin;
     if(HYDRO_PHASE==0u) {
         ivec2 begin=max(ivec2(floor(low))-1,hydro_low()),end=min(ivec2(ceil(high))+1,hydro_high());

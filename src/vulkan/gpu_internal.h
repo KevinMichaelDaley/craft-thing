@@ -254,6 +254,9 @@ struct dc_gpu {
     VkBuffer velocity_buffer;
     VkDeviceMemory velocity_memory;
     void *velocity_mapped;
+    VkBuffer chunk_velocity_buffer;
+    VkDeviceMemory chunk_velocity_memory;
+    VkDeviceAddress chunk_velocity_address;
     dc_face_velocity_t *chunk_velocity;
     bool preserve_shifted_slot[DC_GPU_CHUNK_SLOTS];
     VkBuffer pressure_a_buffer;
