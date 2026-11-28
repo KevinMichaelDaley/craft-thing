@@ -1,6 +1,6 @@
 ---
 id: ctlo-53vm
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T07:15:19Z
@@ -19,3 +19,7 @@ Known body-state reads and corrections resolve slab/word offsets directly, avoid
 **2026-10-24T07:21:28Z**
 
 RED generic body-state resolutions22800, exact reference bytes but fails zero-decode bound. GREEN0 while contact resolutions remain0 and capacities stay2/invocation, body bytes match frozen reference after dynamic queue growth under actual sync validation1/1. Nonprofiled SOLVE4407 instructions,290 sends, zero spills (debug metadata stripped only to fit existing compiler-probe input buffer). Displayed performance pending.
+
+**2026-11-28T04:06:51Z**
+
+Current full GPU suite verified 22800 generic body-state resolutions in the frozen reference and zero with direct slots. The complete body records remained byte-identical through queue growth. The post-change real-time Wayland tree-cut workload measured 32.414 ms mean and 38.887 ms worst over 500 frames (tools/diagnostics/README.md).
