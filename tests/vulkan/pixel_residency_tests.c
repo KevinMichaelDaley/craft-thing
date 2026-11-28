@@ -6,9 +6,13 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
     char err[256]={0};
     memset(chunk,0,sizeof(*chunk));chunk->coord.x=1;
     for(unsigned x=0;x<12;++x) chunk->cells[row*64u+x].material=DC_MATERIAL_STONE;
-    for(unsigned replaced=0;replaced<2;++replaced) {
-        if(replaced) chunk->coord.x=17;
-        ASSERT_TRUE(dc_gpu_upload_chunk(gpu,1,chunk,err,sizeof(err)));
+    const struct { unsigned slot; int chunk_x; bool has_floor; } uploads[] = {
+        {1,1,true}, {1,17,false}, {2,1,true}
+    };
+    for(unsigned step=0;step<sizeof(uploads)/sizeof(uploads[0]);++step) {
+        chunk->coord.x=uploads[step].chunk_x;
+        bool has_floor=uploads[step].has_floor;
+        ASSERT_TRUE(dc_gpu_upload_chunk(gpu,uploads[step].slot,chunk,err,sizeof(err)));
         gpu->body_refresh_pending=true;
         ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
         dc_gpu_broadphase_stats_t candidates;
@@ -16,7 +20,7 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
         ASSERT_TRUE(dc_gpu_read_broadphase(gpu,&candidates,pairs,32,err,sizeof(err)));
         unsigned matching=0;
         for(unsigned i=0;i<candidates.count;++i) if(pairs[i].chunk.x==1 && pairs[i].chunk.y==0) {
-            ASSERT_EQ(pairs[i].kind,replaced ? DC_GPU_PAIR_BOUNDARY : DC_GPU_PAIR_TERRAIN);
+            ASSERT_EQ(pairs[i].kind,has_floor ? DC_GPU_PAIR_TERRAIN : DC_GPU_PAIR_BOUNDARY);
             matching++;
         }
         ASSERT_EQ(matching,1u);
@@ -26,8 +30,8 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
         ASSERT_EQ(stats.overflow,0u);ASSERT_TRUE(stats.count>0);
         for(unsigned i=0;i<stats.count;++i) {
             ASSERT_EQ(contacts[i].feature_chunk.x,1);
-            ASSERT_EQ(contacts[i].kind,replaced ? DC_GPU_CONTACT_BOUNDARY : DC_GPU_CONTACT_TERRAIN);
-            if(!replaced) ASSERT_EQ(contacts[i].feature_b/64u,row);
+            ASSERT_EQ(contacts[i].kind,has_floor ? DC_GPU_CONTACT_TERRAIN : DC_GPU_CONTACT_BOUNDARY);
+            if(has_floor) ASSERT_EQ(contacts[i].feature_b/64u,row);
         }
     }
 }

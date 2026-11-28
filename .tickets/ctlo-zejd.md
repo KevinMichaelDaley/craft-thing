@@ -26,3 +26,7 @@ RED: empty64x64 appearance bank8454144bytes. Initial8192-word arena gives1048576
 **2026-10-24T01:43:55Z**
 
 After descriptor fix, small colored extraction plus140-body geometry/contact relocation passes with core+sync validation. New97028-pixel component test also passes with core+sync: first allocation-deferral frame preserves source terrain; automatic arena growth then extracts every pixel with exact mass, source consumed only after commit. No new kernel resets after the recorded failed experiment. Initial bank allocation/growth and constructor descriptor coverage pass. Running >64 fracture and graphical memory/support checks next.
+
+**2026-11-28T07:40:36Z**
+
+A 500-frame restored level03 benchmark (fresh reference save, lighting on) measured mean 4.387 ms and worst 49.510 ms at frame 500. Another copy with per-frame tracing measured worst 8.364 ms. Paused capture stability passed. The original reported save remains unavailable and the strict timing limit is intermittent.

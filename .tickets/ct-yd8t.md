@@ -39,3 +39,7 @@ Offline read of the exact user-saved world proves all64/64 body records active a
 **2026-11-28T07:26:09Z**
 
 Current native cached-motion recheck under Vulkan synchronization validation: all three fixtures created an exact 128-pixel stone body of mass 345.600006. After four rigid steps, vertical velocity at x20 was 65536, at x60 it was 10794, and at x124 it remained zero. The wholly cached body still freezes. rigid.comp locate_body replaces off-view positions with a sentinel and rigid_solver.comp awake rejects bodies using viewport visibility and its page table. A camera-independent update must also retain real world-space neighbors, contacts and conservative UNKNOWN handling.
+
+**2026-11-28T07:40:36Z**
+
+GPU seam regression: a 128-pixel stone body (mass 345.600006) now reaches vertical velocity 65536 after four steps both on screen and straddling a known cached chunk. Cached floor candidates and exact contact rows are checked, and recycling the chunk slot restores boundary contacts. Wholly cached stone still has zero vertical velocity.

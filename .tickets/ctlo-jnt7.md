@@ -67,3 +67,7 @@ Native integrated RED at 239a46da measured 1,861 union edges. Refactor at 159e82
 **2026-11-27T01:07:03Z**
 
 The parallel submerged-ledger full suite pinned at 55d2438d exited 2 on the strict warm miss gate. The full-body cut retained 36,051 pixels at 8.375 ms. The warm miss took 3.130 ms with one submission, against 3 ms. The integrated tile-connectivity latency run remains queued. The two timing thresholds are unchanged.
+
+**2026-11-28T07:40:36Z**
+
+A fresh save of the shipping level03 scene was restored at 480x270 with lighting, then repeatedly air-brushed at 225,95 radius 16. In 500 displayed frames mean was 25.451 ms, worst 41.795 ms (frame 17), and the frame-8 cut took 35.057 ms. Four paused captures matched. The 30 ms budget remains unmet.
