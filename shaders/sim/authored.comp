@@ -29,6 +29,11 @@ void check_graph_record() {
     else if(record>=first_joint) {record-=first_joint;start=GRAPH_JOINTS;stride=16u;}
     else if(needs_first) {record-=nodes;start=GRAPH_MEMBERS;stride=8u;}
     uint table=g+start,entry=table+record*stride,id=words[entry];
+    if ((start==GRAPH_JOINTS || start==GRAPH_ANCHORS) && lane<9u) {
+        uint coefficients=entry+(start==GRAPH_JOINTS ? 5u : 13u);
+        float value=uintBitsToFloat(words[coefficients+lane]);
+        if (isnan(value) || isinf(value) || (lane<8u && value<0.)) reject(INVALID);
+    }
     if(lane==0u) {
         first_matches=0u;second_matches=0u;
         if(id==0u || words[entry+1u]==0u) reject(INVALID);
