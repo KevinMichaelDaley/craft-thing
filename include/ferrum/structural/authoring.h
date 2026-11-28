@@ -144,6 +144,7 @@ bool fr_gpu_read_authored_stage(dc_gpu_t *gpu,
 typedef struct {
     uint32_t source_root, object, occupied;
     uint32_t low_x, low_y, width, height, tiles, geometry_words, body_slot;
+    uint32_t geometry_word; /**< Tentative absolute sparse shape-header address, in words. */
 } fr_authored_component_plan_t;
 
 /** Read plans in source-root order. On slot shortage, count receives the

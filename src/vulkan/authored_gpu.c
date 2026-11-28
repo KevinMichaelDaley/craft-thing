@@ -7,10 +7,10 @@
 #include "runtime_body_gpu.h"
 
 enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
-       STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 22, STAGE_GRAPH_REFERENCES = 8,
+       STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 23, STAGE_GRAPH_REFERENCES = 8,
        STAGE_BODY_MASKS = 9, STAGE_BODY_PREFIX = 10, STAGE_BODY_SLOTS = 11,
        STAGE_BODY_GROUP_WORDS = 6, STAGE_LANES = 128, STAGE_PHASES = 12 };
-_Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
+_Static_assert(sizeof(fr_authored_component_plan_t) == 11u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
 _Static_assert(FR_STRUCTURAL_MEMBER_CAPACITY < 32u, "Member coverage must fit a GPU word");
 _Static_assert(offsetof(fr_structural_gpu_joint_t, normal_stiffness) == 5 * sizeof(uint32_t) &&

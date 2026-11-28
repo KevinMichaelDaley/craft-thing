@@ -23,7 +23,7 @@ uint graph() {return 24u+pixels()*20u;}
 uint plans() {return graph()+GRAPH_WORDS;}
 uint plan(uint i) {return plans()+i*10u;}
 uint scan(uint parity,uint i) {return plans()+pixels()*10u+parity*pixels()+i;}
-uint output_plan(uint i) {return plans()+pixels()*12u+i*10u;}
+uint output_plan(uint i) {return plans()+pixels()*12u+i*11u;}
 #include "authored/body_slots.glsl"
 void reject(uint i) {atomicOr(words[2],1u);atomicMin(words[20],i);}
 shared uint first_matches,second_matches;
@@ -184,5 +184,6 @@ void main() {
         words[d+8u]=DC_PIXEL_SHAPE_HEADER_WORDS+columns*rows+words[p+7u]*DC_PIXEL_TILE_WORDS;
         atomicAdd(words[5],words[d+8u]);
         words[d+9u]=INVALID;
+        words[d+10u]=INVALID;
     }
 }

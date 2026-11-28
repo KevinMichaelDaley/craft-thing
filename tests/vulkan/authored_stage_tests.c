@@ -450,6 +450,8 @@ static void test_component_plan_respects_used_geometry_and_aggregate_demand(void
     pool=(uint32_t *)gpu->body_mapped+dc_gpu_pixel_pool_word_offset(gpu);
     bank=pool+DC_GPU_PIXEL_POOL_HEADER_WORDS+pool[0]*dc_gpu_pixel_pool_capacity(gpu);
     ASSERT_EQ(pool[1],42u); ASSERT_EQ(memcmp(occupied,bank,sizeof(occupied)),0);
+    ASSERT_EQ(plans[0].geometry_word,(uint32_t)(bank-(uint32_t *)gpu->body_mapped)+pool[1]);
+    ASSERT_EQ(plans[1].geometry_word,plans[0].geometry_word+plans[0].geometry_words);
     dc_gpu_destroy(gpu); free(chunk); free(objects); free(physical_map); free(colors); PASS();
 }
 
