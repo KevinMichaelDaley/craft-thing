@@ -43,3 +43,7 @@ Renderer checkpoint integration857ec8b now includes actual prop reader/exporter.
 **2026-11-28T05:22:14Z**
 
 Two new GPU failures reproduced: a descriptor-pool allocation failure during resize destroyed the previous ready component plan; preflighting a terrain-water asset woke the live fluid scheduler before publication. The replacement stage now completes before installation, releases partial allocations on failure, retains the prior component plan, and removes the per-pixel CPU water scan from staging. All eight authored-stage cases pass on RTX A2000 with Vulkan core/synchronization validation, including exact memory accounting and successful retry. Complete atomic structural publication remains open.
+
+**2026-11-28T05:37:17Z**
+
+Successful terrain-prop admission now publishes the presence of committed water from the GPU. A linked regression counted CPU pixel reads on placement before the fix; all eight final terrain-prop cases pass with zero such reads, dry-state preservation on rejection, 1,504 water pixels and exact material/pigment checks. Input file validation is still performed on admission.

@@ -2,6 +2,7 @@
 #define FR_RENDERER_TEXTURE_GLSL
 
 struct Appearance {vec4 color_roughness;vec4 normal_relief;};
+const uint LAST_STYLED_TERRAIN_MATERIAL=10u;
 uint texture_hash(uint x) {
     x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;return x^(x>>16);
 }

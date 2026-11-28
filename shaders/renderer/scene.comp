@@ -222,7 +222,8 @@ Surface surface_at(uint i,out float opacity,out uint known) {
             if((SCENE_PHASE==6u||SCENE_PHASE==9u)&&authored.w>0.) {
                 a=Appearance(vec4(authored.rgb,0),vec4(0));
             } else {
-                a=texture_sample(rest,body.id,mapped_material,mapped_material<=10u?configuration[4u+mapped_material]:0u);
+                uint style=mapped_material<=LAST_STYLED_TERRAIN_MATERIAL?configuration[4u+mapped_material]:0u;
+                a=texture_sample(rest,body.id,mapped_material,style);
                 if(authored.w>0.) a.color_roughness.rgb=authored.rgb;
             }
             add_surface(surface,a,coverage,body.angle);body_coverage+=coverage;
@@ -278,7 +279,7 @@ uint refresh_palette(uint atlas) {
     uint registry=params.registry+32u+(atlas/4096u)*8u;
     if(DC_BUFFER_DATA(registry+5u)==0u) return 0u;
     uint generated=0u,generation=DC_BUFFER_DATA(registry+4u),material=chunk_cells[atlas].x&65535u;
-    uint style=material<=10u?configuration[4u+material]:0u,key=material|(style<<16u);
+    uint style=material<=LAST_STYLED_TERRAIN_MATERIAL?configuration[4u+material]:0u,key=material|(style<<16u);
     if(uvec2(keys[atlas].x&0x7fffffffu,keys[atlas].y)!=uvec2(key,generation)) {
         ivec2 rest=ivec2(canonical_cell(DC_BUFFER_DATA(registry),atlas%64u),
             canonical_cell(DC_BUFFER_DATA(registry+2u),(atlas%4096u)/64u));

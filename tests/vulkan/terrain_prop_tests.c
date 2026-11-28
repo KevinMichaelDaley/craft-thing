@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/body_address_gpu.h"
+#include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/renderer_internal.h"
 #include "ferrum/assets/prop_gpu.h"
 #include "ferrum/renderer/gpu.h"
@@ -48,6 +48,17 @@ static uint32_t byte_from_linear(float value) {
     return (uint32_t)lroundf(srgb*255.f);
 }
 
+static void update_prop_checksum(uint8_t *bytes,size_t size) {
+    uint32_t crc=UINT32_MAX;
+    for(size_t i=0;i<size;i++) {
+        if(i>=44&&i<48) continue;
+        crc^=bytes[i];
+        for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
+    }
+    crc=~crc;
+    for(unsigned i=0;i<4;i++) bytes[44+i]=(uint8_t)(crc>>(i*8));
+}
+
 static void test_imported_soil_and_gravel_start_at_full_cell_density(void) {
     for(unsigned gravel=0;gravel<2;gravel++) {
         uint8_t *bytes=malloc(g_asset.size);ASSERT_TRUE(bytes);
@@ -57,13 +68,7 @@ static void test_imported_soil_and_gravel_start_at_full_cell_density(void) {
                 uint8_t *record=bytes+g_asset.data_offset+i*8;
                 if(record[0]==7 && record[1]==0) record[0]=8;
             }
-            uint32_t crc=UINT32_MAX;
-            for(size_t i=0;i<g_asset.size;i++) {
-                if(i>=44&&i<48) continue;
-                crc^=bytes[i];
-                for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
-            }
-            crc=~crc;for(unsigned i=0;i<4;i++) bytes[44+i]=(uint8_t)(crc>>(i*8));
+            update_prop_checksum(bytes,g_asset.size);
         }
         fr_prop_asset_t asset;char err[256];
         ASSERT_TRUE(fr_prop_asset_open(&asset,bytes,g_asset.size,err,sizeof(err)));
@@ -169,13 +174,7 @@ static void check_detached_color(bool roundtrip) {
     float water_rgb[3]={.12f,.8f,.3f},water_alpha=1;
     memcpy(physical+128*128*8+water*64,water_rgb,sizeof(water_rgb));
     memcpy(physical+128*128*8+water*64+48,&water_alpha,4);
-    uint32_t crc=UINT32_MAX;
-    for(size_t i=0;i<g_asset.size;i++) {
-        if(i>=44&&i<48) continue;
-        crc^=bytes[i];
-        for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
-    }
-    crc=~crc;memcpy(bytes+44,&crc,4);
+    update_prop_checksum(bytes,g_asset.size);
     fr_prop_asset_t asset;
     ASSERT_TRUE(fr_prop_asset_open(&asset,bytes,g_asset.size,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&asset,0,32,32,err,sizeof(err)));
@@ -315,13 +314,7 @@ static void test_imported_surface_overrides_survive_palette_refresh(void) {
         memcpy(a+12,&roughness,4);memcpy(a+16,normal,12);memcpy(a+28,&relief,4);
         a[60]=7u;
     }
-    uint32_t crc=UINT32_MAX;
-    for(size_t i=0;i<g_asset.size;i++) {
-        if(i>=44&&i<48) continue;
-        crc^=bytes[i];
-        for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
-    }
-    crc=~crc;for(unsigned i=0;i<4;i++) bytes[44+i]=(uint8_t)(crc>>(i*8));
+    update_prop_checksum(bytes,g_asset.size);
     fr_prop_asset_t asset;
     ASSERT_TRUE(fr_prop_asset_open(&asset,bytes,g_asset.size,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&asset,0,32,32,err,sizeof(err)));

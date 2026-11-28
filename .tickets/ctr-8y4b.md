@@ -1,6 +1,6 @@
 ---
 id: ctr-8y4b
-status: in_progress
+status: closed
 deps: [ctr-9svu]
 links: []
 created: 2026-10-14T03:12:55Z
@@ -31,3 +31,7 @@ Parallel GPU texture reference and actual scene-frame GREEN passed with Vulkan v
 **2026-10-14T04:48:20Z**
 
 Pushed fb35ce8 RED and 0e2015b GREEN: exact 64-byte compiled appearance input/reference resolution. Missing optional surface channels use renderer defaults, authored color/emission/alpha remain independent, malformed input has no partial output mutation. CPU appearance9+texture4+shading3 pass; full make all builds. Runtime imported GPU override/admission and displayed/performance acceptance remain open; shared GPU/device failure currently blocks GPU launches.
+
+**2026-11-28T05:37:17Z**
+
+Reproduced discarded imported surface overrides after palette refresh: prop placement indexed unused style words for coal and char, beyond the last configurable terrain material. Placement and scene shading now use the same supported style range. The GPU test reads back exact authored roughness, relief and all normal components after real rendering; terrain-prop suite 8/8 including exact mixed materials, water pigment, holes and persisted colors. Appearance 10/10, procedural texture 5/5, mixed-owner GPU/CPU texel comparison 1/1 and actual scene/paused physics 1/1 passed. The core/sync-validated Xephyr display ran 90 frames at 480x270 in 2.176 s, with 141 cleared/140 newly occupied samples on rotation, all 7,320 optical samples preserved under restyling and four identical paused captures. The separate parent frame-tail target remains open.
