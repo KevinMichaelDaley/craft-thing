@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "ferrum/fire/bulk_phase.h"
 #include "ferrum/fire/gas_gpu.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../test_window.h"
@@ -24,11 +25,30 @@ static bool acquire_dependency;
 static bool present_dependency;
 static bool reject_next_acquire, reject_next_present;
 static unsigned present_calls;
+static struct { void *address; size_t size; } large_clears[128];
+static unsigned clear_count;
+static _Thread_local bool recording_clears;
 #define RUN(fn) do { printf("RUN  %s\n", #fn); fn(); printf("OK   %s\n", #fn); } while (0)
 #define ASSERT_TRUE(e) do { if (!(e)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #e); ++g_fail; return; } } while (0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
 #define ASSERT_INT_EQ(a,b) ASSERT_TRUE((int)(a)==(int)(b))
 #define PASS() ++g_pass
+
+void *__real_memset(void *, int, size_t);
+void *__wrap_memset(void *ptr, int value, size_t bytes) {
+    if (recording_clears && value == 0 && bytes >= 1048576 && clear_count < 128) {
+        large_clears[clear_count].address = ptr;
+        large_clears[clear_count++].size = bytes;
+    }
+    return __real_memset(ptr, value, bytes);
+}
+
+static unsigned constructor_clears(const void *ptr, size_t bytes) {
+    unsigned count = 0;
+    for (unsigned i = 0; i < clear_count; ++i)
+        if (large_clears[i].address == ptr && large_clears[i].size == bytes) ++count;
+    return count;
+}
 
 VkResult __real_vkCreateSwapchainKHR(VkDevice, const VkSwapchainCreateInfoKHR *, const VkAllocationCallbacks *, VkSwapchainKHR *);
 VkResult __wrap_vkCreateSwapchainKHR(VkDevice d, const VkSwapchainCreateInfoKHR *i, const VkAllocationCallbacks *a, VkSwapchainKHR *s) {
@@ -101,8 +121,21 @@ VkResult __wrap_vkQueueWaitIdle(VkQueue q) {
 static int window_cycle(void) {
     char err[256]={0}; dc_gpu_t *g=NULL;
     uint64_t start=SDL_GetPerformanceCounter();
+    clear_count=0;
+    recording_clears=true;
     if(!dc_test_create_window(&g,64,64,256,256,"build/shaders/pattern.comp.spv",err,sizeof(err))) {
+        recording_clears=false;
         fprintf(stderr,"%s\n",err); return 1;
+    }
+    recording_clears=false;
+    size_t terrain=dc_gpu_color_terrain_bytes(g);
+    unsigned water=constructor_clears(g->water_color_mapped,terrain);
+    unsigned shape=constructor_clears(g->shape_color_mapped,terrain+2u*dc_gpu_color_bank_bytes(g));
+    size_t bulk_size=(size_t)dc_gpu_slot_capacity(g)*sizeof(fr_bulk_phase_chunk_t);
+    unsigned bulk=constructor_clears(g->bulk_phase_mapped,bulk_size);
+    if (water>1 || shape>1 || bulk>1) {
+        fprintf(stderr,"Repeated constructor clears: water %u, appearance %u, bulk %u\n",water,shape,bulk);
+        dc_gpu_destroy(g); return 12;
     }
     window_gpu=g;
     acquired_image=VK_NULL_HANDLE;
