@@ -1,6 +1,6 @@
 ---
 id: ct-vkik
-status: in_progress
+status: closed
 deps: [ct-xsll, ct-ortp, ct-hk3v, ct-unkh, ct-1i55]
 links: [ctbpa-ccma, ct-yctv, ctisf-f0wy]
 created: 2026-11-01T19:29:54Z
@@ -27,3 +27,7 @@ Integrated 3c94b591 passed seven live runtime, ten split-screen, six live action
 **2026-11-26T22:14:57Z**
 
 The 109361df full pose-combustion make test completed with exit 2 when the native fire-demo fixture could not allocate device-local memory on the shared RTX A2000. The separate fire-ray GPU group passed all three cases beforehand. That full test result does not establish demo acceptance. The newer integrated and inventory full runs remain queued.
+
+**2026-11-28T04:53:29Z**
+
+Xephyr :93 acceptance passed: seven live runtime cases including six walk and eight cast frames, one live chew case covering all eight authored chomp frames and target conservation, and ten live action cases including simultaneous independent spells and two different harvested cells. Each seat receives exactly 39,322 Q16 wood, and the controller ice target receives 65,536 Q16 fluid while the keyboard spawns one flaming coal body. Native robe and hat gain 7 and 11 Q16 char. The linked profile and save evidence covers fur wetting, burning and byte-exact persistence. The earlier full d105fc10 make test passed including the split suite. The current full suite is running; the separately reproduced native hidden-window 15s watchdog and renderer worst-frame budget failures are tracked under ctlo-equi and ctr-6fii/ct-tu55. Controls, targets and real screenshot paths are in design/beaver_player.md.

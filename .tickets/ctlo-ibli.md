@@ -1,6 +1,6 @@
 ---
 id: ctlo-ibli
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T08:39:59Z
@@ -27,3 +27,7 @@ Extended actual core/synchronization frozen oracle passes32768 rotated quad case
 **2026-11-28T04:39:43Z**
 
 Repeated the frozen comparison under core and synchronization validation on the RTX A2000. Before correction, 1,943 of 32,768 rotated-quad cases disagreed; one large-coordinate case selected the wrong contact face. After correction all six 32,768-case families agree exactly on hit, normal, depth, witnesses, and feature IDs. The quad projection retains zero dynamic polygon iterations. Production contacts and displayed concave dynamics are being exercised separately.
+
+**2026-11-28T04:53:29Z**
+
+All ten production contact tests passed with core/synchronization validation, covering rotated, mixed, partial, symmetric, overflow and missing-page cases. The displayed 480x270 two-body concave test passed 180 ticks in 3.233s including pacing; both bodies rotated, made body and terrain contacts and retained exact mass, with four byte-identical paused frames. Separate four-light/sun renderer scene ran 90 displayed frames in 0.907s. This complements the 196,608 exact GPU oracle comparisons.
