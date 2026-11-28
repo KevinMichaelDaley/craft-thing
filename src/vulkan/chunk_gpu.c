@@ -378,7 +378,6 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
             gpu->component_baseline_pending=true;
     memcpy(gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
            chunk->face_velocity, sizeof(chunk->face_velocity));
-    gpu->preserve_shifted_slot[slot] = false;
     dc_marker_t *markers_a = gpu->marker_a_mapped;
     dc_marker_t *markers_b = gpu->marker_b_mapped;
     size_t offset = (size_t)slot * DC_MARKERS_PER_CHUNK;
@@ -409,6 +408,8 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     dc_gpu_structural_track_chunk(gpu, slot, chunk->coord);
     gpu->fluid_snapshot_valid = false;
     bool okay=dc_gpu_copy_chunk_state(gpu, slot, true, true, err, cap);
+    if(okay && gpu->slot_page[slot]!=UINT32_MAX && !gpu->preserve_shifted_slot[slot])
+        transfer_page_velocity(gpu,gpu->slot_page[slot],gpu->chunk_velocity+(size_t)slot*DC_CHUNK_CELLS,true);
     if(okay&&!gpu->reactive_checkpoint_installing) fr_thermal_clear_water_chunk(gpu,slot);
     return okay;
 }
@@ -457,7 +458,10 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
     uint32_t new_page = slot == UINT32_MAX ? 0u : slot + 1u;
     if (pages[tile] == new_page &&
         (slot == UINT32_MAX || gpu->slot_page[slot] == tile)) {
-        if (slot != UINT32_MAX) gpu->preserve_shifted_slot[slot] = false;
+        if (slot != UINT32_MAX && gpu->preserve_shifted_slot[slot]) {
+            transfer_page_velocity(gpu,tile,gpu->chunk_velocity+(size_t)slot*DC_CHUNK_CELLS,true);
+            gpu->preserve_shifted_slot[slot]=false;
+        }
         return true;
     }
     if (dc_gpu_liquid_owner_held(gpu))
