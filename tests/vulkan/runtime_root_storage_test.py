@@ -26,9 +26,17 @@ def root_decorations(path, block="RuntimeBodyRoot"):
 
 class RuntimeRootStorageTests(unittest.TestCase):
     def test_consumers_promise_readonly_nonaliasing_root_storage(self):
-        for shader in ("rigid_solver", "rigid", "pattern", "mpm", "scene", "contacts"):
+        runtime = ("broadphase", "component_extract", "component_local", "contacts",
+                   "contacts_pixel", "halo", "mpm", "mpm_active", "mpm_commit",
+                   "mpm_compact", "mpm_stencil", "pattern", "pixel_hydro", "rigid",
+                   "rigid_solver", "scene", "structural", "structural_carve", "tick_probe")
+        consumers = [f"runtime/{name}" for name in runtime]
+        consumers.extend(f"runtime/structural_phase_{phase}" for phase in range(6))
+        consumers.extend(("body_combustion", "combustion", "player_drive", "player_fire_ray",
+                          "runtime_body_scan", "thermal"))
+        for shader in consumers:
             with self.subTest(shader=shader):
-                decorations = root_decorations(f"build/shaders/runtime/{shader}.comp.spv")
+                decorations = root_decorations(f"build/shaders/{shader}.comp.spv")
                 self.assertIn(24, decorations, "root must be NonWritable")
                 self.assertIn(19, decorations, "root must be Restrict")
 
