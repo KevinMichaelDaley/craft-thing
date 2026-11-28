@@ -21,10 +21,12 @@ static void diagnostic_case(unsigned kind) {
     if(kind==0) for(unsigned slot=0;slot<64;slot++) bodies[slot].body.active=1;
     if(kind==1) {record[6]=1;record[7]=0;record[10]=0;}
     if(kind==2) {pool[2]=40;}
+    if(kind==3) {graph[36257]=64;graph[36263]=7;graph[36259]=1;}
     dc_gpu_extraction_stats_t stats={0};
     bool okay=dc_gpu_read_extraction_stats(&gpu,&stats);free(gpu.body_mapped);
     ASSERT_TRUE(okay);ASSERT_EQ(stats.body_capacity,64u);ASSERT_EQ(stats.pending,1u);
-    ASSERT_EQ(stats.selected_components,1u);ASSERT_EQ(stats.committed_components,0u);
+    ASSERT_EQ(stats.deferred_by_batch_limit,kind==3?7u:0u);
+    ASSERT_EQ(stats.selected_components,kind==3?64u:1u);ASSERT_EQ(stats.committed_components,0u);
     ASSERT_EQ(stats.owned_bodies,kind==0?64u:0u);
     ASSERT_EQ(stats.unknown_components,kind==1?1u:0u);
     ASSERT_EQ(stats.no_body_slot_components,kind==0?1u:0u);
@@ -33,7 +35,9 @@ static void diagnostic_case(unsigned kind) {
 static void test_full_body_pool_is_not_misreported_as_unknown_water_physics(void) {diagnostic_case(0);}
 static void test_missing_world_connectivity_is_reported_separately(void) {diagnostic_case(1);}
 static void test_geometry_arena_exhaustion_is_reported_separately(void) {diagnostic_case(2);}
+static void test_batch_deferral_reports_the_number_waiting(void) {diagnostic_case(3);}
 int main(void) {
+    RUN(test_batch_deferral_reports_the_number_waiting);
     RUN(test_full_body_pool_is_not_misreported_as_unknown_water_physics);
     RUN(test_missing_world_connectivity_is_reported_separately);
     RUN(test_geometry_arena_exhaustion_is_reported_separately);

@@ -41,6 +41,7 @@ typedef struct {
     uint32_t arena_capacity_words, arena_used_words;
     uint32_t selected_components, committed_components, unknown_components;
     uint32_t no_body_slot_components, no_arena_components, pending;
+    uint32_t deferred_by_batch_limit;
 } dc_gpu_extraction_stats_t;
 /** Explicit completed-queue diagnostic only; never used to solve physics.
  * Reports the last extraction batch and current ownership/resource totals. */
