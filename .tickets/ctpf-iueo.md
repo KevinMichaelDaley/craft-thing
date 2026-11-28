@@ -75,3 +75,7 @@ GPU staging checks total rigid geometry demand against free words in the active 
 **2026-11-28T07:08:22Z**
 
 The GPU now assigns canonical nonoverlapping absolute sparse shape-header addresses in source-root order. The same parallel prefix serves body ranks and geometry demand, including zero-sized gaps between component roots. Tests cover uneven 146/42-word shapes, the alternate active bank, an occupied 42-word prefix, retry after heap relocation and preservation of the existing shape. All 14 staging cases passed on NVIDIA with Vulkan core and synchronization validation; authored SPIR-V validates. These tentative ranges still require transaction-wide destination transfer and publication.
+
+**2026-11-28T07:15:47Z**
+
+All 15 staging tests pass on the RTX A2000 with core and synchronization validation. One 64-byte GPU destination record per source texel now carries source pixel/frame, canonical signed-64 chunk plus local cell, and tentative component/slot/geometry/rest/tile coordinates. Tests crossed the x low-word carry and the negative y chunk boundary, distinguished disconnected bodies with a shared authored object, checked all 1216 entries of a sparse canvas on the alternate geometry bank, and verified a failed request cannot expose stale destinations. Structural rows currently identify their member and have no reserved collider. Live overlap, support, participant reservation and publication are still pending.
