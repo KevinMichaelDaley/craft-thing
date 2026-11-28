@@ -60,10 +60,16 @@ static unsigned constructor_clears(const void *ptr, size_t bytes) {
     return count;
 }
 
-static bool constructor_filled(VkBuffer buffer,VkDeviceSize bytes) {
+static bool initial_transfer_visible(const char *name,VkBuffer buffer,const uint8_t *mapped,size_t bytes) {
+    static const uint8_t zero[16]={0};
+    bool filled=false;
     for (unsigned i=0;i<fill_count;++i)
         if(zero_fills[i].buffer==buffer && (zero_fills[i].bytes==bytes || zero_fills[i].bytes==VK_WHOLE_SIZE))
-            return true;
+            filled=true;
+    unsigned host_clears=constructor_clears(mapped,bytes);
+    if (filled && !host_clears && bytes>=sizeof(zero) && !memcmp(mapped,zero,sizeof(zero)) &&
+        !memcmp(mapped+bytes-sizeof(zero),zero,sizeof(zero))) return true;
+    fprintf(stderr,"%s startup initialization failed: GPU fill %u, full host clears %u\n",name,filled,host_clears);
     return false;
 }
 
@@ -147,16 +153,11 @@ static int window_cycle(void) {
     }
     recording_clears=false;
     size_t terrain=dc_gpu_color_terrain_bytes(g);
-    unsigned water=constructor_clears(g->water_color_mapped,terrain);
-    unsigned shape=constructor_clears(g->shape_color_mapped,terrain+2u*dc_gpu_color_bank_bytes(g));
     size_t bulk_size=(size_t)dc_gpu_slot_capacity(g)*sizeof(fr_bulk_phase_chunk_t);
-    unsigned bulk=constructor_clears(g->bulk_phase_mapped,bulk_size);
-    bool water_filled=constructor_filled(g->water_color_buffer,terrain);
-    bool shape_filled=constructor_filled(g->shape_color_buffer,terrain+2u*dc_gpu_color_bank_bytes(g));
-    bool bulk_filled=constructor_filled(g->bulk_phase_buffer,bulk_size);
-    if (!water_filled || !shape_filled || !bulk_filled || water || shape || bulk) {
-        fprintf(stderr,"Water, appearance and bulk clears: transfer %u/%u/%u, host %u/%u/%u\n",
-            water_filled,shape_filled,bulk_filled,water,shape,bulk);
+    if (!initial_transfer_visible("Water color",g->water_color_buffer,g->water_color_mapped,terrain) ||
+        !initial_transfer_visible("Appearance",g->shape_color_buffer,g->shape_color_mapped,
+                                  terrain+2u*dc_gpu_color_bank_bytes(g)) ||
+        !initial_transfer_visible("Bulk phase",g->bulk_phase_buffer,g->bulk_phase_mapped,bulk_size)) {
         dc_gpu_destroy(g); return 12;
     }
     window_gpu=g;
