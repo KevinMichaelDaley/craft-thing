@@ -17,3 +17,9 @@ The parked-room reopen oracle intermittently publishes a different face velocity
 
 Exact repeated GPU mixed-liquid cells, face velocities and phase state; unchanged constitutive shear, momentum, volume, heat and retained-volume checks; repeat actual parked-room reopen comparison.
 
+
+## Notes
+
+**2026-11-28T05:38:33Z**
+
+All 22 bulk material tests passed after separating face writes from transverse shear reads, but a parked-room replay still failed. Five stage snapshots from a failing physical tick showed identical cells, bulk and faces through rigid processing. A single pressure and two velocities first differed inside the first scheduled water run, before any bulk exchange. Generic pressure also reproduced the mismatch. A new command-recording regression exposed the damped velocity write at the end of a water cycle followed by the next projection snapshot without a compute write-to-read dependency. The added barrier passes the ordering regression; repeated exact replay remains under test.
