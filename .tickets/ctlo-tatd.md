@@ -1,6 +1,6 @@
 ---
 id: ctlo-tatd
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T05:24:10Z
@@ -23,3 +23,7 @@ Specialization wiring/isolation4/4 passes with fake Vulkan pipeline creation. Ex
 **2026-10-24T05:34:37Z**
 
 Equal-work displayed300-frame means: reference29.434ms, long29.194ms, page29.539ms, combined29.692ms. All worst frames exceed30ms; no reliable speedup established and both defaults remain off. Exact transport and specialization tests pass.
+
+**2026-11-28T03:57:27Z**
+
+Rebuilt and ran the specialization fixture: 4 passed. Both flags independently require an explicit value of 1 and only reach transport pipelines. The full GPU scan fixture matched exact water mass and pigment on all 56 direction/variant combinations. The four equal-work displayed comparisons are recorded above; the experiments remain opt-in.

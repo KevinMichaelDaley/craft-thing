@@ -1,6 +1,6 @@
 ---
 id: ctbpa-ccma
-status: in_progress
+status: closed
 deps: []
 links: [ct-vkik, ct-rrwn, ctlo-2q4f]
 created: 2026-11-26T21:24:07Z
@@ -36,3 +36,7 @@ The pre-fix native suite kept the cut terrain and lost the restored Q16 balance.
 **2026-11-26T21:51:16Z**
 
 Exact c7fa9400 passed all five native play cases and all four world save tests. The final native fixture forces a failure after staging the harvested chunk and inventory and confirms reopening still has the original tree cell and zero credit. The staged stream, thermal, gas and reactive stream tests all passed. Adjacent native action, chew, reactive stream view, fire-ray and split-screen cases passed. The exact whole make test remains queued behind the running GPU suites.
+
+**2026-11-28T03:57:27Z**
+
+Verified the same code as the d105fc10 full aggregate. All five native play-spawn cases and eight world-save cases passed, including distinct seat balances after harvest, placement and late rejoin, an interrupted publish, an invalid record, and empty legacy inventory. Full make test exited zero.
