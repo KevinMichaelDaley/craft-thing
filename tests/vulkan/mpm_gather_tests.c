@@ -95,7 +95,7 @@ static void test_stationary_and_moving_gathers_match_the_ordered_reference_exact
     test_buffer_t buffer[8]={0};
     VkDescriptorBufferInfo info[8];VkWriteDescriptorSet writes[8];
     for(unsigned i=0;i<8;i++) {
-        buffer[i].bytes=i<3?PARTICLES*sizeof(dc_mpm_particle_t):i==3?PARTICLES*4u:i==4?(11u+2u*TILES)*4u:i==5?16u:i==6?CHUNKS*4096u*8u:CHUNKS*4u;
+        buffer[i].bytes=i<3?PARTICLES*sizeof(dc_mpm_particle_t):i==3?PARTICLES/4u:i==4?(11u+2u*TILES)*4u:i==5?16u:i==6?CHUNKS*4096u*8u:CHUNKS*4u;
         ASSERT_TRUE(dc_gpu_make_mapped_buffer(g,buffer[i].bytes,&buffer[i].buffer,&buffer[i].memory,&buffer[i].mapped,err,sizeof(err)));
         memset(buffer[i].mapped,0,(size_t)buffer[i].bytes);
         info[i]=(VkDescriptorBufferInfo){buffer[i].buffer,0,buffer[i].bytes};

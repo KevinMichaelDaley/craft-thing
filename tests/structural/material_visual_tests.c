@@ -153,20 +153,22 @@ test_wood_floats_and_stone_sinks_visibly_from_material_density(void) {
     dc_gpu_memory_stats_t memory;
     dc_gpu_tick_capture_t capture;
     ASSERT_TRUE(dc_gpu_memory_stats(gpu, &memory));
-    printf("Wet visual memory: mapped %.3f MiB, device %.3f MiB\n",
-           memory.mapped_local_bytes/1048576.,memory.device_only_bytes/1048576.);
     /* Preserve the pre-channel physics allowance and account for required
        authored-color planes and addressed body/terrain bookkeeping separately. */
     VkDeviceSize appearance=2u*dc_gpu_color_terrain_bytes(gpu)+2u*dc_gpu_color_bank_bytes(gpu);
     VkDeviceSize dynamic=(VkDeviceSize)DC_GPU_CHUNK_SLOTS*DC_CHUNK_CELLS*sizeof(uint32_t)+
         dc_gpu_contact_work_bytes(gpu)+(VkDeviceSize)dc_gpu_body_capacity(gpu)*(256u+32u+512u)+256u*1024u;
-    ASSERT_TRUE(memory.mapped_local_bytes+memory.mapped_system_bytes < 72u*1048576u+appearance+dynamic);
+    uint64_t mapped = memory.mapped_local_bytes + memory.mapped_system_bytes;
+    uint64_t mapped_budget = 72u*1048576u + appearance + dynamic;
+    printf("Wet visual memory: mapped %.3f / %.3f MiB, device %.3f / 112 MiB\n",
+           mapped/1048576., mapped_budget/1048576., memory.device_only_bytes/1048576.);
+    ASSERT_TRUE(mapped < mapped_budget);
     ASSERT_TRUE(memory.device_only_bytes < 112u * 1048576u);
     ASSERT_TRUE(dc_gpu_tick_capture(gpu, &capture, err, 256));
     ASSERT_TRUE(capture.stages[0].gpu_ns > 0);
     printf("Wet visual GPU rigid %.3f ms, mapped %.3f MiB, device %.3f MiB\n",
            capture.stages[0].gpu_ns / 1000000.0,
-           memory.mapped_local_bytes / 1048576.0,
+           mapped / 1048576.0,
            memory.device_only_bytes / 1048576.0);
     free(chunk);
     dc_gpu_destroy(gpu);
