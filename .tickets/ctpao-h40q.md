@@ -1,6 +1,6 @@
 ---
 id: ctpao-h40q
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T23:12:45Z
@@ -55,3 +55,7 @@ A real 64x64 context with injected Vulkan failures previously conflated allocati
 **2026-11-28T06:36:34Z**
 
 Measured the archived 486563d0 executable on RTX A2000, then linked only the corrected halo fixture against the same archived engine objects and shaders. All four physical tests passed in both unbounded runs. The particle test peak fell from two devices, 330352688 allocated bytes and 145114608 mapped bytes to one device, 165438608 allocated bytes and 72704820 mapped bytes. The current engine passed all four at 134739360 allocated / 43836228 mapped. All three released all allocations. Under a process-only 256 MiB Vulkan budget the archived particle test failed at the original line 123: 259144272 bytes live plus a 29360128-byte request exceeded the budget. The corrected fixture on the same historical engine passed that particle test and all four controls at the same budget. This establishes a reproducible resource-limit cause for that exact symptom. Several type-5 allocation attempts returned actual VK_ERROR_OUT_OF_DEVICE_MEMORY even during the successful unbounded runs; fallback worked. The precise failing operation in the November 26 event was not logged.
+
+**2026-11-28T07:06:36Z**
+
+Closure audit: stable unguarded original, corrected same-engine fixture and current native halo runs all exit 0. At 256 MiB the original fails on the second context at the original assertion, and the corrected same-engine fixture exits 0. Allocation/bind/map setup errors are individually surfaced. The subsequent full suite recorded the room 1 cell 2208 velocity mismatch (ctowpe-attc, since repaired). The rerun of the integrated snapshot target reached 44/45, failing its camera-admission watchdog at 0 owners and 0 visible slots; follow-up ctowpe-qtwp owns that failure. The original uninstrumented log cannot identify which Vulkan operation failed on November 26.
