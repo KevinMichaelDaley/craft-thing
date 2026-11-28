@@ -223,6 +223,22 @@ void __wrap_vkCmdDispatchIndirect(VkCommandBuffer command, VkBuffer buffer, VkDe
     __real_vkCmdDispatchIndirect(command, buffer, offset);
 }
 static uint32_t expected_slots, pressure_dispatches, mass_dispatches, wrong_dispatches;
+static dc_gpu_t *cycle_owner;
+static bool pending_damped_velocity, missing_cycle_barrier;
+static unsigned cycle_writes, cycle_reads;
+
+void __real_vkCmdPipelineBarrier2(VkCommandBuffer,const VkDependencyInfo *);
+void __wrap_vkCmdPipelineBarrier2(VkCommandBuffer command,const VkDependencyInfo *dependency) {
+    for(uint32_t i=0;cycle_owner && i<dependency->memoryBarrierCount;i++) {
+        const VkMemoryBarrier2 *b=dependency->pMemoryBarriers+i;
+        if((b->srcStageMask&(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)) &&
+           (b->srcAccessMask&(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT|VK_ACCESS_2_MEMORY_WRITE_BIT)) &&
+           (b->dstStageMask&(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)) &&
+           (b->dstAccessMask&(VK_ACCESS_2_SHADER_STORAGE_READ_BIT|VK_ACCESS_2_MEMORY_READ_BIT)))
+            pending_damped_velocity=false;
+    }
+    __real_vkCmdPipelineBarrier2(command,dependency);
+}
 
 void __real_vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline);
 void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point, VkPipeline pipeline) {
@@ -232,6 +248,14 @@ void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint point
 
 void __real_vkCmdDispatch(VkCommandBuffer, uint32_t, uint32_t, uint32_t);
 void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint32_t z) {
+    if(cycle_owner && traced_pipeline==cycle_owner->fluid_phase_pipelines[5]) {
+        cycle_writes++;
+        pending_damped_velocity=true;
+    }
+    if(cycle_owner && traced_pipeline==cycle_owner->projection_phase_pipelines[5]) {
+        cycle_reads++;
+        missing_cycle_barrier|=pending_damped_velocity;
+    }
     if (traced_pressure && traced_pipeline == traced_pressure->pressure_work_pipelines[1])
         ++tile_scans;
     if (traced_workspace) {
@@ -254,6 +278,22 @@ void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y, uint3
         }
     }
     __real_vkCmdDispatch(command, x, y, z);
+}
+
+static void test_cycle_publishes_damped_faces_before_next_velocity_snapshot(void) {
+    dc_chunk_t left={0},right={0};char err[256]={0};
+    dc_gpu_t *gpu=make_grid(&left,&right,err,sizeof(err));ASSERT_TRUE(gpu);
+    VkCommandBufferBeginInfo begin={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    ASSERT_EQ(vkResetCommandBuffer(gpu->command,0),VK_SUCCESS);
+    ASSERT_EQ(vkBeginCommandBuffer(gpu->command,&begin),VK_SUCCESS);
+    cycle_owner=gpu;
+    dc_gpu_record_fluid_phase_uncached(gpu,5);
+    dc_gpu_record_fluid_phase_uncached(gpu,0);
+    cycle_owner=NULL;
+    ASSERT_EQ(vkEndCommandBuffer(gpu->command),VK_SUCCESS);
+    dc_gpu_destroy(gpu);
+    ASSERT_EQ(cycle_writes,1u);ASSERT_EQ(cycle_reads,1u);
+    ASSERT_TRUE(!missing_cycle_barrier);PASS();
 }
 
 static void test_sparse_workspace_pages_match_full_slot_dispatch(void) {
@@ -476,6 +516,8 @@ int main(int argc, char **argv) {
         RUN(test_scheduled_pressure_runs_match_independent_phases);
         return g_fail != 0;
     }
+    RUN(test_cycle_publishes_damped_faces_before_next_velocity_snapshot);
+    if(argc==2 && !strcmp(argv[1],"--cycle-barrier")) return g_fail!=0;
     RUN(test_sparse_workspace_pages_match_full_slot_dispatch);
     if (argc == 2 && !strcmp(argv[1], "--workspace")) return g_fail != 0;
     RUN(test_scheduled_pressure_runs_match_independent_phases);
