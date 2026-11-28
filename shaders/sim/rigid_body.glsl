@@ -208,14 +208,19 @@ vec2 piece_vertex(Body b,uint p,uint i) {
     return b.center+body_rotate(piece_rest_vertex(b,p,i)-b.center,b.angle);
 }
 struct BodyQuad {vec2 a,b,c,d;};
-bool body_pixel_quad(Body b,uint piece,out BodyQuad q) {
+bool body_pixel_cell(Body b,uint piece,out vec2 cell) {
     if(piece>=pixel_tile_count(b)*256u) return false;
     uint offset=b.compound_reserved+pixel_tile_offset(b,piece/256u);
     uint material=pixel_word_at(offset+1u+(piece%256u)/8u);
     if(((material>>((piece%8u)*4u))&15u)==0u) return false;
     uint coordinate=pixel_word_at(offset);
-    vec2 cell=vec2(ivec2(coordinate&65535u,coordinate>>16u)*16+
+    cell=vec2(ivec2(coordinate&65535u,coordinate>>16u)*16+
                    ivec2(piece%16u,(piece%256u)/16u));
+    return true;
+}
+bool body_pixel_quad(Body b,uint piece,out BodyQuad q) {
+    vec2 cell;
+    if(!body_pixel_cell(b,piece,cell)) return false;
     q.a=b.center+body_rotate(cell-b.center,b.angle);
     q.b=b.center+body_rotate(cell+vec2(1,0)-b.center,b.angle);
     q.c=b.center+body_rotate(cell+vec2(1,1)-b.center,b.angle);

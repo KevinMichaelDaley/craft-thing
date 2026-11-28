@@ -42,28 +42,28 @@ float body_cell_volume(Body b,uint piece,ivec2 cell,float fraction,out vec2 cent
     center_point=vec2(cell)+moment/max(3*twice,1e-20);
     return max(twice*.5,0);
 }
-bool clip_face_edge(vec2 a,vec2 z,vec2 start,vec2 stop,inout float low,inout float high) {
-    vec2 edge=z-a,normal=vec2(-edge.y,edge.x);
-    float first=dot(normal,start-a),delta=dot(normal,stop-start);
-    if(abs(delta)<1e-12) {if(first<0) return false;}
-    else if(delta>0) low=max(low,-first/delta);
-    else high=min(high,-first/delta);
-    return true;
+vec2 body_pixel_face_vertex(Body b,vec2 cell,uint vertex) {
+    vec2 corner=vec2((vertex==1u||vertex==2u)?1:0,vertex>=2u?1:0);
+    return b.center+body_rotate(cell+corner-b.center,b.angle);
 }
 float body_face_coverage(Body b,uint piece,vec2 start,vec2 stop) {
+    bool pixel=pixel_body(b);
+    vec2 cell=vec2(0);
+    uint count;
+    if(pixel) count=body_pixel_cell(b,piece,cell)?4u:0u;
+    else count=piece_vertices(b,piece);
+    if(count==0u) return 0;
     float low=0,high=1;
     vec2 origin=vec2(b.x_fp,b.y_fp)/65536.;
-    if(pixel_body(b)) {
-        BodyQuad q;if(!body_pixel_quad(b,piece,q)) return 0;
-        q.a=origin+q.a;q.b=origin+q.b;q.c=origin+q.c;q.d=origin+q.d;
-        if(!clip_face_edge(q.a,q.b,start,stop,low,high)||!clip_face_edge(q.b,q.c,start,stop,low,high)||
-           !clip_face_edge(q.c,q.d,start,stop,low,high)||!clip_face_edge(q.d,q.a,start,stop,low,high)) return 0;
-    } else {
-        uint count=piece_vertices(b,piece);if(count==0u) return 0;
-        for(uint i=0u;i<count;i++) {
-            vec2 a=origin+piece_vertex(b,piece,i),z=origin+piece_vertex(b,piece,(i+1u)%count);
-            if(!clip_face_edge(a,z,start,stop,low,high)) return 0;
-        }
+    for(uint i=0u;i<count;i++) {
+        uint j=(i+1u)%count;
+        vec2 a=origin+(pixel?body_pixel_face_vertex(b,cell,i):piece_vertex(b,piece,i));
+        vec2 z=origin+(pixel?body_pixel_face_vertex(b,cell,j):piece_vertex(b,piece,j));
+        vec2 edge=z-a,normal=vec2(-edge.y,edge.x);
+        float first=dot(normal,start-a),delta=dot(normal,stop-start);
+        if(abs(delta)<1e-12) {if(first<0) return 0;}
+        else if(delta>0) low=max(low,-first/delta);
+        else high=min(high,-first/delta);
     }
     return max(0,high-low);
 }
