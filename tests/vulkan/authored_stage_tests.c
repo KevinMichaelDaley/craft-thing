@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ferrum/structural/authoring.h"
 #include "ferrum/assets/prop.h"
+#include "ferrum/structural/authoring.h"
 #include "../../src/vulkan/gpu_internal.h"
 
 static bool fail_descriptor_pool;

@@ -39,3 +39,7 @@ External GPU recovery blocker: previouslypassing authored staging timed out45sec
 **2026-10-17T09:03:35Z**
 
 Renderer checkpoint integration857ec8b now includes actual prop reader/exporter. Exclusive recovered GPU execution with core+sync validation observed3pass2fail in authored_stage_tests (no validation diagnostics): component-plan getter remains a stub and absent-normal default semantics fail. These pending tests are now behaviorally RED, replacing prior unlocalized stall evidence. No claim of publication/reservations or completed feature. Combined all-test run continues past those known failures to check remaining consumers; unchanged tests retained.
+
+**2026-11-28T05:22:14Z**
+
+Two new GPU failures reproduced: a descriptor-pool allocation failure during resize destroyed the previous ready component plan; preflighting a terrain-water asset woke the live fluid scheduler before publication. The replacement stage now completes before installation, releases partial allocations on failure, retains the prior component plan, and removes the per-pixel CPU water scan from staging. All eight authored-stage cases pass on RTX A2000 with Vulkan core/synchronization validation, including exact memory accounting and successful retry. Complete atomic structural publication remains open.
