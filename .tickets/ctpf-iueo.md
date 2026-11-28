@@ -51,3 +51,7 @@ Successful terrain-prop admission now publishes the presence of committed water 
 **2026-11-28T06:09:57Z**
 
 GPU preflight now checks that each declared member owns a valid structural pixel and that each member, joint and anchor endpoint resolves uniquely to a stable node. Real red cases admitted an unowned member and an unresolved endpoint. Duplicate node identity and zero generation are rejected. The final ten staging tests, including corrected-input retry, pass on RTX A2000 under core and synchronization validation. The compiled shader passes spirv-val. Live all-role reservation, root contact and publication still require implementation.
+
+**2026-11-28T06:25:42Z**
+
+Reproduced structural staging accepting canonical dense wood with an ordinary wood mechanical profile, in disagreement with fr_structural_material_map. GPU staging now rejects materials without a registered structural profile and preserves all rigid-role material support. All 11 staging cases passed on the RTX A2000 with synchronization validation, as did an expanded 36-combination check covering twelve canonical material IDs against each of the three declared profiles. SPIR-V validated. Atomic live placement remains open.

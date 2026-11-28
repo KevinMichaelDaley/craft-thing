@@ -160,12 +160,19 @@ static void test_structural_pixels_use_registered_mechanical_profiles(void) {
     for (uint32_t material=1; material<=12; ++material) {
         fr_structural_material_t profile=FR_STRUCTURAL_WOOD;
         bool supported=fr_structural_material_map(false,fr_prop_body_material(material),&profile);
-        graph.members[0].material=profile;
         pixel(0,0,material,FR_AUTHORED_STRUCTURE,1);
-        ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
-        ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
-        ASSERT_EQ(d.failures,supported ? 0u : FR_AUTHORED_FAIL_INPUT);
-        ASSERT_EQ(d.structural_pixels,(uint32_t)supported);
+        for (uint32_t declared=0; declared<FR_STRUCTURAL_MATERIAL_COUNT; ++declared) {
+            graph.members[0].material=declared;
+            bool accepted=supported && profile==declared;
+            ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+            ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+            if (d.failures!=(accepted ? 0u : FR_AUTHORED_FAIL_INPUT) ||
+                d.structural_pixels!=(uint32_t)accepted)
+                printf("Canonical material %u with profile %u: failure bits %u, structural pixels %u\n",
+                       material,declared,d.failures,d.structural_pixels);
+            ASSERT_EQ(d.failures,accepted ? 0u : FR_AUTHORED_FAIL_INPUT);
+            ASSERT_EQ(d.structural_pixels,(uint32_t)accepted);
+        }
     }
     dc_gpu_destroy(gpu); PASS();
 }
