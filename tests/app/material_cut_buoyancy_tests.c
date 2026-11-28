@@ -53,7 +53,7 @@ static bool seed_mainland_pond_layout(const char *directory,uint16_t material,bo
 static bool seed_mainland_pond(const char *directory,uint16_t material) {
     return seed_mainland_pond_layout(directory,material,true);
 }
-static void cut_material(uint16_t material) {
+static void cut_material_from_bank(uint16_t material,unsigned radius) {
     char directory[]="build/ui_material_cut_XXXXXX",err[256]={0};
     ASSERT_TRUE(mkdtemp(directory));ASSERT_TRUE(seed_mainland_pond(directory,material));
     dc_level_view_t *view=dc_level_view_create(directory,314,err,sizeof(err));
@@ -69,8 +69,9 @@ static void cut_material(uint16_t material) {
     dc_gpu_world_body_t body;dc_gpu_body_motion_t motion;
     ASSERT_TRUE(!dc_level_view_body_state(view,0x80000001u,&body,&motion,err,sizeof(err)));
     /* This is the same eraser and water brush used by the interactive sandbox. */
-    ASSERT_TRUE(dc_level_view_paint(view,SOURCE_X-1,80,0,DC_MATERIAL_AIR,err,sizeof(err)));
-    ASSERT_TRUE(dc_level_view_paint(view,SOURCE_X-1,80,0,DC_MATERIAL_WATER,err,sizeof(err)));
+    unsigned brush_x=SOURCE_X-1-radius;
+    ASSERT_TRUE(dc_level_view_paint(view,brush_x,80,radius,DC_MATERIAL_AIR,err,sizeof(err)));
+    ASSERT_TRUE(dc_level_view_paint(view,brush_x,80,radius,DC_MATERIAL_WATER,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_body_state(view,0x80000001u,&body,&motion,err,sizeof(err)));
@@ -90,37 +91,33 @@ static void cut_material(uint16_t material) {
     }
     free(chunk);ASSERT_EQ(remaining,0u);
     double initial_y=body.chunk.y*64.+body.body.y_fp/65536.+motion.center_y;
+    unsigned total_contacts=0;
+    dc_gpu_rigid_solver_stats_t stats;
     for(unsigned tick=0;tick<20;tick++) {
         ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
         ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
+        ASSERT_TRUE(dc_level_view_rigid_solver_stats(view,&stats));
+        ASSERT_EQ(stats.overflow,0u);
+        total_contacts+=stats.solved_contacts;
     }
     ASSERT_TRUE(dc_level_view_body_state(view,0x80000001u,&body,&motion,err,sizeof(err)));
     double final_y=body.chunk.y*64.+body.body.y_fp/65536.+motion.center_y;
-    dc_gpu_rigid_solver_stats_t stats;
-    ASSERT_TRUE(dc_level_view_rigid_solver_stats(view,&stats));
-    printf("Paint cut material%u mass%.3f density%.3f centerY%.6f→%.6f\n",material,motion.mass,motion.density,initial_y,final_y);
-    if(stats.solved_contacts) {
-        dc_gpu_contact_stats_t summary;
-        ASSERT_TRUE(dc_level_view_contacts(view,&summary,NULL,0,err,sizeof(err)));
-        dc_gpu_contact_t *contacts=calloc(summary.count?summary.count:1,sizeof(*contacts));
-        ASSERT_TRUE(contacts);
-        ASSERT_TRUE(dc_level_view_contacts(view,&summary,contacts,summary.count,err,sizeof(err)));
-        printf("%u solved contacts, %u final contacts\n",stats.solved_contacts,summary.count);
-        for(unsigned i=0;i<summary.count && i<8;i++) {
-            dc_gpu_contact_t *c=&contacts[i];
-            printf("contact %u: owners %u,%u kind %u chunk %lld,%lld cell %u\n",
-                i,c->body_a,c->body_b,c->kind,(long long)c->feature_chunk.x,(long long)c->feature_chunk.y,c->feature_b);
-        }
-        free(contacts);
-    }
+    printf("Paint cut radius%u material%u mass%.3f density%.3f centerY%.6f→%.6f contacts%u\n",
+        radius,material,motion.mass,motion.density,initial_y,final_y,total_contacts);
     ASSERT_TRUE(dc_level_view_destroy(view,err,sizeof(err)));
-    ASSERT_EQ(stats.overflow,0u);ASSERT_EQ(stats.solved_contacts,0u);
+    if(radius!=0u) ASSERT_EQ(total_contacts,0u);
+    else if(material==DC_MATERIAL_STONE) ASSERT_EQ(stats.solved_contacts,0u);
     ASSERT_TRUE(material==DC_MATERIAL_STONE?final_y>initial_y+1:final_y<initial_y-1);PASS();
 }
+static void cut_material(uint16_t material) {cut_material_from_bank(material,0);}
+static void test_painted_stone_sinks_clear_of_the_cut_bank(void) {cut_material_from_bank(DC_MATERIAL_STONE,4);}
+static void test_matched_wood_floats_clear_of_the_cut_bank(void) {cut_material_from_bank(DC_MATERIAL_WOOD,4);}
 static void test_large_painted_stone_cut_sinks_across_known_seams(void) {cut_material(DC_MATERIAL_STONE);}
 static void test_matched_painted_wood_cut_floats_across_known_seams(void) {cut_material(DC_MATERIAL_WOOD);}
 int main(void) {
     RUN(test_large_painted_stone_cut_sinks_across_known_seams);
     RUN(test_matched_painted_wood_cut_floats_across_known_seams);
+    RUN(test_painted_stone_sinks_clear_of_the_cut_bank);
+    RUN(test_matched_wood_floats_clear_of_the_cut_bank);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }

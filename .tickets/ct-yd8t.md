@@ -55,3 +55,7 @@ Broadphase and exact contacts now cover a fully cached 128-pixel stone across ch
 **2026-11-28T08:17:35Z**
 
 Native validated solver now advances the 128-pixel stone at x124 to vy=65536 after four rigid steps, matching both viewport edges and the on-screen case. Submerged wood in a 0.5-cell/tick current reaches vx=1640, vy=-10920 in each camera position, including a camera rebase of (+2^40,-2^40) chunks. Its canonical position and velocity agree. A distant cached floor arrests a falling body at y=27.999481 for a floor at 36 and an 8-cell hull. The application paint-and-erase fixture clears the entire 3200-pixel source and checks stone/wood masses; stone sinks and wood rises, but wood reports 16 contacts during the final tick. An isolated checkout at 09f3ac53 reproduces the same trajectory and count. The zero-contact acceptance gate remains open.
+
+**2026-11-28T08:22:07Z**
+
+The native paint-and-erase fixture now passes all four matched trials. The original one-cell cut left a stone tip at world (78,-48) which wood grazed sideways while rising. With a wider cut both 3200-pixel pieces clear the bank, stone sinks and wood rises with zero solved contacts over all 20 ticks. All eight camera/cached residency tests also pass, including distant world floor and water flow.
