@@ -36,13 +36,16 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
     }
 }
 
-static void check_cached_body_support(dc_gpu_t *gpu,dc_gpu_world_body_t stone,dc_chunk_coord_t camera) {
+static void check_cached_body_support(dc_gpu_t *gpu,dc_chunk_t *chunk,dc_gpu_world_body_t stone,dc_chunk_coord_t camera) {
     char err[256]={0};
     dc_gpu_world_body_t support={.chunk={1,0},.body={.id=71,.active=1,.width=6,.height=2,
         .x_fp=63<<16,.y_fp=stone.body.y_fp+(8<<16)}};
     ASSERT_TRUE(dc_gpu_spawn_world_body(gpu,support,err,sizeof(err)));
     support.chunk.x+=INT64_C(1)<<32;
     support.body.id=72;
+    memset(chunk,0,sizeof(*chunk));
+    chunk->coord=support.chunk;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,4,chunk,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_spawn_world_body(gpu,support,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_set_body_origin(gpu,camera,err,sizeof(err)));
     dc_gpu_broadphase_stats_t stats;
@@ -99,7 +102,7 @@ static void cached_stone(unsigned world_x,unsigned camera_chunk) {
             ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,UINT32_MAX,err,sizeof(err)));
             dc_chunk_coord_t distant={INT64_C(1)<<40,-(INT64_C(1)<<40)};
             check_cached_contact_ownership(gpu,chunk,row,floor_chunk,distant);
-            check_cached_body_support(gpu,body,distant);
+            check_cached_body_support(gpu,chunk,body,distant);
         }
     }
     if(camera_chunk==1) {

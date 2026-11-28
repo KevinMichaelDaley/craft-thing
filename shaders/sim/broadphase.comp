@@ -79,11 +79,12 @@ bool member(uvec2 bits, uint slot) {
 
 #ifdef DC_RUNTIME_BODY_STORAGE
 #include "cached_chunk.glsl"
+// Low-word collisions share only the bitset. Candidate bounds use full world keys.
 uint world_bucket(uvec2 x,uvec2 y,uvec2 extent) {
     return ((y.x-params.origin_y.x+1u)%extent.y)*extent.x+
             (x.x-params.origin_x.x+1u)%extent.x;
 }
-void cached_terrain_pairs(uint index,Body body,uint words,uint bit_base,uvec2 extent) {
+void register_cached_body(uint index,Body body,uint words,uint bit_base,uvec2 extent) {
     vec2 low,high;
     body_bounds(body,low,high);
     vec2 anchor=vec2(body.local_fp)/65536.;
@@ -154,7 +155,7 @@ void runtime_broadphase() {
         if(body.enabled==0u) return;
         if(body.visible==0u) {
             if(cached_chunk_page(params.registry,params.slot_capacity,body.chunk_x,body.chunk_y)!=0u)
-                cached_terrain_pairs(index,body,words,bit_base,extent);
+                register_cached_body(index,body,words,bit_base,extent);
             return;
         }
         atomicAdd(DC_DATA(4),1u);

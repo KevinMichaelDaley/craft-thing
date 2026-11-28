@@ -47,3 +47,7 @@ GPU seam regression: a 128-pixel stone body (mass 345.600006) now reaches vertic
 **2026-11-28T07:46:20Z**
 
 Native Vulkan regression with the camera moved one chunk right exposed a second seam failure: the same partly visible 128-pixel stone had zero vertical velocity when its first occupied pixel was left of the viewport. The solver now resolves that signed cached reference. Both camera positions give 65536 after four steps; evicting the reference chunk preserves the last world position and velocity. Representable wholly offscreen bodies now retain correct solver coordinates; x124 velocity remains zero. Residency results 3 passed, 1 failed. World body tests 3/3, including far-camera eviction and signed world carry.
+
+**2026-11-28T07:58:21Z**
+
+Broadphase and exact contacts now cover a fully cached 128-pixel stone across chunks 1 and 2. Native GPU verification resolves the cached floor at its actual cell row, switches to boundary on eviction, and finds the restored floor in a different slot. These checks also pass after rebasing the camera to (+2^40,-2^40) chunks with no displayed page. A box spanning the seam produces one body pair and exact contacts; a resident decoy offset by 2^32 chunks produces none. Offscreen motion remains open: after four steps x124 still has zero velocity.
