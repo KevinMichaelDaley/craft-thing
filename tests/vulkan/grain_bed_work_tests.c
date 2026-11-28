@@ -138,7 +138,30 @@ static void test_compact_bed_preserves_every_support_graph_value(void) {
     }
     PASS();
 }
+static void test_high_slot_alone_reactivates_grain_support_after_growth(void) {
+    dc_gpu_t *g=context(true); ASSERT_TRUE(g);
+    const uint32_t initial=dc_gpu_body_capacity(g);
+    for(uint32_t slot=0;slot<=initial;++slot) {
+        dc_gpu_body_t body={.x_fp=(int32_t)(slot%32u)*65536,.y_fp=(int32_t)(slot/32u)*65536,
+            .width=1,.height=1,.id=slot+1u,.active=1};
+        ASSERT_TRUE(dc_gpu_spawn_body(g,body,g_error,sizeof(g_error)));
+    }
+    ASSERT_TRUE(dc_gpu_body_capacity(g)>initial);
+    for(uint32_t id=1;id<=initial;++id) ASSERT_TRUE(dc_gpu_remove_body(g,id,g_error,sizeof(g_error)));
+    ASSERT_EQ(dc_gpu_body_record(g,initial)->body.id,initial+1u);
+    ASSERT_TRUE(dc_gpu_rigid_step(g,g_error,sizeof(g_error)));
+    uint32_t work[3];
+    ASSERT_TRUE(triplet(g,DC_GRAIN_BED_WORK_WORD,work)); ASSERT_EQ(work[0],1u);
+    ASSERT_TRUE(triplet(g,DC_RIGID_BODY_WORK_WORD,work));
+    ASSERT_EQ(work[0],(dc_gpu_runtime_body_count(g)+63u)/64u); ASSERT_TRUE(work[0]>1u);
+    ASSERT_TRUE(dc_gpu_remove_body(g,initial+1u,g_error,sizeof(g_error)));
+    ASSERT_TRUE(dc_gpu_rigid_step(g,g_error,sizeof(g_error)));
+    ASSERT_TRUE(triplet(g,DC_GRAIN_BED_WORK_WORD,work)); ASSERT_EQ(work[0],0u);
+    dc_gpu_destroy(g); PASS();
+}
+
 int main(void) {
+    RUN(test_high_slot_alone_reactivates_grain_support_after_growth);
     RUN(test_body_without_particles_has_no_grain_bed_work);
     RUN(test_grain_bed_work_tracks_body_activation_on_gpu);
     RUN(test_compact_bed_preserves_every_support_graph_value);
