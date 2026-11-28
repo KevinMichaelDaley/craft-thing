@@ -15,6 +15,7 @@ uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(push_constant) uniform Params {
     uint width, height, mode, body_count;
     uvec2 origin_x, origin_y;
+    uint registry,slot_capacity;
 } params;
 
 const uint HEADER_WORDS = 8u;
@@ -74,6 +75,18 @@ bool member(uvec2 bits, uint slot) {
 }
 
 #ifdef DC_RUNTIME_BODY_STORAGE
+void register_cached_neighbor(uint slot,uvec2 extent) {
+    uint record=params.registry+32u+8u*slot;
+    if(DC_DATA(record+5u)==0u) return;
+    ivec2 chunk;
+    if(!relative_chunk(uvec2(DC_DATA(record),DC_DATA(record+1u)),params.origin_x,chunk.x) ||
+       !relative_chunk(uvec2(DC_DATA(record+2u),DC_DATA(record+3u)),params.origin_y,chunk.y)) return;
+    if(any(lessThan(chunk,ivec2(-1))) || any(greaterThan(chunk,ivec2(extent)))) return;
+    if(all(greaterThanEqual(chunk,ivec2(0))) && all(lessThan(chunk,ivec2(extent)))) return;
+    uint bucket=uint(chunk.y+1)*(extent.x+2u)+uint(chunk.x+1);
+    uint word=HEADER_WORDS+2u*bucket;
+    if(atomicCompSwap(DC_DATA(word),0u,slot+1u)!=0u) atomicExchange(DC_DATA(word),0xffffffffu);
+}
 void runtime_broadphase() {
     uint group=gl_WorkGroupID.y*gl_NumWorkGroups.x+gl_WorkGroupID.x;
     uint index=group*64u+gl_LocalInvocationIndex;
@@ -84,10 +97,12 @@ void runtime_broadphase() {
             DC_DATA(5)=bucket_count();DC_DATA(6)=0u;DC_DATA(7)=0u;
         }
         if(index<words*bucket_count()) DC_RUNTIME_WORK(bit_base+index)=0u;
+        if(index<bucket_count()) DC_DATA(HEADER_WORDS+2u*index)=0u;
         return;
     }
     uvec2 extent=page_extent()+2u;
     if(params.mode==1u) {
+        if(index<params.slot_capacity) register_cached_neighbor(index,page_extent());
         if(index>=params.body_count) return;
         Body body=DC_BODY(index);
         if(body.enabled==0u||body.visible==0u) return;

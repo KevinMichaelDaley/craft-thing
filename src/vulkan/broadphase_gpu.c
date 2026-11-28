@@ -74,8 +74,9 @@ void dc_gpu_record_broadphase(dc_gpu_t *gpu) {
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE,
         gpu->pipeline_layout, 0, 1, &gpu->descriptor, 0, NULL);
     uint64_t x = (uint64_t)gpu->body_origin.x, y = (uint64_t)gpu->body_origin.y;
-    uint32_t push[8] = { gpu->width, gpu->height, 0, dc_gpu_runtime_body_count(gpu),
-        (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32) };
+    uint32_t push[] = { gpu->width, gpu->height, 0, dc_gpu_runtime_body_count(gpu),
+        (uint32_t)x, (uint32_t)(x >> 32), (uint32_t)y, (uint32_t)(y >> 32),
+        dc_gpu_structural_word_offset(gpu),dc_gpu_slot_capacity(gpu) };
     uint32_t buckets = dc_gpu_broadphase_buckets(gpu);
     for (uint32_t mode = 0; mode < 3; ++mode) {
         push[2] = mode;
@@ -85,6 +86,7 @@ void dc_gpu_record_broadphase(dc_gpu_t *gpu) {
                         mode == 1 ? dc_gpu_runtime_body_count(gpu) : buckets;
         if(gpu->runtime_body_consumers) {
             if(mode==0) work=(uint64_t)buckets*((dc_gpu_body_capacity(gpu)+31u)/32u);
+            if(mode==1 && work<dc_gpu_slot_capacity(gpu)) work=dc_gpu_slot_capacity(gpu);
             if(mode==2) work=(uint64_t)buckets*((dc_gpu_runtime_body_count(gpu)+63u)/64u)*64u;
         }
         uint64_t groups=(work+DC_GPU_BROADPHASE_GROUP_SIZE-1u)/DC_GPU_BROADPHASE_GROUP_SIZE;

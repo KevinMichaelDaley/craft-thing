@@ -121,6 +121,16 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
     uint page = 0u;
     if (kind != BOUNDARY_CONTACT && all(greaterThanEqual(tile, ivec2(0))) &&
         all(lessThan(tile, ivec2(page_extent())))) page = pages[uint(cy) * page_extent().x + uint(cx)];
+    uint cached_page=0u;
+#ifdef DC_RUNTIME_BODY_STORAGE
+    if(kind==BOUNDARY_CONTACT && pixel_body(body) &&
+       all(greaterThanEqual(tile,ivec2(-1))) && all(lessThanEqual(tile,ivec2(page_extent()))) &&
+       (any(lessThan(tile,ivec2(0))) || any(greaterThanEqual(tile,ivec2(page_extent()))))) {
+        uint bucket=uint(cy+1)*(page_extent().x+2u)+uint(cx+1);
+        uint candidate=DC_DATA(HEADER_WORDS+2u*bucket);
+        if(candidate!=0xffffffffu) cached_page=candidate;
+    }
+#endif
     bool found = false;
     for (int y = low.y; y < high.y; ++y) for (int x = low.x; x < high.x; ++x) {
         uint cell_feature = uint(y - tile_low.y) * 64u + uint(x - tile_low.x);
@@ -128,6 +138,7 @@ bool terrain_contacts(Body body, uint kind, uvec2 chunk_x, uvec2 chunk_y, Polygo
         uint owner = page;
         if (owner == 0u || x < 0 || y < 0 || x >= int(params.width) || y >= int(params.height))
             owner = hydro_peer_page(ivec2(x,y));
+        if(owner==0u) owner=cached_page;
         if (owner != 0u) {
             uint slot = (owner & ~HYDRO_PEER) - 1u;
             uint atlas = slot * 4096u + cell_feature;
