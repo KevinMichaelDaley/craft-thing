@@ -39,3 +39,7 @@ The guarded NVIDIA RED reproduced overlapping-context failure. The fixed NVIDIA 
 **2026-11-27T00:13:08Z**
 
 A separate pinned integrated run at 3c94b591 exited 2 on the later large-body carve timing gate. It preserved exact pixel and mass results. The original unguarded 486563d0 halo replay is still pending under the GPU headroom gate.
+
+**2026-11-28T04:15:50Z**
+
+Recovered the exit receipt and log for the exact unguarded 486563d0 replay. It passed all four cases on the RTX A2000, including the second context. The refactored full suite passed all four as well. The original failing executable omitted the Vulkan result, so the precise resource rejected during that original run cannot be recovered from this log.
