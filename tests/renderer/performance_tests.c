@@ -114,11 +114,17 @@ void __wrap_vkCmdDispatchIndirect(VkCommandBuffer command, VkBuffer buffer,
     g_light_passes++;
   }
 }
-static void test_full_frame(unsigned width, unsigned height) {
+static void test_full_frame(unsigned width, unsigned height, bool present) {
   dc_gpu_t *g;
   char err[256] = {0};
   ASSERT_TRUE(dc_gpu_create(&g, width, height, "build/shaders/pattern.comp.spv", err,
                             sizeof(err)));
+  if(present) {
+    ASSERT_TRUE(g->swapchain!=VK_NULL_HANDLE);
+    ASSERT_EQ(g->swap_extent.width,width);
+    ASSERT_EQ(g->swap_extent.height,height);
+    printf("Presented %s swapchain %ux%u\n",SDL_GetCurrentVideoDriver(),width,height);
+  }
   VkPhysicalDeviceProperties device;
   vkGetPhysicalDeviceProperties(g->physical, &device);
   printf("Vulkan device: %s; fluid pressure sweeps %u, chunk slots %u\n",
@@ -212,10 +218,12 @@ static void test_full_frame(unsigned width, unsigned height) {
   ASSERT_TRUE(worst < 30.0);
   PASS();
 }
-int main(void) {
+int main(int argc,char **argv) {
+  bool present=argc==2 && strcmp(argv[1],"--present")==0;
+  if(argc!=1 && !present) return 2;
   g_profile_passes = getenv("DC_RENDERER_PASS_PROFILE") != NULL;
-  test_full_frame(480, 270);
-  test_full_frame(640, 360);
+  test_full_frame(480, 270, present);
+  test_full_frame(640, 360, present);
   printf("Results: %d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }
