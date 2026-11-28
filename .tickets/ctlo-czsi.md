@@ -19,3 +19,7 @@ GPU frozen eight-axis oracle checks rotated quads, mixed pentagons, rectangular 
 **2026-10-24T10:06:42Z**
 
 RED131072 frozen comparisons were exact but rectangle work still8 axes. General rectangular culling then exposed4+11 bit-level roundoff differences, so narrowed eligibility to exact unit-width/unit-height rectangular edges. GREEN196608 frozen comparisons now have zero errors across arbitrary quads, mixed pentagons, fractional/large-coordinate rectangles and unit cells; unit+quad maximum6 axes, unit+unit4, all other rectangles retain8. Actual core/synchronization validation clean; graphical measurement and full contact suite remain.
+
+**2026-11-28T04:39:43Z**
+
+The RTX strict oracle exposed 3,255 mismatches on rotated quads against fractional rectangles and 5,653 against unit cells before the fix. The ordered edge traversal and support-face reduction now match all 196,608 frozen cases bit for bit with core and sync validation, including exact feature IDs and witness coordinates. Fractional and unit rectangles each need at most six axes against arbitrary quads and four against another rectangle. Current graphical dynamics run is pending.

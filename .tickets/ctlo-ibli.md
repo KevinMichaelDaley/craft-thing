@@ -23,3 +23,7 @@ RED32768 ordered quad cases preserve exact results but execute up to54 dynamic p
 **2026-10-24T09:01:49Z**
 
 Extended actual core/synchronization frozen oracle passes32768 rotated quad cases plus32768 mixed pentagon/quad cases, exact hit/miss, normal/depth, witness coordinates and feature IDs. Quad dynamic projection iterations remain zero.
+
+**2026-11-28T04:39:43Z**
+
+Repeated the frozen comparison under core and synchronization validation on the RTX A2000. Before correction, 1,943 of 32,768 rotated-quad cases disagreed; one large-coordinate case selected the wrong contact face. After correction all six 32,768-case families agree exactly on hit, normal, depth, witnesses, and feature IDs. The quad projection retains zero dynamic polygon iterations. Production contacts and displayed concave dynamics are being exercised separately.
