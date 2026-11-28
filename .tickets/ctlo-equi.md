@@ -1,6 +1,6 @@
 ---
 id: ctlo-equi
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T09:59:14Z
@@ -35,3 +35,7 @@ Repeated native Wayland on a fresh, private device cache. All three 90-frame cyc
 **2026-11-28T06:00:03Z**
 
 Traced duplicate full-sized memset calls during each actual Wayland constructor: water, shape appearance and bulk state each received two zero fills. Removed the redundant client-side fills and checked the constructor directly while running all 90 real brush submissions. Each waited its fence, with zero presentation queue-idle calls. One three-cycle run passed the unchanged deadline, but repeated runs still timed out under concurrent rendering; device shutdown alone reached 3.1 seconds in a trace. Keeping the ticket open.
+
+**2026-11-28T06:20:55Z**
+
+Three consecutive final native Wayland runs in persistent hidden Xephyr passed the original 15-second watchdog, each with three window lifetimes and 270 real displayed brush frames. Across the nine lifetimes the displayed frame means were 10.046 to 10.411 ms. All 810 brush submissions waited on their fences, with zero presentation queue-idle waits, finite acquire, safe per-image semaphores and both transfer dependencies. A separate Vulkan synchronization validation run passed all 90 submissions without a validation diagnostic. Startup initializes the mapped water, appearance and bulk fields on the existing GPU transfer command; the test checks the actual fills and mapped endpoints.
