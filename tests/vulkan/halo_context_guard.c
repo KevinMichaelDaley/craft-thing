@@ -40,10 +40,15 @@ bool halo_context_memory_errors(void) {
         failure = i;
         bool created = dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err));
         failure = NORMAL;
-        if (created || gpu || !strstr(err, expected[i]) || !strstr(err, "bytes") || !strstr(err, "memory type")) {
+        const char *details = strchr(err, '(');
+        unsigned long long bytes = 0;
+        unsigned type = VK_MAX_MEMORY_TYPES;
+        if (created || gpu || !strstr(err, expected[i]) || !details ||
+            sscanf(details, "(%llu bytes, memory type %u)", &bytes, &type) != 2 ||
+            !bytes || type >= VK_MAX_MEMORY_TYPES) {
             fprintf(stderr, "Expected %s with allocation details, got [%s]\n", expected[i], err);
             passed = false;
-        }
+        } else printf("Observed %s\n", err);
         dc_gpu_destroy(gpu);
     }
     return passed;

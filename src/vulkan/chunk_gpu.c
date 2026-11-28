@@ -36,6 +36,14 @@ uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
 
 enum mapped_buffer_role { MAPPED_STORAGE, MAPPED_STAGING, MAPPED_TRANSFER_INITIALIZED };
 
+static bool mapped_memory_error(char *err, uint32_t cap, const char *operation,
+                                VkResult result, const VkMemoryAllocateInfo *allocation) {
+    if (err && cap)
+        snprintf(err, cap, "%s returned %d (%llu bytes, memory type %u)", operation,
+                 (int)result, (unsigned long long)allocation->allocationSize, allocation->memoryTypeIndex);
+    return false;
+}
+
 static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                enum mapped_buffer_role role, bool addressable, char *err, uint32_t cap) {
@@ -70,7 +78,6 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     if (result != VK_SUCCESS) {
         VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        *memory = VK_NULL_HANDLE;
         for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
             VkMemoryPropertyFlags flags = props.memoryTypes[i].propertyFlags;
             if (!(req.memoryTypeBits & (1u << i)) || (flags & needed) != needed ||
@@ -80,23 +87,18 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
             if (result == VK_SUCCESS)
                 break;
         }
+        if (result != VK_SUCCESS) {
+            *memory = VK_NULL_HANDLE;
+            return mapped_memory_error(err, cap, "vkAllocateMemory", result, &alloc);
+        }
     }
-    const char *operation = "vkAllocateMemory";
-    if (result == VK_SUCCESS) {
-        operation = "vkBindBufferMemory";
-        result = vkBindBufferMemory(gpu->device, *buffer, *memory, 0);
-    } else {
-        *memory = VK_NULL_HANDLE;
-    }
-    if (result == VK_SUCCESS) {
-        operation = "vkMapMemory";
-        result = vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped);
-    }
+    result = vkBindBufferMemory(gpu->device, *buffer, *memory, 0);
+    if (result != VK_SUCCESS)
+        return mapped_memory_error(err, cap, "vkBindBufferMemory", result, &alloc);
+    result = vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped);
     if (result != VK_SUCCESS) {
         *mapped = NULL;
-        if (err && cap) snprintf(err, cap, "%s returned %d (%llu bytes, memory type %u)",
-            operation, (int)result, (unsigned long long)req.size, alloc.memoryTypeIndex);
-        return false;
+        return mapped_memory_error(err, cap, "vkMapMemory", result, &alloc);
     }
     if (props.memoryTypes[alloc.memoryTypeIndex].propertyFlags &
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)

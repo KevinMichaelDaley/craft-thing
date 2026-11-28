@@ -47,3 +47,7 @@ Recovered the exit receipt and log for the exact unguarded 486563d0 replay. It p
 **2026-11-28T06:26:18Z**
 
 Checked historical kernel records, the exact full-run log, and its fixture timestamps. On Nov 26 at 15:06:51 PST NVIDIA reported NV_ERR_NO_MEMORY allocating DMA mapping VA. The earlier world_body_tests created build/world_bodies_Z5p7im at 15:08:05; the halo second-context failure occurred after world_body_tests and gpu_tests, before the full run exited at 15:09:30. No NVIDIA diagnostic in that later interval identifies the failing halo call. The earlier kernel event establishes mapping pressure on the host, but cannot be attributed to this context. Current mapped-buffer startup also collapses vkBindBufferMemory and vkMapMemory into the same message.
+
+**2026-11-28T06:32:29Z**
+
+A real 64x64 context with injected Vulkan failures previously conflated allocation, binding and mapping. The mapped-buffer constructor now reports the exact failing call, VkResult, required allocation size and attempted memory type. The RTX A2000 fixture separately observed allocation -2 (98304 bytes, type 4), binding -1 and mapping -5 (98304 bytes, type 3). All four real native halo cases and the missing-driver regression passed; no synchronization validation errors. The historical failure predates these diagnostics.
