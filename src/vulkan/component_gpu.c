@@ -3,15 +3,16 @@
 
 bool dc_gpu_read_extraction_stats(dc_gpu_t *gpu,dc_gpu_extraction_stats_t *stats) {
     if(!gpu||!stats||!gpu->body_mapped||vkQueueWaitIdle(gpu->queue)!=VK_SUCCESS) return false;
-    *stats=(dc_gpu_extraction_stats_t){.body_capacity=dc_gpu_body_capacity(gpu)};
+    *stats=(dc_gpu_extraction_stats_t){.body_capacity=dc_gpu_body_capacity(gpu),
+        .arena_capacity_words=dc_gpu_pixel_pool_capacity(gpu)};
     for(uint32_t slot=0;slot<stats->body_capacity;slot++) {
         const dc_gpu_body_record_t *body=dc_gpu_body_record(gpu,slot);
         stats->owned_bodies+=body->body.active!=0u||body->reserved[0]!=0u;
     }
     stats->free_body_slots=stats->body_capacity-stats->owned_bodies;
-    if(!gpu->automatic_components_enabled) return true;
     const uint32_t *base=dc_gpu_structural_data(gpu),*graph=base+dc_gpu_structural_graph_offset(gpu);
-    stats->arena_used_words=graph[40001];stats->arena_capacity_words=graph[40002];
+    stats->arena_used_words=graph[40001];
+    if(!gpu->automatic_components_enabled) return true;
     stats->pending=base[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]!=0u;
     stats->selected_components=graph[36257]<64u?graph[36257]:64u;
     stats->deferred_by_batch_limit=graph[36263];

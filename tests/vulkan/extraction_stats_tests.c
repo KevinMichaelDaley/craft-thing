@@ -11,16 +11,15 @@ static int g_pass,g_fail;
 #define PASS() g_pass++
 VkResult __wrap_vkQueueWaitIdle(VkQueue queue) {(void)queue;return VK_SUCCESS;}
 static void diagnostic_case(unsigned kind) {
-    dc_gpu_t gpu={.width=64,.height=64,.automatic_components_enabled=true};
+    dc_gpu_t gpu={.width=64,.height=64,.pixel_pool_words=kind==2?40u:100u,.automatic_components_enabled=true};
     gpu.body_mapped=calloc(1,dc_gpu_body_storage_bytes(&gpu));ASSERT_TRUE(gpu.body_mapped);
     uint32_t *base=dc_gpu_structural_data(&gpu),*graph=base+dc_gpu_structural_graph_offset(&gpu);
     base[DC_STRUCTURAL_COMPONENT_DIRTY_WORD]=1;graph[36257]=1;
-    uint32_t *record=graph+36300,*pool=graph+40000;
-    pool[2]=100;record[7]=1;record[10]=41;
+    uint32_t *record=graph+36300;
+    record[7]=1;record[10]=41;
     dc_gpu_body_record_t *bodies=gpu.body_mapped;
     if(kind==0) for(unsigned slot=0;slot<64;slot++) bodies[slot].body.active=1;
     if(kind==1) {record[6]=1;record[7]=0;record[10]=0;}
-    if(kind==2) {pool[2]=40;}
     if(kind==3) {graph[36257]=64;graph[36263]=7;graph[36259]=1;}
     dc_gpu_extraction_stats_t stats={0};
     bool okay=dc_gpu_read_extraction_stats(&gpu,&stats);free(gpu.body_mapped);
