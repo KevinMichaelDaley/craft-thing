@@ -4,9 +4,11 @@
 #include <string.h>
 
 #include "ferrum/assets/prop.h"
+#include "ferrum/physics/authored_rigid_gpu.h"
 #include "ferrum/structural/authoring.h"
 #include "../../src/vulkan/gpu_internal.h"
 #include "../../src/vulkan/runtime_body_gpu.h"
+#include "../../src/vulkan/runtime_body_internal.h"
 
 static bool fail_descriptor_pool;
 VKAPI_ATTR VkResult VKAPI_CALL __real_vkCreateDescriptorPool(VkDevice, const VkDescriptorPoolCreateInfo *,
@@ -397,6 +399,54 @@ static void test_component_plan_only_offers_available_live_slots(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_component_plan_respects_used_geometry_and_aggregate_demand(void) {
+    enum { WIDTH=1920, HEIGHT=3, PIXELS=WIDTH*HEIGHT };
+    fr_authored_request_t r=request();
+    uint8_t *physical_map=calloc(PIXELS,FR_AUTHORED_PHYSICAL_STRIDE);
+    uint8_t *colors=calloc(PIXELS,FR_AUTHORED_APPEARANCE_STRIDE);
+    ASSERT_TRUE(physical_map && colors);
+    for (unsigned i=0;i<PIXELS;++i) if (i/WIDTH!=1u) {
+        physical_map[i*8u]=1;
+        physical_map[i*8u+2u]=FR_AUTHORED_RIGID;
+    }
+    r.width=WIDTH; r.height=HEIGHT; r.physical=physical_map; r.appearance=colors;
+    r.physical_bytes=PIXELS*FR_AUTHORED_PHYSICAL_STRIDE;
+    r.appearance_bytes=PIXELS*FR_AUTHORED_APPEARANCE_STRIDE;
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu);
+    char err[256]; fr_authored_stage_diagnostic_t diagnostic;
+    fr_authored_component_plan_t plans[2]; uint32_t count=0;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].geometry_words,4088u);
+    ASSERT_EQ(plans[1].geometry_words,4088u);
+    const uint32_t slots=dc_gpu_slot_capacity(gpu)*DC_CHUNK_CELLS;
+    uint32_t *objects=calloc(slots,sizeof(*objects));
+    dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+    ASSERT_TRUE(objects && chunk);
+    chunk->cells[100].material=DC_MATERIAL_WOOD;
+    objects[100]=11;
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu,0,chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_admit_rigid_objects(gpu,1,objects,slots,err,sizeof(err)));
+    uint32_t *pool=(uint32_t *)gpu->body_mapped+dc_gpu_pixel_pool_word_offset(gpu);
+    uint32_t capacity=dc_gpu_pixel_pool_capacity(gpu), header[DC_GPU_PIXEL_POOL_HEADER_WORDS];
+    ASSERT_EQ(pool[1],42u);
+    ASSERT_TRUE(8176u <= capacity && 8176u > capacity-pool[1]);
+    memcpy(header,pool,sizeof(header));
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&diagnostic,NULL,0,err,sizeof(err)));
+    ASSERT_EQ(diagnostic.failures,FR_AUTHORED_FAIL_CAPACITY);
+    ASSERT_TRUE(!fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_TRUE(strstr(err,"geometry")); ASSERT_EQ(count,2u);
+    ASSERT_EQ(memcmp(header,pool,sizeof(header)),0);
+    ASSERT_TRUE(dc_gpu_runtime_geometry_reserve(gpu,8176u+pool[1],err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].geometry_words+plans[1].geometry_words,8176u);
+    ASSERT_EQ(((uint32_t *)gpu->body_mapped)[dc_gpu_pixel_pool_word_offset(gpu)+1u],42u);
+    dc_gpu_destroy(gpu); free(chunk); free(objects); free(physical_map); free(colors); PASS();
+}
+
 static void test_unpublished_water_keeps_dry_world_asleep(void) {
     fr_authored_request_t r = request();
     pixel(1, 1, FR_PROP_MATERIAL_WATER, 1, 0);
@@ -408,6 +458,10 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
 }
 
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--geometry-capacity")) {
+        RUN(test_component_plan_respects_used_geometry_and_aggregate_demand);
+        return g_fail!=0;
+    }
     if(argc==2 && !strcmp(argv[1],"--body-slots")) {
         RUN(test_component_plan_only_offers_available_live_slots);
         return g_fail!=0;
@@ -423,6 +477,7 @@ int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--structural-graph")) return g_fail!=0;
     RUN(test_failed_resize_preserves_ready_component_plan);
     RUN(test_unpublished_water_keeps_dry_world_asleep);
+    RUN(test_component_plan_respects_used_geometry_and_aggregate_demand);
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
     RUN(test_diagonal_pixels_remain_independent);
     RUN(test_invalid_role_material_and_fabricated_structure_are_diagnosed);
