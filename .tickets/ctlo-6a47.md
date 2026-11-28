@@ -27,3 +27,7 @@ Selected five-consumer contract passes2/2; bounded engine init gets through all 
 **2026-10-24T05:23:38Z**
 
 Selected declaration final focused checks: dynamic runtime5/5, solver contact-state comparisons4/4, brush12/12, SPIR-V contract2/2. This retains GPU growth/retries and exact colors/physics. No full-frame target achievement or isolated speedup is claimed.
+
+**2026-11-28T04:46:35Z**
+
+The compiled contract originally failed for 18 non-index consumers. All 31 production consumer modules now declare the root NonWritable and Restrict; the explicit index writer retains write access and the geometry writers retain their separate writable geometry path. Five compiled-contract checks and three allocation/publication rollback tests pass. Core/sync GPU growth copied 6,000 records across 94 slabs exactly, the parallel allocator retried through growth, and the 16,385-element recursive scan had zero mismatches. With an empty application cache and driver disk cache disabled, the RTX compiled the runtime structural phase-4 pipeline in 4.232s, reached the diagnostic’s intentionally forbidden first submit, and reported no pipeline creation errors. The historically slow Intel compiler is unavailable on this host.
