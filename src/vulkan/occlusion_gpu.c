@@ -180,6 +180,6 @@ bool fr_occlusion_input_read(fr_occlusion_gpu_t *c,uint32_t x,uint32_t y,
   const optical_input_t *input=c->input_mapped;
   optical_input_t cell=input[y*c->width[0]+x];
   float opacity=cell.known?cell.opacity:1.f;
-  *node=(fr_occlusion_node_t){opacity,opacity,cell.known,0};
+  *node=(fr_occlusion_node_t){.minimum=opacity,.maximum=opacity,.known=cell.known};
   return true;
 }

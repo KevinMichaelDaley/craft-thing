@@ -4,10 +4,11 @@
 #include "dungeoncraft/gpu.h"
 
 typedef struct fr_occlusion_gpu fr_occlusion_gpu_t;
-/** Opacity extrema and known residency for a conservative hierarchy node. */
+/** Opacity extrema, residency and last hierarchy update. Raw input reads have revision zero. */
 typedef struct {
   float minimum, maximum;
-  uint32_t known, reserved;
+  uint32_t known;
+  union { uint32_t revision; uint32_t reserved; };
 } fr_occlusion_node_t;
 
 /** Allocate a fixed one-pixel-preserving hierarchy, separate from appearance.
