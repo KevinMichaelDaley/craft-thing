@@ -1,6 +1,6 @@
 ---
 id: ctfm-w80b
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T19:00:27Z
@@ -30,3 +30,7 @@ Runtime validation at f90a75ca on the persistent hidden Xephyr :93 display: all 
 **2026-11-27T22:37:33Z**
 
 The previous aggregate passed all 45 structure snapshots on persistent Xephyr :93 and stopped at command 213 of 264. ctowpe-x0yo corrected the diagnostic's readback of the native aperture buffer. Its four focused modes now pass synchronization validation. The full suite restarted at code revision d105fc10; its result is pending.
+
+**2026-11-28T00:37:20Z**
+
+Accepted on code revision d105fc10. The complete make test run with test_level_structure_snapshots and test_gpu_tools exited 0 on persistent hidden Xephyr :93. All 264 planned commands ran with no compiler warnings. All 45 structure snapshot cases passed, including the two-screen pan, seam handoff and cold return. Equal-world-time replay and water conservation passed. The displacement diagnostic matched all 8,192 aperture pairs. Native near/middle/far p95 was 29.832/30.157/28.465 ms against the 33.333 ms budget with 16 owners and 2.000000104 seconds advanced in each band. All child tickets are closed.
