@@ -53,6 +53,10 @@ static void cached_stone(unsigned world_x) {
     dc_gpu_world_body_t body;dc_gpu_body_motion_t motion;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu,0x80000001u,&body,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,body.body.id,&motion,err,sizeof(err)));
+    dc_gpu_body_t solver_body;
+    ASSERT_TRUE(dc_gpu_read_body_id(gpu,body.body.id,&solver_body,err,sizeof(err)));
+    int64_t expected_x=body.chunk.x*(64<<16)+body.body.x_fp;
+    int64_t expected_y=body.chunk.y*(64<<16)+body.body.y_fp;
     unsigned pixels=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,body.body.id,NULL,0,&pixels,err,sizeof(err)));
     float mass=motion.mass;int velocity=body.body.vy_fp;
@@ -60,6 +64,8 @@ static void cached_stone(unsigned world_x) {
     if(world_x==60) check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u);
     dc_gpu_destroy(gpu);free(chunk);
     ASSERT_EQ(pixels,128u);ASSERT_TRUE(fabsf(mass-128.f*2.7f)<.002f);
+    ASSERT_EQ(solver_body.x_fp,expected_x);
+    ASSERT_EQ(solver_body.y_fp,expected_y);
     ASSERT_EQ(velocity,4*16384);PASS();
 }
 static void test_onscreen_known_stone_advances(void) {cached_stone(20);}
