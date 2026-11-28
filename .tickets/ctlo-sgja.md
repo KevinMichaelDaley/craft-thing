@@ -30,3 +30,7 @@ Resumed implementation after user reiterated no fixed limit. Merged main storage
 **2026-10-23T16:45:33Z**
 
 Addressed gameplay migration now passes actual Wayland sandbox with90 bodies and repeated64->128->256->512 growth for320 bodies; v7 counted checkpoint reload retains all320 IDs and exact stone masses under core+sync validation (build/runtime_counted_growth.log). Production default now addressed; geometry/colors and queue resource growth plus fracture/leaf journal migration are implemented and undergoing focused validation. Ticket remains in progress until complete regressions and original-world graphical replay pass.
+
+**2026-11-28T06:58:05Z**
+
+Looked for the original save even under renamed workspace and temporary test directories. A read-only survey of 171 project-related roots (up to nine levels deep) found 4,763 distinct rigid_bodies.bin files. None had the documented version-6 DCS1 header with body_words=8704, graph_words=40000 and flags=5. A current-format test world cannot establish behavior on the original full-pool save.
