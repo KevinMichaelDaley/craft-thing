@@ -100,6 +100,7 @@ VkResult __wrap_vkQueueWaitIdle(VkQueue q) {
 
 static int window_cycle(void) {
     char err[256]={0}; dc_gpu_t *g=NULL;
+    uint64_t start=SDL_GetPerformanceCounter();
     if(!dc_test_create_window(&g,64,64,256,256,"build/shaders/pattern.comp.spv",err,sizeof(err))) {
         fprintf(stderr,"%s\n",err); return 1;
     }
@@ -129,6 +130,7 @@ static int window_cycle(void) {
     idle_calls=brush_fence_waits=0;
     acquire_ms=enqueue_ms=render_wait_ms=0;
     for(uint32_t i=0;i<32;++i) image_sems[i]=VK_NULL_HANDLE;
+    uint64_t first_frame=SDL_GetPerformanceCounter();
     for(unsigned frame=0;frame<90;++frame) {
         if(frame==30) SDL_HideWindow(g->window);
         if(frame==60) SDL_ShowWindow(g->window);
@@ -143,6 +145,9 @@ static int window_cycle(void) {
         if(!okay) { fprintf(stderr,"%s\n",err); return 6; }
         SDL_Delay(2);
     }
+    uint64_t last_frame=SDL_GetPerformanceCounter(),hz=SDL_GetPerformanceFrequency();
+    fprintf(stdout,"Brush window setup %.3f ms, displayed frame mean %.3f ms over 90 frames\n",
+        1000.0*(first_frame-start)/hz,1000.0*(last_frame-first_frame)/(90.0*hz));
     bool okay=finite_acquire && idle_calls==0 && brush_fence_waits==90u && image_sems_safe && acquire_dependency && present_dependency;
     okay=okay && dc_gpu_read_body_id(g,1,&body,err,sizeof(err)) && body.x_fp==10*65536+90*4096;
     fprintf(stdout,"mode=%d finite acquire=%d presentation queue-idle calls=%u\n",mode,finite_acquire,idle_calls);
