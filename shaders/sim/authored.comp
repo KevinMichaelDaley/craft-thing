@@ -8,7 +8,7 @@ uint pixel_word_at(uint index) {return DC_PIXEL_WORD(index);}
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint PHASE=0u;
 layout(set=0,binding=0,std430) buffer Staging { uint words[]; };
-layout(push_constant) uniform Params { uint width,height,has_graph,padding; } params;
+layout(push_constant) uniform Params { uint width,height,has_graph,padding,pool_offset,pool_capacity; } params;
 const uint INVALID=0xffffffffu;
 const uint GRAPH_WORDS=2320u;
 const uint GRAPH_NODES=16u,GRAPH_MEMBERS=400u,GRAPH_JOINTS=528u,GRAPH_ANCHORS=1552u;
@@ -182,6 +182,7 @@ void main() {
         uint columns=(width+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
         uint rows=(height+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
         words[d+8u]=DC_PIXEL_SHAPE_HEADER_WORDS+columns*rows+words[p+7u]*DC_PIXEL_TILE_WORDS;
+        atomicAdd(words[5],words[d+8u]);
         words[d+9u]=INVALID;
     }
 }

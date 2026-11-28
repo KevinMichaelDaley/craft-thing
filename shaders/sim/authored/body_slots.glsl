@@ -22,6 +22,15 @@ void plan_body_slots() {
     uint slot=group*SLOT_GROUP_SIZE+lane;
     uint word=lane/32u, bit=1u<<(lane%32u);
     if(PHASE==9u) {
+        if(group==0u && lane==0u) {
+            uint used=pixel_word_at(params.pool_offset+1u);
+            uint recorded=pixel_word_at(params.pool_offset+2u);
+            uint capacity=recorded==0u ? params.pool_capacity : min(recorded,params.pool_capacity);
+            if(pixel_word_at(params.pool_offset)>1u || used>capacity || words[5]>capacity-used) {
+                atomicOr(words[2],FAIL_BODY_CAPACITY);
+                atomicOr(words[22],2u);
+            }
+        }
         if(lane<SLOT_MASK_WORDS) group_masks[lane]=0u;
         barrier();
         if(slot<BODY_CAPACITY) {
@@ -40,7 +49,10 @@ void plan_body_slots() {
     }
     prefix+=groups*params.padding;
     if(words[prefix+groups-1u]<needed) {
-        if(group==0u && lane==0u) atomicOr(words[2],FAIL_BODY_CAPACITY);
+        if(group==0u && lane==0u) {
+            atomicOr(words[2],FAIL_BODY_CAPACITY);
+            atomicOr(words[22],1u);
+        }
         return;
     }
     uint mask_base=base+group*SLOT_MASK_WORDS;

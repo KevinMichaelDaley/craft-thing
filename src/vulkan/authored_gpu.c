@@ -117,7 +117,7 @@ static bool stage_init(dc_gpu_t *gpu, uint32_t count, struct dc_gpu_authored_sta
         .dstSet = s->descriptor, .dstBinding = 0, .descriptorCount = 2,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = buffers};
     vkUpdateDescriptorSets(gpu->device, 1, &write, 0, NULL);
-    VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 16};
+    VkPushConstantRange push = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 24};
     VkPipelineLayoutCreateInfo layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &s->set_layout,
@@ -181,7 +181,8 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
         return error(err, cap, "Cannot begin authored command buffer");
     stage_barrier(gpu, true);
     vkCmdBindDescriptorSets(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, s->layout, 0, 1, &s->descriptor, 0, NULL);
-    uint32_t push[4] = {r->width, r->height, r->structure != NULL, 0};
+    uint32_t push[] = {r->width, r->height, r->structure != NULL, 0,
+                       dc_gpu_pixel_pool_word_offset(gpu), dc_gpu_pixel_pool_capacity(gpu)};
     vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     for (uint32_t phase = 0; phase < STAGE_PHASES; phase++) {
         uint32_t groups = stage_groups(count);
@@ -268,8 +269,13 @@ bool fr_gpu_read_authored_components(dc_gpu_t *gpu,
         return error(err_buf, err_cap, "Cannot read authored component plans");
     *count = s->mapped[FR_AUTHORED_BODY_DEMAND];
     uint32_t failures = s->mapped[FR_AUTHORED_FAILURE];
-    if (failures == FR_AUTHORED_FAIL_CAPACITY)
+    if (failures == FR_AUTHORED_FAIL_CAPACITY) {
+        if (s->mapped[22] == 3u)
+            return error(err_buf, err_cap, "Insufficient geometry space and free body slots for the authored components");
+        if (s->mapped[22] == 2u)
+            return error(err_buf, err_cap, "Insufficient geometry space for the authored components");
         return error(err_buf, err_cap, "Insufficient free body slots for the authored components");
+    }
     if (failures) return error(err_buf, err_cap, "Authored staging contains invalid input");
     if (capacity < *count || (*count && !components))
         return error(err_buf, err_cap, "Authored component readback capacity is insufficient");
