@@ -35,6 +35,7 @@ void __wrap_fr_renderer_record(dc_gpu_t *g) {
   vkCmdResetQueryPool(g->command, g_queries, 0, 64);
   g_scene = g->renderer;
   g_bound_pipeline = VK_NULL_HANDLE;
+  memset(g_timed_groups,0,sizeof(g_timed_groups));
   g_recording = true;
   vkCmdWriteTimestamp2(g->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                        g_queries, 0);
@@ -61,11 +62,11 @@ void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y,
     else if (g_bound_pipeline == g_scene->phases[SCENE_COMPOSE])
       query = 10;
   }
-  if (query != 99)
+  if (query != 99) {
     g_timed_groups[query]=x*y*z;
-  if (query != 99)
     vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                          g_queries, query);
+  }
   __real_vkCmdDispatch(command, x, y, z);
   if (query != 99)
     vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -148,14 +149,13 @@ static void test_full_frame(unsigned width, unsigned height) {
     ASSERT_TRUE(profile_frame ? dc_gpu_tick_capture(g, &tick, err, sizeof(err)) :
                                dc_gpu_tick_step(g, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
-    if(i==0u) {
+    clock_gettime(CLOCK_MONOTONIC, &stop);
+    if(i==0u)
       printf("Timed dispatch groups: texture %u, optical %u, compose %u\n",
              g_timed_groups[2],g_timed_groups[4],g_timed_groups[10]);
-      ASSERT_EQ(g_timed_groups[2],dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS/64u);
-      ASSERT_EQ(g_timed_groups[4],(width*height+63u)/64u);
-      ASSERT_EQ(g_timed_groups[10],(width*height+63u)/64u);
-    }
-    clock_gettime(CLOCK_MONOTONIC, &stop);
+    ASSERT_EQ(g_timed_groups[2],dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS/64u);
+    ASSERT_EQ(g_timed_groups[4],(width*height+63u)/64u);
+    ASSERT_EQ(g_timed_groups[10],(width*height+63u)/64u);
     double frame = (stop.tv_sec - start.tv_sec) * 1000. +
                    (stop.tv_nsec - start.tv_nsec) / 1e6;
     wall += frame;
