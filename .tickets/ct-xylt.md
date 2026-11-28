@@ -1,6 +1,6 @@
 ---
 id: ct-xylt
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-30T09:35:27Z
@@ -50,3 +50,7 @@ Cold-start follow-up: thermal enable creates the 247,884-byte generic thermal sh
 **2026-11-28T05:13:00Z**
 
 Displayed 960x540 RTX A2000 bonfire on persistent Xephyr, empty application cache and driver disk caching disabled for cold runs. Before/after base-ready plus scene gas-enable intervals totaled 173.993 / 139.671 s cold and 19.583 / 8.271 s warm. The cold base interval itself rose from 87.457 to 95.684 s, while the scene interval fell from 86.536 to 43.987 s. These single runs include concurrent machine load. Candidate uploaded all 187 chunks, passed all four displayed checkpoint cases and both specialized/universal shader-load checks. The separate displayed frame budget remains open.
+
+**2026-11-28T05:14:58Z**
+
+For cold fixture admission, upload-complete to rigid-admitted dropped from 52.693 s to 15.189 s. The upload stage itself took 5.122 / 6.503 s before/after in this pair. The preceding arena reservation separately reduced reactive import on the original comparison from 5.039 to 2.898 s. Restored-parcel/liquid/heat and failed-checkpoint preservation tests passed. Cache reuse loaded all 25,128,675 bytes on the candidate warm run. The displayed executable returned 1 for the independent frame-time gate on both candidate runs; this closes startup only.
