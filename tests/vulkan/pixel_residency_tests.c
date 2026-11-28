@@ -25,12 +25,16 @@ static void cached_stone(unsigned world_x) {
     printf("Known cached stone x%u: pixels%u mass%.6f vy%d\n",world_x,pixels,mass,velocity);
     dc_gpu_destroy(gpu);free(chunk);
     ASSERT_EQ(pixels,128u);ASSERT_TRUE(fabsf(mass-128.f*2.7f)<.002f);
-    ASSERT_TRUE(velocity>0);PASS();
+    ASSERT_EQ(velocity,4*16384);PASS();
 }
 static void test_onscreen_known_stone_advances(void) {cached_stone(20);}
 static void test_partly_offscreen_known_stone_advances(void) {cached_stone(60);}
 static void test_wholly_offscreen_known_stone_across_cached_seam_advances(void) {cached_stone(124);}
-int main(void) {
+int main(int argc,char **argv) {
+    if(argc==2 && strcmp(argv[1],"--seam")==0) {
+        RUN(test_partly_offscreen_known_stone_advances);
+        return g_fail!=0;
+    }
     RUN(test_onscreen_known_stone_advances);
     RUN(test_partly_offscreen_known_stone_advances);
     RUN(test_wholly_offscreen_known_stone_across_cached_seam_advances);
