@@ -1,6 +1,6 @@
 ---
 id: ct-yd8t
-status: in_progress
+status: closed
 deps: []
 links: [ct-hhmy, ct-wuci]
 created: 2026-10-17T07:42:34Z
@@ -59,3 +59,7 @@ Native validated solver now advances the 128-pixel stone at x124 to vy=65536 aft
 **2026-11-28T08:22:07Z**
 
 The native paint-and-erase fixture now passes all four matched trials. The original one-cell cut left a stone tip at world (78,-48) which wood grazed sideways while rising. With a wider cut both 3200-pixel pieces clear the bank, stone sinks and wood rises with zero solved contacts over all 20 ticks. All eight camera/cached residency tests also pass, including distant world floor and water flow.
+
+**2026-11-28T08:28:59Z**
+
+Final quarter-native validation: the actual eraser marks extraction pending, all 70 visible/halo chunks are available, and every one of the 3200 unique body-local cells has the correct rigid material in all four trials. The original 64-owned-slot save diagnosis is recorded above. The F3 sandbox report exposes residency, dirty/pending state, unknown connectivity, batch backlog, body-slot and geometry admission reasons. A 71-island native case reports 64 selected and seven deferred. Five diagnostic and four native extraction cases pass, including atomic retry and warm/cold seams. All eight camera-residency cases pass. Native world-body, solver, exact contact, broadphase, revolute and grain-bed suites passed. Both extraction shader variants passed SPIR-V validation. The ongoing repository-wide run and separate original level03 replay are tracked independently.

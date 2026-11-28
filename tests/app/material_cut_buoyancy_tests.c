@@ -71,11 +71,33 @@ static void cut_material_from_bank(uint16_t material,unsigned radius) {
     /* This is the same eraser and water brush used by the interactive sandbox. */
     unsigned brush_x=SOURCE_X-1-radius;
     ASSERT_TRUE(dc_level_view_paint(view,brush_x,80,radius,DC_MATERIAL_AIR,err,sizeof(err)));
+    dc_gpu_t *gpu=dc_level_view_gpu(view);
+    dc_gpu_extraction_stats_t extraction;
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu,&extraction));
+    ASSERT_EQ(extraction.pending,1u);
     ASSERT_TRUE(dc_level_view_paint(view,brush_x,80,radius,DC_MATERIAL_WATER,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_step(view,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_tick(view,err,sizeof(err)));
     ASSERT_TRUE(dc_level_view_body_state(view,0x80000001u,&body,&motion,err,sizeof(err)));
     ASSERT_EQ(body.body.width,SOURCE_WIDTH);ASSERT_EQ(body.body.height,SOURCE_HEIGHT);
+    dc_gpu_body_pixel_t pixels[SOURCE_PIXELS];
+    bool occupied[SOURCE_PIXELS]={false};
+    uint32_t count=0;
+    ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,body.body.id,pixels,SOURCE_PIXELS,&count,err,sizeof(err)));
+    ASSERT_EQ(count,SOURCE_PIXELS);
+    uint32_t body_material=material==DC_MATERIAL_STONE?DC_GPU_BODY_STONE:DC_GPU_BODY_WOOD;
+    for(uint32_t i=0;i<count;i++) {
+        ASSERT_EQ(pixels[i].material,body_material);
+        ASSERT_TRUE(pixels[i].x<SOURCE_WIDTH&&pixels[i].y<SOURCE_HEIGHT);
+        uint32_t cell=pixels[i].y*SOURCE_WIDTH+pixels[i].x;
+        ASSERT_TRUE(!occupied[cell]);
+        occupied[cell]=true;
+    }
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu,&extraction));
+    ASSERT_EQ(extraction.owned_bodies,1u);
+    ASSERT_EQ(extraction.deferred_by_batch_limit,0u);
+    ASSERT_EQ(extraction.no_body_slot_components,0u);
+    ASSERT_EQ(extraction.no_arena_components,0u);
     float density=material==DC_MATERIAL_STONE?2.7f:.6f;
     ASSERT_TRUE(fabsf(motion.mass-density*SOURCE_PIXELS)<.02f);
     ASSERT_TRUE(fabsf(motion.density-density)<1e-5f);
