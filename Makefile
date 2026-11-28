@@ -236,7 +236,7 @@ GPU_SRC = $(patsubst build/%.o,src/vulkan/%.c,$(filter-out build/structural_mate
 build/authored_stage_tests: tests/vulkan/authored_stage_tests.c build/compound_body_tests $(GPU_OBJ) $(CHUNK_OBJ)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=vkCreateDescriptorPool
 test: build/authored_stage_tests
-build/shaders/authored.comp.spv: shaders/sim/authored.comp
+build/shaders/authored.comp.spv: shaders/sim/authored.comp include/dungeoncraft/pixel_geometry_layout.h
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/structural_material.o: src/structural/material.c include/ferrum/structural/mechanics.h
@@ -1269,7 +1269,7 @@ $(MPM_SHADER) $(MPM_COMPONENT_SHADER) $(MPM_ACTIVITY_SHADER): include/dungeoncra
 build/pixel_component_tests: tests/vulkan/pixel_component_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ) build/component_extraction_tests
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
 
-build/pixel_gpu.o: src/vulkan/pixel_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h
+build/pixel_gpu.o: src/vulkan/pixel_gpu.c src/vulkan/gpu_internal.h include/dungeoncraft/gpu.h include/dungeoncraft/pixel_geometry_layout.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 build/pixel_geometry_tests: tests/vulkan/pixel_geometry_tests.c Makefile $(GPU_OBJ) $(CHUNK_OBJ)

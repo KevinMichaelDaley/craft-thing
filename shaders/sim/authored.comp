@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "../../include/dungeoncraft/pixel_geometry_layout.h"
 layout(local_size_x=128) in;
 layout(constant_id=0) const uint PHASE=0u;
 layout(set=0,binding=0,std430) buffer Staging { uint words[]; };
@@ -8,7 +10,6 @@ const uint GRAPH_WORDS=2320u;
 const uint GRAPH_NODES=16u,GRAPH_MEMBERS=400u,GRAPH_JOINTS=528u,GRAPH_ANCHORS=1552u;
 const uint JOINT_STIFFNESS_WORD=5u,ANCHOR_STIFFNESS_WORD=13u,INTERFACE_ANGLE_INDEX=8u;
 const uint MEMBER_COVERAGE_WORD=21u;
-const uint SHAPE_TILE_SIDE=16u;
 uint pixels() {return params.width*params.height;}
 uint physical(uint i) {return 24u+i*2u;}
 uint appearance(uint i) {return 24u+pixels()*2u+i*16u;}
@@ -156,11 +157,11 @@ void main() {
     }
     if(PHASE==5u) {
         uint low_x=words[p+3u],low_y=words[p+4u];
-        uint tx=x-(x-low_x)%SHAPE_TILE_SIDE,ty=y-(y-low_y)%SHAPE_TILE_SIDE;
+        uint tx=x-(x-low_x)%DC_PIXEL_TILE_SIDE,ty=y-(y-low_y)%DC_PIXEL_TILE_SIDE;
         if(x>tx && words[label(i-1u)]==owner) return;
         if(y>ty && words[label(i-params.width)]==owner) return;
         /* Only the first occupied texel of this component in this tile contributes. */
-        for(uint yy=ty;yy<=y;yy++) for(uint xx=tx;xx<min(tx+SHAPE_TILE_SIDE,params.width);xx++) {
+        for(uint yy=ty;yy<=y;yy++) for(uint xx=tx;xx<min(tx+DC_PIXEL_TILE_SIDE,params.width);xx++) {
             uint candidate=yy*params.width+xx;
             if(candidate>=i) break;
             if(words[label(candidate)]==owner) return;
@@ -172,9 +173,9 @@ void main() {
         uint width=words[p+5u]-words[p+3u]+1u,height=words[p+6u]-words[p+4u]+1u;
         for(uint k=0u;k<5u;k++) words[d+k]=words[p+k];
         words[d+5u]=width;words[d+6u]=height;words[d+7u]=words[p+7u];
-        uint columns=(width+SHAPE_TILE_SIDE-1u)/SHAPE_TILE_SIDE;
-        uint rows=(height+SHAPE_TILE_SIDE-1u)/SHAPE_TILE_SIDE;
-        words[d+8u]=8u+columns*rows+words[p+7u]*33u;
+        uint columns=(width+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
+        uint rows=(height+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
+        words[d+8u]=DC_PIXEL_SHAPE_HEADER_WORDS+columns*rows+words[p+7u]*DC_PIXEL_TILE_WORDS;
         words[d+9u]=rank;
     }
 }

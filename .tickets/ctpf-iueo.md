@@ -59,3 +59,7 @@ Reproduced structural staging accepting canonical dense wood with an ordinary wo
 **2026-11-28T06:42:28Z**
 
 The GPU preflight admitted a NaN joint stiffness. It now validates all eight mechanical coefficients and the orientation of every joint and anchor in parallel. Six native failure cases cover nonfinite stiffness, strength and orientation and negative capacity/friction. Valid signed angles and corrected retry pass. All 12 authored staging cases passed RTX core/synchronization validation; SPIR-V validates.
+
+**2026-11-28T06:48:20Z**
+
+The GPU component planner counted 7 tiles and 254 words for a shape that the production sparse encoder stored in 4 tiles / 146 words. Planning now uses the same 16x16 tile layout, header and tile-record sizes as runtime checkpoint conversion. A concave 73-pixel shape crosses horizontal and vertical tile boundaries and re-enters an occupied tile on a separate prong. The final footprint matches byte-for-byte storage length, with both empty directory entries retained. Authored staging 12/12 and pixel geometry 7/7 pass with synchronization validation; spirv-val passes.

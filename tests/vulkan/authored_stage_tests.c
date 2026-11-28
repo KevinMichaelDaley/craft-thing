@@ -297,7 +297,9 @@ static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
     uint32_t *shape=calloc(words,sizeof(*shape));
     ASSERT_TRUE(shape);
     for (unsigned y=0;y<SHAPE_HEIGHT;++y) for (unsigned x=0;x<SHAPE_WIDTH;++x) {
-        if (x && y) continue;
+        bool bottom_branch=y==SHAPE_HEIGHT-1 && x<=12;
+        bool inner_prong=x==12 && y>=4;
+        if (x && y && !bottom_branch && !inner_prong) continue;
         unsigned texel=(y+1)*WIDTH+x+1, local=y*SHAPE_WIDTH+x;
         p[texel*8]=1; p[texel*8+2]=FR_AUTHORED_RIGID;
         shape[local/8]|=1u<<((local%8)*4);
@@ -310,10 +312,10 @@ static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
     ASSERT_EQ(count, 2u); ASSERT_EQ(plans[0].source_root, 65u);
     dc_gpu_body_record_t bodies[DC_GPU_BODY_CAPACITY]={0};
     bodies[0].body=(dc_gpu_body_t){.width=SHAPE_WIDTH,.height=SHAPE_HEIGHT,.active=1};
-    bodies[0].piece_count=DC_GPU_PIXEL_BODY_FLAG | (SHAPE_WIDTH+SHAPE_HEIGHT-1);
+    bodies[0].piece_count=DC_GPU_PIXEL_BODY_FLAG | 73u;
     ASSERT_TRUE(dc_gpu_upgrade_dense_pixels(gpu,bodies,&shape,&words));
     ASSERT_EQ(shape[1],4u); ASSERT_EQ(words,146u);
-    ASSERT_EQ(plans[0].occupied,SHAPE_WIDTH+SHAPE_HEIGHT-1);
+    ASSERT_EQ(plans[0].occupied,73u);
     ASSERT_EQ(plans[0].width,SHAPE_WIDTH); ASSERT_EQ(plans[0].height,SHAPE_HEIGHT);
     printf("Sparse shape runtime/planned: tiles %u/%u, words %u/%u\n",
            shape[1],plans[0].tiles,words,plans[0].geometry_words);

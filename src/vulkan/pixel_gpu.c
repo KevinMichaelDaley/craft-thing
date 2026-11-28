@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dungeoncraft/material_density.h"
+#include "dungeoncraft/pixel_geometry_layout.h"
 #include "ferrum/fire/gpu.h"
 #include "reactive_storage_gpu.h"
 #include "runtime_body_internal.h"
@@ -81,8 +82,8 @@ static uint32_t dense_material(const uint32_t *pixels, uint32_t width,
 static bool pixel_dense_layout(const dc_gpu_body_record_t *b,uint32_t words,
                                uint64_t *area,uint64_t *dw,uint64_t *dh) {
     *area=(uint64_t)b->body.width*b->body.height;
-    *dw=((uint64_t)b->body.width+15u)/16u;
-    *dh=((uint64_t)b->body.height+15u)/16u;
+    *dw=((uint64_t)b->body.width+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
+    *dh=((uint64_t)b->body.height+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
     return *area&&b->compound_reserved<=words&&(*area+7u)/8u<=words-b->compound_reserved&&
         *dw<=65536u&&*dh<=65536u;
 }
@@ -94,7 +95,7 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
         const dc_gpu_body_record_t *b=bodies+slot;uint64_t area,dw,dh;
         if((!b->body.active&&!b->reserved[0])||!(b->piece_count&DC_GPU_PIXEL_BODY_FLAG)) continue;
         if(!pixel_dense_layout(b,*words,&area,&dw,&dh)) return false;
-        required+=8u+dw*dh*34u;
+        required+=DC_PIXEL_SHAPE_HEADER_WORDS+dw*dh*(1u+DC_PIXEL_TILE_WORDS);
         if(required>UINT32_MAX) return false;
     }
     if(required>capacity) capacity=(uint32_t)required;
@@ -107,7 +108,7 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
             !(b->piece_count & DC_GPU_PIXEL_BODY_FLAG))
             continue;
         uint64_t area,dw,dh;
-        if (!pixel_dense_layout(b,*words,&area,&dw,&dh)||8+dw*dh>capacity-used)
+        if (!pixel_dense_layout(b,*words,&area,&dw,&dh)||DC_PIXEL_SHAPE_HEADER_WORDS+dw*dh>capacity-used)
             goto invalid;
         const uint32_t *dense = *pixels + b->compound_reserved;
         uint32_t count = 0;
@@ -138,13 +139,14 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
         shape[5] = low_y;
         shape[6] = high_x;
         shape[7] = high_y;
-        uint32_t output = 8 + dw * dh, tiles = 0;
+        uint32_t output = DC_PIXEL_SHAPE_HEADER_WORDS + dw * dh, tiles = 0;
         for (uint32_t ty = 0; ty < dh; ty++)
             for (uint32_t tx = 0; tx < dw; tx++) {
                 bool occupied = false;
-                uint32_t packed[32] = {0};
-                for (unsigned p = 0; p < 256; p++) {
-                    uint32_t x = tx * 16 + p % 16, y = ty * 16 + p / 16;
+                uint32_t packed[DC_PIXEL_TILE_WORDS-1] = {0};
+                for (unsigned p = 0; p < DC_PIXEL_TILE_SIDE*DC_PIXEL_TILE_SIDE; p++) {
+                    uint32_t x = tx * DC_PIXEL_TILE_SIDE + p % DC_PIXEL_TILE_SIDE;
+                    uint32_t y = ty * DC_PIXEL_TILE_SIDE + p / DC_PIXEL_TILE_SIDE;
                     if (x >= b->body.width || y >= b->body.height)
                         continue;
                     uint32_t material =
@@ -154,13 +156,13 @@ bool dc_gpu_upgrade_dense_pixels(dc_gpu_t *gpu, dc_gpu_body_record_t *bodies,
                 }
                 if (!occupied)
                     continue;
-                if ((uint64_t)output + 33 > capacity - used)
+                if ((uint64_t)output + DC_PIXEL_TILE_WORDS > capacity - used)
                     goto invalid;
-                shape[8 + ty * dw + tx] = output;
+                shape[DC_PIXEL_SHAPE_HEADER_WORDS + ty * dw + tx] = output;
                 shape[output] = tx | (ty << 16);
-                for (unsigned word = 0; word < 32; word++)
+                for (unsigned word = 0; word < DC_PIXEL_TILE_WORDS-1; word++)
                     shape[output + 1 + word] = packed[word];
-                output += 33;
+                output += DC_PIXEL_TILE_WORDS;
                 tiles++;
             }
         shape[0] = output;
