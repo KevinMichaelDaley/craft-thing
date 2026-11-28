@@ -71,3 +71,7 @@ A native RED admitted two new components even when 63 of 64 live body slots were
 **2026-11-28T07:04:00Z**
 
 GPU staging checks total rigid geometry demand against free words in the active geometry bank. A validated NVIDIA regression reproduced two 4088-word plans overcommitting the bank after admitting an existing body, then passed after the capacity check and on retry after heap growth. Final placement and publication remain in progress.
+
+**2026-11-28T07:08:22Z**
+
+The GPU now assigns canonical nonoverlapping absolute sparse shape-header addresses in source-root order. The same parallel prefix serves body ranks and geometry demand, including zero-sized gaps between component roots. Tests cover uneven 146/42-word shapes, the alternate active bank, an occupied 42-word prefix, retry after heap relocation and preservation of the existing shape. All 14 staging cases passed on NVIDIA with Vulkan core and synchronization validation; authored SPIR-V validates. These tentative ranges still require transaction-wide destination transfer and publication.
