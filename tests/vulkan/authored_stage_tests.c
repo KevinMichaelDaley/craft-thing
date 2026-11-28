@@ -119,6 +119,32 @@ static void test_invalid_role_material_and_fabricated_structure_are_diagnosed(vo
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_each_declared_member_requires_owned_structural_pixels(void) {
+    fr_authored_request_t r = request();
+    fr_structural_gpu_graph_t graph = {.node_count=3, .member_count=2};
+    for (unsigned i=0; i<3; ++i)
+        graph.nodes[i]=(fr_structural_gpu_node_t){.id=i+1,.generation=1,.x_fp=(int32_t)i*65536};
+    for (unsigned i=0; i<2; ++i)
+        graph.members[i]=(fr_structural_gpu_member_t){.id=11+i,.generation=1,.a=i+1,.b=i+2,
+            .material=FR_STRUCTURAL_STONE,.depth_fp=65536};
+    uint32_t owners[64]={11};
+    r.structure=&graph;
+    r.member_ownership=(const uint8_t *)owners;
+    r.member_ownership_bytes=sizeof(owners);
+    pixel(0,0,1,FR_AUTHORED_STRUCTURE,1);
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu);
+    char err[256]; fr_authored_stage_diagnostic_t d;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+    ASSERT_TRUE(d.failures & FR_AUTHORED_FAIL_INPUT);
+    owners[1]=12; pixel(1,0,1,FR_AUTHORED_STRUCTURE,1);
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+    ASSERT_EQ(d.failures,0u);
+    ASSERT_EQ(d.structural_pixels,2u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 static void test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior(void) {
     fr_authored_request_t r = request(); pixel(1,1,2,3,0);
     dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
@@ -213,6 +239,7 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
 }
 
 int main(void) {
+    RUN(test_each_declared_member_requires_owned_structural_pixels);
     RUN(test_failed_resize_preserves_ready_component_plan);
     RUN(test_unpublished_water_keeps_dry_world_asleep);
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
