@@ -1,6 +1,6 @@
 ---
 id: ctlo-6a47
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T05:13:57Z
@@ -31,3 +31,7 @@ Selected declaration final focused checks: dynamic runtime5/5, solver contact-st
 **2026-11-28T04:46:35Z**
 
 The compiled contract originally failed for 18 non-index consumers. All 31 production consumer modules now declare the root NonWritable and Restrict; the explicit index writer retains write access and the geometry writers retain their separate writable geometry path. Five compiled-contract checks and three allocation/publication rollback tests pass. Core/sync GPU growth copied 6,000 records across 94 slabs exactly, the parallel allocator retried through growth, and the 16,385-element recursive scan had zero mismatches. With an empty application cache and driver disk cache disabled, the RTX compiled the runtime structural phase-4 pipeline in 4.232s, reached the diagnostic’s intentionally forbidden first submit, and reported no pipeline creation errors. The historically slow Intel compiler is unavailable on this host.
+
+**2026-11-28T05:02:46Z**
+
+The actual five-case GPU dynamic runtime suite passed with core/sync validation, including geometry/color growth, descriptor republishing, exhausted pair/contact queue retries, a 97,028-pixel component and fracture across a body page. The displayed 480x270 concave scene passed 180 physical ticks in 3.245s including pacing; the separate normal renderer completed 90 frames in 0.879s. These observations establish operation and measure displayed performance without attributing a speedup to the declaration.
