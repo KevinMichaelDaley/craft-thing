@@ -1,6 +1,6 @@
 ---
 id: ctlo-qrwc
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T05:32:10Z
@@ -27,3 +27,7 @@ GREEN normal fixture:1920 ->512 actual team barriers, exactly matching all five 
 **2026-10-24T05:48:36Z**
 
 Actual core+synchronization validation now passes the complete raster fixture using DC_VK_VALIDATE=1 and VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT; no VUID or synchronization hazard messages. The previous undocumented DC_VK_SYNC_VALIDATE flag was ineffective. Running corrected synchronization checks for coupled grains, all carving cases and dynamic growth as well.
+
+**2026-11-28T04:25:32Z**
+
+Verified current raster code and the full-suite GPU regression. It compares all five planes on the partial 123x117 grid across 128 slots, with 512 measured barriers versus 1920 for the reference. The ticket records the synchronization-validated run and its 500-frame displayed comparison. The later unsampled level03 timings are in design/inline_frame_optimization.md.

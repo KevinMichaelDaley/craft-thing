@@ -1,6 +1,6 @@
 ---
 id: ctlo-6slx
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T08:52:13Z
@@ -23,3 +23,7 @@ RED2/2 work failures:195 synchronized frontier rounds. GREEN2/2 actual core/sync
 **2026-10-24T09:00:44Z**
 
 Full brush regression initially found reserved leaf labels being mistaken for union links. Fixed by preserving LEAF_RESERVATION high-bit entries through linking, compression and remapping. Normal full brush battery now12/12, including failed-allocation rollback, leaf bits/material10, mixed wood preservation, concavities, rotation and anchored members.
+
+**2026-11-28T04:25:33Z**
+
+Verified GPU union and deterministic seed ranking in the production carve path. The full suite recorded zero synchronized frontier rounds and 34216 edge merges for the 36051 remaining pixels. Both work cases and all 13 brush cases passed, including diagonal connectivity, rotated coordinates, mixed material, splitting and rollback. The 500-frame displayed cutting measurement is recorded above.
