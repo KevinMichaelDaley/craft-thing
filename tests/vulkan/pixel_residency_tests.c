@@ -2,7 +2,7 @@
 #include "pixel_component_tests.c"
 #undef main
 
-static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsigned row,int floor_chunk) {
+static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsigned row,int floor_chunk,dc_chunk_coord_t camera) {
     char err[256]={0};
     memset(chunk,0,sizeof(*chunk));
     for(unsigned x=0;x<12;++x) chunk->cells[row*64u+x].material=DC_MATERIAL_STONE;
@@ -14,7 +14,7 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
         bool has_floor=uploads[step].has_floor;
         ASSERT_TRUE(dc_gpu_upload_chunk(gpu,uploads[step].slot,chunk,err,sizeof(err)));
         gpu->body_refresh_pending=true;
-        ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){0,0},err,sizeof(err)));
+        ASSERT_TRUE(dc_gpu_set_body_origin(gpu,camera,err,sizeof(err)));
         dc_gpu_broadphase_stats_t candidates;
         dc_gpu_broadphase_pair_t pairs[32];
         ASSERT_TRUE(dc_gpu_read_broadphase(gpu,&candidates,pairs,32,err,sizeof(err)));
@@ -62,8 +62,16 @@ static void cached_stone(unsigned world_x,unsigned camera_chunk) {
     ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,body.body.id,NULL,0,&pixels,err,sizeof(err)));
     float mass=motion.mass;int velocity=body.body.vy_fp;
     printf("Known cached stone x%u: pixels%u mass%.6f vy%d\n",world_x,pixels,mass,velocity);
-    if(!camera_chunk && (world_x==60 || world_x==124))
-        check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u,(world_x+4u)/64u);
+    if(!camera_chunk && (world_x==60 || world_x==124)) {
+        unsigned row=(unsigned)(body.body.y_fp>>16)+8u;
+        int floor_chunk=(world_x+4u)/64u;
+        check_cached_contact_ownership(gpu,chunk,row,floor_chunk,(dc_chunk_coord_t){0,0});
+        if(world_x==124) {
+            ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,UINT32_MAX,err,sizeof(err)));
+            dc_chunk_coord_t distant={INT64_C(1)<<40,-(INT64_C(1)<<40)};
+            check_cached_contact_ownership(gpu,chunk,row,floor_chunk,distant);
+        }
+    }
     if(camera_chunk==1) {
         memset(chunk,0,sizeof(*chunk));
         chunk->coord.x=17;
