@@ -68,8 +68,8 @@ static bool phase(dc_gpu_t *g,uint32_t mode) {
     VkSubmitInfo submit={.sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,.commandBufferCount=1,.pCommandBuffers=&g->command};
     return vkQueueSubmit(g->queue,1,&submit,VK_NULL_HANDLE)==VK_SUCCESS&&vkQueueWaitIdle(g->queue)==VK_SUCCESS;
 }
-static bool pressure_snapshot(dc_gpu_t *g,void *destination,char *err,uint32_t cap) {
-    VkDeviceSize bytes=(VkDeviceSize)g->width*g->height*sizeof(float);
+static bool snapshot_buffer(dc_gpu_t *g,VkBuffer source,VkDeviceSize offset,VkDeviceSize bytes,
+                            void *destination,char *err,uint32_t cap) {
     VkBuffer buffer=VK_NULL_HANDLE;VkDeviceMemory memory=VK_NULL_HANDLE;void *mapped=NULL;
     if(!dc_gpu_make_mapped_buffer(g,bytes,&buffer,&memory,&mapped,err,cap)) return false;
     VkCommandBufferBeginInfo begin={.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -80,7 +80,7 @@ static bool pressure_snapshot(dc_gpu_t *g,void *destination,char *err,uint32_t c
             .dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,.dstAccessMask=VK_ACCESS_2_TRANSFER_READ_BIT};
         VkDependencyInfo dep={.sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,.memoryBarrierCount=1,.pMemoryBarriers=&barrier};
         vkCmdPipelineBarrier2(g->command,&dep);
-        VkBufferCopy copy={.size=bytes};vkCmdCopyBuffer(g->command,g->pressure_a_buffer,buffer,1,&copy);
+        VkBufferCopy copy={.srcOffset=offset,.size=bytes};vkCmdCopyBuffer(g->command,source,buffer,1,&copy);
         barrier.srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT;barrier.srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT;
         barrier.dstStageMask=VK_PIPELINE_STAGE_2_HOST_BIT;barrier.dstAccessMask=VK_ACCESS_2_HOST_READ_BIT;
         vkCmdPipelineBarrier2(g->command,&dep);
@@ -91,6 +91,10 @@ static bool pressure_snapshot(dc_gpu_t *g,void *destination,char *err,uint32_t c
     }
     vkUnmapMemory(g->device,memory);vkDestroyBuffer(g->device,buffer,NULL);vkFreeMemory(g->device,memory,NULL);
     return ok;
+}
+static bool pressure_snapshot(dc_gpu_t *g,void *destination,char *err,uint32_t cap) {
+    return snapshot_buffer(g,g->pressure_a_buffer,0,(VkDeviceSize)g->width*g->height*sizeof(float),
+                           destination,err,cap);
 }
 static void test_water_inserted_between_pressure_batches_matches_dense_solver(void) {
     dc_chunk_t left={0},right={0};char err[256]={0};
@@ -128,6 +132,30 @@ static void test_water_inserted_between_pressure_batches_matches_dense_solver(vo
     }
     free(pressure_a);free(pressure_b);dc_gpu_destroy(sparse);dc_gpu_destroy(dense);PASS();
 }
+static void test_binary_stencil_records_predicted_divergence(void) {
+    dc_chunk_t left={0},right={0};
+    char err[256]={0};
+    for(unsigned i=0;i<DC_CHUNK_CELLS;i++) left.cells[i].fluid_mass=65536u;
+    dc_gpu_t *gpu=make_grid(&left,&right,err,sizeof(err));
+    ASSERT_TRUE(gpu);
+    size_t cell=10u*gpu->width+10u;
+    dc_face_velocity_t *velocity=gpu->velocity_mapped;
+    velocity[cell].x=2.f;
+    ASSERT_TRUE(phase(gpu,0));
+    float expected=velocity[cell].x-velocity[cell-1].x+
+                   velocity[cell].y-velocity[cell-gpu->width].y;
+    uint32_t words[4];
+    ASSERT_TRUE(snapshot_buffer(gpu,gpu->pressure_stencil_buffer,cell*sizeof(words),
+                                sizeof(words),words,err,sizeof(err)));
+    uint32_t payload=0;
+    for(unsigned axis=0;axis<4;axis++) payload|=(words[axis]&255u)<<(8u*axis);
+    dc_gpu_destroy(gpu);
+    ASSERT_TRUE(expected!=0.f);
+    ASSERT_TRUE(words[0]&(1u<<29));
+    ASSERT_EQ(payload,dc_gpu_float_bits(expected));
+    PASS();
+}
+
 static void test_cached_stencil_matches_dense_with_partial_faces_and_mixed_terrain(void) {
     dc_chunk_t left={0},right={0};char err[256]={0};uint32_t seed=0x684126u;
     for(unsigned slot=0;slot<2;slot++) {
@@ -451,6 +479,7 @@ int main(int argc, char **argv) {
     RUN(test_sparse_workspace_pages_match_full_slot_dispatch);
     if (argc == 2 && !strcmp(argv[1], "--workspace")) return g_fail != 0;
     RUN(test_scheduled_pressure_runs_match_independent_phases);
+    RUN(test_binary_stencil_records_predicted_divergence);
     RUN(test_pressure_batches_have_exact_stencil_cache_storage);
     RUN(test_pressure_stencil_does_not_increase_mapped_memory);
     RUN(test_pressure_work_is_empty_then_wakes_for_local_water);
