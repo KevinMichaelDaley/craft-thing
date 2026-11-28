@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -236,6 +237,39 @@ static void test_structural_references_require_existing_nodes(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_invalid_interface_mechanics_rejected_before_placement(void) {
+    fr_authored_request_t r=request();
+    fr_structural_gpu_graph_t graph={.node_count=2,.member_count=1,.joint_count=1,.anchor_count=1};
+    graph.nodes[0]=(fr_structural_gpu_node_t){.id=1,.generation=1};
+    graph.nodes[1]=(fr_structural_gpu_node_t){.id=2,.generation=1,.x_fp=65536};
+    graph.members[0]=(fr_structural_gpu_member_t){.id=8,.generation=1,.a=1,.b=2,.depth_fp=65536};
+    fr_structural_gpu_joint_t *joint=&graph.joints[0];
+    *joint=(fr_structural_gpu_joint_t){.id=4,.generation=1,.a=1,.b=2,.kind=FR_JOINT_BONDED,.normal_angle=-.5f};
+    fr_structural_gpu_anchor_t *anchor=&graph.anchors[0];
+    *anchor=(fr_structural_gpu_anchor_t){.id=5,.generation=1,.node=1,.kind=FR_JOINT_PINNED,
+        .width=1,.height=1,.terrain_material=DC_MATERIAL_STONE,.normal_angle=-1.f};
+    uint32_t owners[64]={8};
+    r.structure=&graph; r.member_ownership=(const uint8_t *)owners; r.member_ownership_bytes=sizeof(owners);
+    pixel(0,0,1,FR_AUTHORED_STRUCTURE,1);
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu);
+    char err[256]; fr_authored_stage_diagnostic_t d;
+    struct {float *field; float invalid;} cases[]={
+        {&joint->normal_stiffness,NAN}, {&joint->moment_capacity,-1.f}, {&joint->normal_angle,INFINITY},
+        {&anchor->friction,-.1f}, {&anchor->pullout_capacity,INFINITY}, {&anchor->normal_angle,NAN}};
+    for (unsigned i=0;i<sizeof(cases)/sizeof(cases[0]);++i) {
+        float saved=*cases[i].field;
+        *cases[i].field=cases[i].invalid;
+        ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+        ASSERT_EQ(d.failures,FR_AUTHORED_FAIL_INPUT);
+        *cases[i].field=saved;
+    }
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+    ASSERT_EQ(d.failures,0u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 static void test_absent_normal_uses_renderer_default_not_raw_placeholder(void) {
     fr_authored_request_t r = request();
     memset(appearance + 16, 0, 12);
@@ -311,6 +345,7 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
 
 int main(int argc,char **argv) {
     RUN(test_structural_references_require_existing_nodes);
+    RUN(test_invalid_interface_mechanics_rejected_before_placement);
     RUN(test_each_declared_member_requires_owned_structural_pixels);
     RUN(test_structural_pixels_use_registered_mechanical_profiles);
     if(argc==2 && !strcmp(argv[1],"--structural-graph")) return g_fail!=0;
