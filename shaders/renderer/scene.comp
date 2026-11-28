@@ -192,6 +192,12 @@ void fire_ray_surface(uvec2 cell,inout Surface surface) {
         surface.weights.z*=1.-alpha;
     }
 }
+Appearance terrain_appearance(uint atlas) {
+    Appearance a=palette[atlas];
+    vec4 tint=terrain_colors[atlas];
+    if(tint.w>0.) a.color_roughness.rgb=tint.rgb;
+    return a;
+}
 Surface surface_at(uint i,out float opacity,out uint known) {
     Surface surface=Surface(vec4(0),vec4(0),vec4(0),vec4(0),vec4(0));
     uvec2 cell=uvec2(i%params.width,i/params.width);
@@ -244,16 +250,16 @@ Surface surface_at(uint i,out float opacity,out uint known) {
             solid=min(coverage,1.);
             for(uint layer=0u;layer<2u;layer++) {
                 Particle p=particles[first+4096u*layer];if(p.mass_fp==0u) continue;
-                Appearance a=palette[atlas];
+                Appearance a=terrain_appearance(atlas);
                 if(p.material==13u) a.color_roughness.rgb=vec3(.33,.32,.31);
                 if(p.material==10u&&(p.flags&DC_LEAF_COLOR_FLAG)!=0u) a.color_roughness.rgb=leaf_color_unpack(p.flags);
                 else if(p.material!=10u&&(p.flags&0x80ffffffu)!=0u) a.color_roughness.rgb*=.6;
                 float volume=float(p.mass_fp)/65536./(p.material==10u?DC_DENSITY_LEAVES:p.material==13u?DC_DENSITY_ASH:1.);
                 add_surface(surface,a,remaining*solid*volume/coverage,0.);
             }
-        } else {solid=1.;add_surface(surface,palette[atlas],remaining,0.);}
+        } else {solid=1.;add_surface(surface,terrain_appearance(atlas),remaining,0.);}
     } else if(material!=0u && material!=3u) {
-        solid=1.;add_surface(surface,palette[atlas],remaining,0.);
+        solid=1.;add_surface(surface,terrain_appearance(atlas),remaining,0.);
     }
     surface.weights.y=(1.-body_coverage)*water;
     if(water>0.) {
@@ -286,7 +292,6 @@ uint refresh_palette(uint atlas) {
         palette[atlas]=texture_sample(rest,1u,material,style);keys[atlas]=uvec2(key,generation);
         generated=material!=0u&&material!=3u?1u:0u;
     }
-    if(terrain_colors[atlas].w>0.) palette[atlas].color_roughness.rgb=terrain_colors[atlas].rgb;
     return generated;
 }
 void main() {

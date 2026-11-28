@@ -92,8 +92,8 @@ void main() {
     Appearance a=texture_sample(rest,1u,mapped,style);
     uint source=8u+count*2u+i*16u,flags=words[source+15u];
     float alpha=scalar(source+12u);
-    a.color_roughness.rgb=mix(a.color_roughness.rgb,vec3(scalar(source),scalar(source+1u),scalar(source+2u)),alpha);
-    terrain_colors[atlas]=mapped!=0u&&alpha>0.?vec4(a.color_roughness.rgb,1.):vec4(0);
+    vec3 color=mix(a.color_roughness.rgb,vec3(scalar(source),scalar(source+1u),scalar(source+2u)),alpha);
+    terrain_colors[atlas]=mapped!=0u&&alpha>0.?vec4(color,1.):vec4(0);
     water_colors[atlas]=material==6u?vec4(mix(vec3(.035,.193,.666),
         vec3(scalar(source),scalar(source+1u),scalar(source+2u)),alpha),1.):vec4(0);
     if((flags&2u)!=0u) a.color_roughness.a=scalar(source+3u);
