@@ -234,6 +234,9 @@ test_symmetric_and_eccentric_seam_bridge_survives_visual_checkpoint(void) {
         ASSERT_TRUE(
             fr_gpu_save_structure(gpu, "build/structure_seam.dcs", err, 256));
         ASSERT_TRUE(tick(gpu, err));
+        fr_structural_gpu_node_state_t live[2], restored;
+        for (unsigned node = 0; node < 2; ++node)
+            ASSERT_TRUE(fr_gpu_read_structure_node(gpu, node + 1, &live[node]));
         uint32_t before[160 * 112], after[160 * 112];
         ASSERT_TRUE(dc_gpu_readback(gpu, before, 160 * 112, err, 256));
         dc_gpu_destroy(gpu);
@@ -245,6 +248,10 @@ test_symmetric_and_eccentric_seam_bridge_survives_visual_checkpoint(void) {
         ASSERT_TRUE(
             dc_gpu_set_body_origin(gpu, (dc_chunk_coord_t){0, 0}, err, 256));
         ASSERT_TRUE(tick(gpu, err));
+        for (unsigned node = 0; node < 2; ++node) {
+            ASSERT_TRUE(fr_gpu_read_structure_node(gpu, node + 1, &restored));
+            ASSERT_EQ(memcmp(live[node].reaction, restored.reaction, sizeof(restored.reaction)), 0);
+        }
         ASSERT_TRUE(dc_gpu_readback(gpu, after, 160 * 112, err, 256));
         unsigned changed = 0;
         for (unsigned pixel = 0; pixel < 160 * 112; pixel++)
