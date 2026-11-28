@@ -8,6 +8,7 @@
 static int g_pass, g_fail;
 static VkQueryPool g_queries;
 static unsigned g_dispatch;
+static unsigned g_timed_groups[12];
 static bool g_recording, g_subsystem;
 static bool g_lighting;
 static unsigned g_light_passes;
@@ -54,6 +55,8 @@ void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y,
       query = 10;
     g_dispatch++;
   }
+  if (query != 99)
+    g_timed_groups[query]=x*y*z;
   if (query != 99)
     vkCmdWriteTimestamp2(command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                          g_queries, query);
@@ -139,6 +142,13 @@ static void test_full_frame(unsigned width, unsigned height) {
     ASSERT_TRUE(profile_frame ? dc_gpu_tick_capture(g, &tick, err, sizeof(err)) :
                                dc_gpu_tick_step(g, err, sizeof(err)));
     ASSERT_TRUE(fr_renderer_render(g, err, sizeof(err)));
+    if(i==0u) {
+      printf("Timed dispatch groups: texture %u, optical %u, compose %u\n",
+             g_timed_groups[2],g_timed_groups[4],g_timed_groups[10]);
+      ASSERT_EQ(g_timed_groups[2],dc_gpu_slot_capacity(g)*DC_CHUNK_CELLS/64u);
+      ASSERT_EQ(g_timed_groups[4],(width*height+63u)/64u);
+      ASSERT_EQ(g_timed_groups[10],(width*height+63u)/64u);
+    }
     clock_gettime(CLOCK_MONOTONIC, &stop);
     double frame = (stop.tv_sec - start.tv_sec) * 1000. +
                    (stop.tv_nsec - start.tv_nsec) / 1e6;
