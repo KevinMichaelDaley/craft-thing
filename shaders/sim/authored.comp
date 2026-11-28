@@ -99,6 +99,16 @@ void join(uint a,uint b) {
         if(atomicCompSwap(words[label(high)],high,low)==high) return;
     }
 }
+uint geometry_size(uint p) {
+    if(words[p+2u]==0u) return 0u;
+    uint columns=1u+(words[p+5u]-words[p+3u])/DC_PIXEL_TILE_SIDE;
+    uint rows=1u+(words[p+6u]-words[p+4u])/DC_PIXEL_TILE_SIDE;
+    return DC_PIXEL_SHAPE_HEADER_WORDS+columns*rows+words[p+7u]*DC_PIXEL_TILE_WORDS;
+}
+uint geometry_prefix(uint i,uint offset,uint parity) {
+    uint p=plan(i);
+    return offset==1u ? geometry_size(p) : words[p+8u+parity];
+}
 void main() {
     if(PHASE>=9u) {plan_body_slots();return;}
     if(PHASE==8u) {check_graph_record();return;}
@@ -143,8 +153,13 @@ void main() {
     if(PHASE==6u) {
         uint offset=params.padding>>1u,parity=params.padding&1u;
         uint sum=words[scan(parity,i)];
-        if(i>=offset) sum+=words[scan(parity,i-offset)];
+        uint geometry=geometry_prefix(i,offset,parity);
+        if(i>=offset) {
+            sum+=words[scan(parity,i-offset)];
+            geometry+=geometry_prefix(i-offset,offset,parity);
+        }
         words[scan(parity^1u,i)]=sum;
+        words[plan(i)+8u+(parity^1u)]=geometry;
         return;
     }
     if(owner==INVALID) return;
@@ -179,11 +194,11 @@ void main() {
         uint width=words[p+5u]-words[p+3u]+1u,height=words[p+6u]-words[p+4u]+1u;
         for(uint k=0u;k<5u;k++) words[d+k]=words[p+k];
         words[d+5u]=width;words[d+6u]=height;words[d+7u]=words[p+7u];
-        uint columns=(width+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
-        uint rows=(height+DC_PIXEL_TILE_SIDE-1u)/DC_PIXEL_TILE_SIDE;
-        words[d+8u]=DC_PIXEL_SHAPE_HEADER_WORDS+columns*rows+words[p+7u]*DC_PIXEL_TILE_WORDS;
+        words[d+8u]=geometry_size(p);
         atomicAdd(words[5],words[d+8u]);
         words[d+9u]=INVALID;
-        words[d+10u]=INVALID;
+        uint prior=i==0u ? 0u : words[plan(i-1u)+8u+params.padding];
+        words[d+10u]=params.pool_offset+16u+pixel_word_at(params.pool_offset)*params.pool_capacity+
+                     pixel_word_at(params.pool_offset+1u)+prior;
     }
 }
