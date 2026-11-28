@@ -2,12 +2,12 @@
 #include "pixel_component_tests.c"
 #undef main
 
-static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsigned row) {
+static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsigned row,int floor_chunk) {
     char err[256]={0};
-    memset(chunk,0,sizeof(*chunk));chunk->coord.x=1;
+    memset(chunk,0,sizeof(*chunk));
     for(unsigned x=0;x<12;++x) chunk->cells[row*64u+x].material=DC_MATERIAL_STONE;
     const struct { unsigned slot; int chunk_x; bool has_floor; } uploads[] = {
-        {1,1,true}, {1,17,false}, {2,1,true}
+        {(unsigned)floor_chunk,floor_chunk,true}, {(unsigned)floor_chunk,17,false}, {3,floor_chunk,true}
     };
     for(unsigned step=0;step<sizeof(uploads)/sizeof(uploads[0]);++step) {
         chunk->coord.x=uploads[step].chunk_x;
@@ -19,7 +19,7 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
         dc_gpu_broadphase_pair_t pairs[32];
         ASSERT_TRUE(dc_gpu_read_broadphase(gpu,&candidates,pairs,32,err,sizeof(err)));
         unsigned matching=0;
-        for(unsigned i=0;i<candidates.count;++i) if(pairs[i].chunk.x==1 && pairs[i].chunk.y==0) {
+        for(unsigned i=0;i<candidates.count;++i) if(pairs[i].chunk.x==floor_chunk && pairs[i].chunk.y==0) {
             ASSERT_EQ(pairs[i].kind,has_floor ? DC_GPU_PAIR_TERRAIN : DC_GPU_PAIR_BOUNDARY);
             matching++;
         }
@@ -29,7 +29,7 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
         ASSERT_TRUE(dc_gpu_read_contacts(gpu,&stats,contacts,512,err,sizeof(err)));
         ASSERT_EQ(stats.overflow,0u);ASSERT_TRUE(stats.count>0);
         for(unsigned i=0;i<stats.count;++i) {
-            ASSERT_EQ(contacts[i].feature_chunk.x,1);
+            ASSERT_EQ(contacts[i].feature_chunk.x,floor_chunk);
             ASSERT_EQ(contacts[i].kind,has_floor ? DC_GPU_CONTACT_TERRAIN : DC_GPU_CONTACT_BOUNDARY);
             if(has_floor) ASSERT_EQ(contacts[i].feature_b/64u,row);
         }
@@ -62,7 +62,8 @@ static void cached_stone(unsigned world_x,unsigned camera_chunk) {
     ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,body.body.id,NULL,0,&pixels,err,sizeof(err)));
     float mass=motion.mass;int velocity=body.body.vy_fp;
     printf("Known cached stone x%u: pixels%u mass%.6f vy%d\n",world_x,pixels,mass,velocity);
-    if(world_x==60 && !camera_chunk) check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u);
+    if(!camera_chunk && (world_x==60 || world_x==124))
+        check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u,(world_x+4u)/64u);
     if(camera_chunk==1) {
         memset(chunk,0,sizeof(*chunk));
         chunk->coord.x=17;
@@ -87,6 +88,10 @@ static void test_partly_offscreen_known_stone_advances(void) {cached_stone(60,0)
 static void test_wholly_offscreen_known_stone_across_cached_seam_advances(void) {cached_stone(124,0);}
 static void test_left_cached_reference_advances(void) {cached_stone(60,1);}
 int main(int argc,char **argv) {
+    if(argc==2 && strcmp(argv[1],"--cached")==0) {
+        RUN(test_wholly_offscreen_known_stone_across_cached_seam_advances);
+        return g_fail!=0;
+    }
     if(argc==2 && strcmp(argv[1],"--left")==0) {
         RUN(test_left_cached_reference_advances);
         return g_fail!=0;
