@@ -40,7 +40,7 @@ static bool error(char *buf, uint32_t cap, const char *message) {
 bool dc_gpu_fluid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkDeviceSize bytes = (VkDeviceSize)gpu->width * gpu->height * sizeof(uint32_t);
     VkDeviceSize color_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_CHUNK_CELLS*16;
-    if(!dc_gpu_make_mapped_buffer(gpu,color_bytes,&gpu->water_color_buffer,
+    if(!dc_gpu_make_transfer_initialized_buffer(gpu,color_bytes,&gpu->water_color_buffer,
         &gpu->water_color_memory,&gpu->water_color_mapped,err,cap)) return false;
     VkDeviceSize bulk_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*sizeof(fr_bulk_phase_chunk_t);
     if(!dc_gpu_make_hydro_buffer(gpu,DC_HYDRO_BULK,bulk_bytes,&gpu->bulk_phase_buffer,
@@ -389,14 +389,18 @@ bool dc_gpu_clear_fluid_scratch(dc_gpu_t *gpu, char *err, uint32_t cap) {
     VkBuffer buffers[4] = {gpu->fluid_a_buffer, gpu->fluid_b_buffer,
                            gpu->pressure_a_buffer, gpu->fluid_previous_buffer};
     for (unsigned i = 0; i < 4; i++) vkCmdFillBuffer(gpu->command, buffers[i], 0, bytes, 0);
+    vkCmdFillBuffer(gpu->command,gpu->water_color_buffer,0,VK_WHOLE_SIZE,0);
     VkDeviceSize particle_bytes=(VkDeviceSize)dc_gpu_slot_capacity(gpu)*DC_MPM_PARTICLES_PER_CHUNK*sizeof(dc_mpm_particle_t);
     vkCmdFillBuffer(gpu->command,gpu->mpm_output_buffer,0,particle_bytes,0);
     vkCmdFillBuffer(gpu->command,gpu->particle_buffer,0,particle_bytes,0);
     VkMemoryBarrier2 barrier = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_HOST_BIT |
+                        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                         VK_ACCESS_2_HOST_READ_BIT | VK_ACCESS_2_HOST_WRITE_BIT |
+                         VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT};
     VkDependencyInfo dependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .memoryBarrierCount = 1, .pMemoryBarriers = &barrier};
     vkCmdPipelineBarrier2(gpu->command, &dependency);

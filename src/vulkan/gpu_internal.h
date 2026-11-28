@@ -553,6 +553,9 @@ bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
                                char *err, uint32_t cap);
 /** Prefer host system memory for transfer staging to reserve mapped VRAM for physics. */
 bool dc_gpu_make_staging_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+                                VkDeviceMemory *memory, void **mapped, char *err, uint32_t cap);
+/** The caller must initialize the complete buffer by transfer before exposing it. */
+bool dc_gpu_make_transfer_initialized_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                 VkDeviceMemory *memory, void **mapped,
                                 char *err, uint32_t cap);
 bool dc_gpu_make_hydro_buffer(dc_gpu_t *gpu, uint32_t field, VkDeviceSize bytes, VkBuffer *buffer,

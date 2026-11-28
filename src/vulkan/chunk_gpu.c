@@ -34,9 +34,11 @@ uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
     return fallback;
 }
 
+enum mapped_buffer_role { MAPPED_STORAGE, MAPPED_STAGING, MAPPED_TRANSFER_INITIALIZED };
+
 static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
-                               bool staging, bool addressable, char *err, uint32_t cap) {
+                               enum mapped_buffer_role role, bool addressable, char *err, uint32_t cap) {
     VkBufferCreateInfo info = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = bytes, .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
@@ -51,7 +53,7 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     VkPhysicalDeviceMemoryProperties props;
     vkGetPhysicalDeviceMemoryProperties(gpu->physical, &props);
     uint32_t type = dc_gpu_host_memory_type(&props, req.memoryTypeBits);
-    if(staging) for(uint32_t i=0;i<props.memoryTypeCount;i++) {
+    if(role==MAPPED_STAGING) for(uint32_t i=0;i<props.memoryTypeCount;i++) {
         VkMemoryPropertyFlags flags=props.memoryTypes[i].propertyFlags;
         if((req.memoryTypeBits&(1u<<i))&&
             (flags&(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))==
@@ -85,18 +87,22 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
         gpu->mapped_local_bytes += req.size;
     else gpu->mapped_system_bytes += req.size;
-    memset(*mapped, 0, (size_t)bytes);
+    if (role != MAPPED_TRANSFER_INITIALIZED) memset(*mapped, 0, (size_t)bytes);
     return true;
 }
 bool dc_gpu_make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                VkDeviceMemory *memory, void **mapped,
                                char *err, uint32_t cap) {
-    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,false,false,err,cap);
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,MAPPED_STORAGE,false,err,cap);
+}
+bool dc_gpu_make_transfer_initialized_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
+    VkDeviceMemory *memory, void **mapped, char *err, uint32_t cap) {
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,MAPPED_TRANSFER_INITIALIZED,false,err,cap);
 }
 bool dc_gpu_make_staging_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
                                 VkDeviceMemory *memory, void **mapped,
                                 char *err, uint32_t cap) {
-    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,true,false,err,cap);
+    return make_mapped_buffer(gpu,bytes,buffer,memory,mapped,MAPPED_STAGING,false,err,cap);
 }
 
 static bool make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buffer,
@@ -141,7 +147,7 @@ bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 bool dc_gpu_make_hydro_buffer(dc_gpu_t *gpu, uint32_t field, VkDeviceSize bytes, VkBuffer *buffer,
     VkDeviceMemory *memory, void **mapped, char *err, uint32_t cap) {
     if (field >= DC_HYDRO_BUFFERS) return error(err, cap, "Invalid liquid neighborhood field");
-    bool okay = mapped ? make_mapped_buffer(gpu, bytes, buffer, memory, mapped, false, true, err, cap) :
+    bool okay = mapped ? make_mapped_buffer(gpu, bytes, buffer, memory, mapped, MAPPED_STORAGE, true, err, cap) :
                          make_device_buffer(gpu, bytes, buffer, memory, true, err, cap);
     if (!okay) return false;
     VkBufferDeviceAddressInfo info = {.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = *buffer};
