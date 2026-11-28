@@ -1,6 +1,6 @@
 ---
 id: ctlo-3s4c
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T11:35:09Z
@@ -31,3 +31,7 @@ Removed the redundant post-solver cache rebuild while keeping standalone queries
 **2026-10-24T18:32:28Z**
 
 Uncached comparison path and specialization33 both pass exact core+synchronization manifold oracle7/7. With no-cache specialization and alternating granular pools, displayed500-frame replay23.864ms mean30.879ms worst; original resolution and paused pixels retained. Remaining measured peak is dominated by active cutting, so next targeting staged-color address work.
+
+**2026-11-28T05:55:15Z**
+
+The full 640x448 displayed wet structure test with the boundary cache enabled now passes both unchanged allocation limits under Vulkan synchronization validation. Device allocations dropped from 114.040 to 111.989 MiB. Synchronous particle I/O reuses one 448 KiB chunk, and the grain acceptance pass packs both layers into disjoint two-bit decisions. Full and partial tile gather fixtures retain exact particles, materials and counts. Both bridge reloads changed zero pixels. Canonical rotated manifold checks passed 7/7 with the cache enabled and 7/7 disabled, with the packed boundary and geometry-growth checks recorded above.
