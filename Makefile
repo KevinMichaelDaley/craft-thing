@@ -2495,7 +2495,7 @@ build/gpu.o build/structural_store_chunk.o build/structural_store_channels.o: sr
 build/structural_store_chunk.o: include/ferrum/fire/gas_checkpoint.h src/vulkan/reactive_checkpoint_gpu.h src/vulkan/thermal_gpu_internal.h
 build/gpu.o build/chunk_gpu.o build/structural_store_gpu.o: src/vulkan/reactive_checkpoint_gpu.h src/vulkan/structural_store_channels.h
 build/thermal_gpu_display_tests: tests/vulkan/thermal_gpu_tests.c tests/vulkan/reactive_cell_gpu_tests.c $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST -DFR_TRACE_THERMAL_MODULES $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_load_shader_module
 build/thermal_bench_display_tests: tests/app/thermal_bench_tests.c tests/vulkan/reactive_cell_gpu_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) -DFR_REACTIVE_PRESENTATION_TEST $< $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/bonfire_display_tests: tests/app/bonfire_tests.c src/app/level.c $(filter-out build/performance/src/app/main.o build/performance/src/app/level.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) $(MPM_ACTIVITY_SHADER) $(MPM_SHADER) build/shaders/combustion.comp.spv

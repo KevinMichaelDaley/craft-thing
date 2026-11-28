@@ -5,6 +5,20 @@
 #include <sys/stat.h>
 #include "ferrum/fire/thermal_gpu.h"
 
+#ifdef FR_TRACE_THERMAL_MODULES
+static unsigned generic_modules, phase_modules[26];
+bool __real_dc_gpu_load_shader_module(dc_gpu_t *, const char *, VkShaderModule *, char *, uint32_t);
+bool __wrap_dc_gpu_load_shader_module(dc_gpu_t *gpu, const char *path, VkShaderModule *module,
+                                      char *err, uint32_t cap) {
+    unsigned phase;
+    int consumed = 0;
+    if (strcmp(path, "build/shaders/thermal.comp.spv") == 0) ++generic_modules;
+    if (sscanf(path, "build/shaders/thermal_phase_%u.comp.spv%n", &phase, &consumed) == 1 &&
+        consumed > 0 && path[consumed] == '\0' && phase < 26u) ++phase_modules[phase];
+    return __real_dc_gpu_load_shader_module(gpu, path, module, err, cap);
+}
+#endif
+
 static bool setup_pair(dc_gpu_t **g,fr_reactive_state_t *stone,fr_reactive_state_t *wood,char *err,uint32_t cap) {
     dc_chunk_t *c=calloc(1,sizeof(*c));if(!c) return false;
     c->cells[20*64+20]=(dc_cell_t){.material=DC_MATERIAL_STONE,.flags=DC_CELL_LOADED_TERRAIN};
@@ -22,6 +36,15 @@ static void test_vulkan_face_exchange_matches_reference_and_paused_presentation_
     ASSERT_TRUE(fr_thermal_sample_from_state(&stone,&a,err,sizeof(err))&&fr_thermal_sample_from_state(&wood,&b,err,sizeof(err)));
     ASSERT_TRUE(fr_thermal_pair_flux(a,b,1.f/60.f,&flux,err,sizeof(err)));
     ASSERT_TRUE(fr_thermal_gpu_enable(g,err,sizeof(err))&&fr_thermal_gpu_step(g,1.f/60.f,err,sizeof(err)));
+#ifdef FR_TRACE_THERMAL_MODULES
+    const char *setting = getenv("DC_THERMAL_SPECIALIZED_PHASES");
+    bool generic = setting && strcmp(setting, "0") == 0;
+    bool expected_modules = generic_modules == (generic ? 1u : 0u);
+    for (unsigned phase = 0; phase < 26u; ++phase) {
+        bool used = phase != 3u && phase != 12u && phase != 15u && phase != 18u && phase != 22u;
+        expected_modules &= phase_modules[phase] == (used && !generic ? 1u : 0u);
+    }
+#endif
     fr_reactive_record_t hot,cold;bool found=false;
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+20,&hot,&found,err,sizeof(err))&&found);
     ASSERT_TRUE(fr_gpu_reactive_read_cell(g,0,20*64+21,&cold,&found,err,sizeof(err))&&found);
@@ -37,7 +60,13 @@ static void test_vulkan_face_exchange_matches_reference_and_paused_presentation_
     SDL_Surface *surface=SDL_CreateRGBSurfaceWithFormatFrom(pixels,480,270,32,480*4,SDL_PIXELFORMAT_ABGR8888);ASSERT_TRUE(surface);
     ASSERT_EQ(SDL_SaveBMP(surface,"build/screenshots/thermal_reference_pair.bmp"),0);SDL_FreeSurface(surface);free(pixels);
 #endif
-    dc_gpu_destroy(g);PASS();
+    dc_gpu_destroy(g);
+#ifdef FR_TRACE_THERMAL_MODULES
+    printf("Generic thermal shader loads %u, final two thermal phase loads %u/%u\n",
+           generic_modules, phase_modules[24], phase_modules[25]);
+    ASSERT_TRUE(expected_modules);
+#endif
+    PASS();
 }
 static void test_real_physics_tick_advances_heat_once_despite_rigid_and_mpm_substeps(void) {
     char err[256]={0};dc_gpu_t *g=NULL;fr_reactive_state_t stone,wood;
