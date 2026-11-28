@@ -55,6 +55,7 @@ static void test_packed_boundary_matches_sparse_concave_reference_with_bounded_r
         ASSERT_EQ(errors,0u);ASSERT_EQ(tested,1024u);ASSERT_TRUE(interior<=10u);ASSERT_EQ(polygon_errors,0u);ASSERT_TRUE(polygon_reads<=3u);
         ASSERT_EQ(mask_errors,0u);ASSERT_TRUE(mask_reads<=32u);
         ASSERT_EQ(clips,768u*18u);ASSERT_EQ(volume_errors,0u);ASSERT_EQ(face_tolerance_errors,0u);
+        ASSERT_EQ(face_errors,0u);
         ASSERT_TRUE(volume_reads<=6u);ASSERT_TRUE(face_reads<=6u);
         ASSERT_EQ(overlap_errors,0u);ASSERT_TRUE(overlap_reads<=6u);
     }
