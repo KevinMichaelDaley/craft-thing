@@ -151,17 +151,23 @@ static void test_clearing_terrain_color_restores_the_material_texture(void) {
   ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
   ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
   ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
-  ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
-  ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
-  uint32_t original=((uint32_t *)g->mapped)[cell];
-  colors->terrain[cell][0]=1.f; colors->terrain[cell][3]=1.f;
-  ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));
-  ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
-  ASSERT_EQ(((uint32_t *)g->mapped)[cell],0xff0000ffu);
-  colors->terrain[cell][3]=0.f;
-  ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));
-  ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
-  ASSERT_EQ(((uint32_t *)g->mapped)[cell],original);
+  fr_renderer_sun_t sun={.direction={0,-1,1},.color={1,1,1},.intensity=1,.known_sky=FR_SKY_TOP};
+  ASSERT_TRUE(fr_renderer_set_sources(g,NULL,0,sun));
+  const fr_renderer_mode_t modes[]={FR_RENDERER_ALBEDO,FR_RENDERER_LIT};
+  for(unsigned i=0;i<sizeof(modes)/sizeof(modes[0]);++i) {
+    ASSERT_TRUE(fr_renderer_set_mode(g,modes[i]));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    uint32_t original=((uint32_t *)g->mapped)[cell];
+    colors->terrain[cell][0]=1.f; colors->terrain[cell][3]=1.f;
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    uint32_t painted=((uint32_t *)g->mapped)[cell];
+    ASSERT_TRUE(painted!=original && (painted&0x00ffff00u)==0u && (painted&255u)>0u);
+    colors->terrain[cell][3]=0.f;
+    ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    ASSERT_EQ(((uint32_t *)g->mapped)[cell],original);
+  }
   free(colors); free(chunk); dc_gpu_destroy(g); PASS();
 }
 
