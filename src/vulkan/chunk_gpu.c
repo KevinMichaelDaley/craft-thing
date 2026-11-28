@@ -66,7 +66,8 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
     VkMemoryAllocateInfo alloc = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext = addressable ? &flags : NULL,
         .allocationSize = req.size, .memoryTypeIndex = type };
-    if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) != VK_SUCCESS) {
+    VkResult result = vkAllocateMemory(gpu->device, &alloc, NULL, memory);
+    if (result != VK_SUCCESS) {
         VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         *memory = VK_NULL_HANDLE;
@@ -75,14 +76,28 @@ static bool make_mapped_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
             if (!(req.memoryTypeBits & (1u << i)) || (flags & needed) != needed ||
                 i == type) continue;
             alloc.memoryTypeIndex = i;
-            if (vkAllocateMemory(gpu->device, &alloc, NULL, memory) == VK_SUCCESS)
+            result = vkAllocateMemory(gpu->device, &alloc, NULL, memory);
+            if (result == VK_SUCCESS)
                 break;
         }
-        if (!*memory) return error(err, cap, "Cannot allocate GPU chunk memory");
     }
-    if (vkBindBufferMemory(gpu->device, *buffer, *memory, 0) != VK_SUCCESS ||
-        vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped) != VK_SUCCESS)
-        return error(err, cap, "Cannot allocate or map GPU chunk memory");
+    const char *operation = "vkAllocateMemory";
+    if (result == VK_SUCCESS) {
+        operation = "vkBindBufferMemory";
+        result = vkBindBufferMemory(gpu->device, *buffer, *memory, 0);
+    } else {
+        *memory = VK_NULL_HANDLE;
+    }
+    if (result == VK_SUCCESS) {
+        operation = "vkMapMemory";
+        result = vkMapMemory(gpu->device, *memory, 0, bytes, 0, mapped);
+    }
+    if (result != VK_SUCCESS) {
+        *mapped = NULL;
+        if (err && cap) snprintf(err, cap, "%s returned %d (%llu bytes, memory type %u)",
+            operation, (int)result, (unsigned long long)req.size, alloc.memoryTypeIndex);
+        return false;
+    }
     if (props.memoryTypes[alloc.memoryTypeIndex].propertyFlags &
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
         gpu->mapped_local_bytes += req.size;
