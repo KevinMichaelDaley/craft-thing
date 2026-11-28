@@ -6,6 +6,7 @@
 #include "ferrum/assets/prop.h"
 #include "ferrum/structural/authoring.h"
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/runtime_body_gpu.h"
 
 static bool fail_descriptor_pool;
 VKAPI_ATTR VkResult VKAPI_CALL __real_vkCreateDescriptorPool(VkDevice, const VkDescriptorPoolCreateInfo *,
@@ -349,6 +350,41 @@ static void test_failed_resize_preserves_ready_component_plan(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_component_plan_only_offers_available_live_slots(void) {
+    fr_authored_request_t r=request();
+    pixel(1,1,1,FR_AUTHORED_RIGID,1);
+    pixel(6,6,2,FR_AUTHORED_RIGID,2);
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu);
+    char err[256];
+    uint32_t original=dc_gpu_body_capacity(gpu);
+    for (uint32_t i=0;i<original-1;++i) {
+        dc_gpu_body_t body={.active=1,.width=1,.height=1,.id=100+i};
+        ASSERT_TRUE(dc_gpu_spawn_body(gpu,body,err,sizeof(err)));
+    }
+    fr_authored_stage_diagnostic_t diagnostic;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&diagnostic,NULL,0,err,sizeof(err)));
+    ASSERT_EQ(diagnostic.failures,FR_AUTHORED_FAIL_CAPACITY);
+    ASSERT_EQ(diagnostic.rigid_components,2u);
+    ASSERT_TRUE(!dc_gpu_body_record(gpu,original-1)->body.active);
+
+    ASSERT_TRUE(dc_gpu_runtime_bodies_reserve(gpu,original*4,err,sizeof(err)));
+    dc_gpu_body_owner(gpu,original)->state=DC_BODY_OWNER_RESERVED;
+    dc_gpu_body_owner(gpu,original+1)->generation=UINT32_MAX;
+    dc_gpu_body_record(gpu,original+2)->reserved[0]=DC_GPU_STRUCTURAL_TAG;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    fr_authored_component_plan_t plans[2];
+    uint32_t count=0;
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].body_slot,original-1);
+    ASSERT_EQ(plans[1].body_slot,original+3);
+    ASSERT_EQ(dc_gpu_body_owner(gpu,original)->state,DC_BODY_OWNER_RESERVED);
+    ASSERT_EQ(dc_gpu_body_owner(gpu,original+1)->generation,UINT32_MAX);
+    ASSERT_EQ(dc_gpu_body_record(gpu,original+2)->reserved[0],DC_GPU_STRUCTURAL_TAG);
+    ASSERT_EQ(dc_gpu_body_record(gpu,0)->body.id,100u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 static void test_unpublished_water_keeps_dry_world_asleep(void) {
     fr_authored_request_t r = request();
     pixel(1, 1, FR_PROP_MATERIAL_WATER, 1, 0);
@@ -360,6 +396,10 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
 }
 
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--body-slots")) {
+        RUN(test_component_plan_only_offers_available_live_slots);
+        return g_fail!=0;
+    }
     if(argc==2 && !strcmp(argv[1],"--sparse-plan")) {
         RUN(test_parallel_plans_span_workgroups_and_sparse_tiles);
         return g_fail!=0;
@@ -377,6 +417,7 @@ int main(int argc,char **argv) {
     RUN(test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior);
     RUN(test_absent_normal_uses_renderer_default_not_raw_placeholder);
     RUN(test_parallel_plans_span_workgroups_and_sparse_tiles);
+    RUN(test_component_plan_only_offers_available_live_slots);
     printf("%d passed, %d failed\n", g_pass, g_fail);
     return g_fail != 0;
 }
