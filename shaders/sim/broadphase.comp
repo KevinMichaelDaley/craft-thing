@@ -79,7 +79,11 @@ bool member(uvec2 bits, uint slot) {
 
 #ifdef DC_RUNTIME_BODY_STORAGE
 #include "cached_chunk.glsl"
-void cached_terrain_pairs(Body body) {
+uint world_bucket(uvec2 x,uvec2 y,uvec2 extent) {
+    return ((y.x-params.origin_y.x+1u)%extent.y)*extent.x+
+            (x.x-params.origin_x.x+1u)%extent.x;
+}
+void cached_terrain_pairs(uint index,Body body,uint words,uint bit_base,uvec2 extent) {
     vec2 low,high;
     body_bounds(body,low,high);
     vec2 anchor=vec2(body.local_fp)/65536.;
@@ -91,9 +95,31 @@ void cached_terrain_pairs(Body body) {
             atomicOr(DC_DATA(2),2u);
             continue;
         }
+        uint bucket=world_bucket(x,y,extent);
+        atomicOr(DC_RUNTIME_WORK(bit_base+bucket*words+index/32u),1u<<(index%32u));
+        if(!pixel_body(body)) continue;
         uint page=cached_chunk_page(params.registry,params.slot_capacity,x,y);
         emit_world_pair(body.id,0u,page==0u?PAIR_BOUNDARY:PAIR_TERRAIN,x,y);
     }
+}
+void emit_cached_body_pair(Body a,Body b,uint bucket,uvec2 extent) {
+    if(!pixel_body(a) && !pixel_body(b)) return;
+    ivec2 delta;
+    if(!relative_chunk(b.chunk_x,a.chunk_x,delta.x) || !relative_chunk(b.chunk_y,a.chunk_y,delta.y)) return;
+    vec2 al,ah,bl,bh;
+    body_bounds(a,al,ah);body_bounds(b,bl,bh);
+    vec2 pa=vec2(a.local_fp)/65536.,pb=vec2(delta)*64.+vec2(b.local_fp)/65536.;
+    vec2 low=max(floor(al+pa),floor(bl+pb))-CONTACT_SKIN;
+    vec2 high=min(ceil(ah+pa),ceil(bh+pb))+CONTACT_SKIN;
+    if(any(greaterThanEqual(low,high))) return;
+    ivec2 tile=ivec2(low)>>6;
+    uvec2 x,y;
+    if(!shifted_chunk(a.chunk_x,tile.x,x) || !shifted_chunk(a.chunk_y,tile.y,y)) {
+        atomicOr(DC_DATA(2),2u);
+        return;
+    }
+    if(bucket==world_bucket(x,y,extent))
+        emit_world_pair(min(a.id,b.id),max(a.id,b.id),PAIR_BODY,x,y);
 }
 void register_cached_neighbor(uint slot,uvec2 extent) {
     uint record=params.registry+32u+8u*slot;
@@ -127,8 +153,8 @@ void runtime_broadphase() {
         Body body=DC_BODY(index);
         if(body.enabled==0u) return;
         if(body.visible==0u) {
-            if(pixel_body(body) && cached_chunk_page(params.registry,params.slot_capacity,body.chunk_x,body.chunk_y)!=0u)
-                cached_terrain_pairs(body);
+            if(cached_chunk_page(params.registry,params.slot_capacity,body.chunk_x,body.chunk_y)!=0u)
+                cached_terrain_pairs(index,body,words,bit_base,extent);
             return;
         }
         atomicAdd(DC_DATA(4),1u);
@@ -153,7 +179,7 @@ void runtime_broadphase() {
         uint page=DC_DATA(HEADER_WORDS+2u*bucket);
         if(page!=0u && page!=0xffffffffu) kind=PAIR_TERRAIN;
     }
-    emit_pair(first.id,0u,kind,chunk);
+    if(first.visible!=0u) emit_pair(first.id,0u,kind,chunk);
     ivec2 first_low,first_high,first_bucket_low,first_bucket_high;
     bounds(first,first_low,first_high);bucket_bounds(first,first_bucket_low,first_bucket_high);
     for(uint word=a/32u;word<words;word++) {
@@ -162,6 +188,10 @@ void runtime_broadphase() {
         while(mask!=0u) {
             uint b=word*32u+uint(findLSB(mask));mask&=mask-1u;
             Body second=DC_BODY(b);
+            if(first.visible==0u || second.visible==0u) {
+                emit_cached_body_pair(first,second,bucket,extent);
+                continue;
+            }
             ivec2 second_low,second_high,second_bucket_low,second_bucket_high;
             bounds(second,second_low,second_high);
             if(!all(lessThan(first_low,second_high))||!all(lessThan(second_low,first_high))) continue;
