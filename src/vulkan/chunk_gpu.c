@@ -164,7 +164,7 @@ bool dc_gpu_chunks_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
                &gpu->chunk_staging_memory, &gpu->chunk_mapped, err, cap) &&
            dc_gpu_make_hydro_buffer(gpu, DC_HYDRO_PARTICLES, particle_bytes, &gpu->particle_buffer,
                &gpu->particle_memory, NULL, err, cap) &&
-           dc_gpu_make_staging_buffer(gpu, particle_bytes, &gpu->particle_staging_buffer,
+           dc_gpu_make_staging_buffer(gpu, sizeof(((dc_chunk_t *)0)->particles), &gpu->particle_staging_buffer,
                &gpu->particle_staging_memory, &gpu->particle_mapped, err, cap) &&
            dc_gpu_make_mapped_buffer(gpu, dc_gpu_slot_capacity(gpu) * sizeof(uint32_t),
                &gpu->particle_count_buffer, &gpu->particle_count_memory,
@@ -268,8 +268,8 @@ bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
         upload ? gpu->chunk_buffer : gpu->chunk_staging_buffer, 1, &region);
     if (particles) {
         VkDeviceSize particle_stride = DC_MPM_PARTICLES_PER_CHUNK * sizeof(dc_mpm_particle_t);
-        region.srcOffset = slot * particle_stride;
-        region.dstOffset = region.srcOffset;
+        region.srcOffset = upload ? 0 : slot * particle_stride;
+        region.dstOffset = upload ? slot * particle_stride : 0;
         region.size = particle_stride;
         vkCmdCopyBuffer(gpu->command,
             upload ? gpu->particle_staging_buffer : gpu->particle_buffer,
@@ -348,8 +348,7 @@ bool dc_gpu_upload_chunk_exact(dc_gpu_t *gpu, uint32_t slot, const dc_chunk_t *c
     ((uint32_t *)gpu->marker_count_b_mapped)[slot] = chunk->marker_count;
     memset((uint32_t *)gpu->marker_grid_mapped + (size_t)slot * DC_CHUNK_CELLS,
            0, DC_CHUNK_CELLS * sizeof(uint32_t));
-    dc_mpm_particle_t *particles = (dc_mpm_particle_t *)gpu->particle_mapped +
-        (size_t)slot * DC_MPM_PARTICLES_PER_CHUNK;
+    dc_mpm_particle_t *particles = gpu->particle_mapped;
     memcpy(particles, chunk->particles, sizeof(chunk->particles));
     for (uint32_t i = 0; i < DC_CHUNK_CELLS; ++i) {
         uint32_t material = chunk->cells[i].material;
@@ -412,10 +411,7 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
     chunk->particle_count = ((uint32_t *)gpu->particle_count_mapped)[slot];
     if (chunk->particle_count > DC_MPM_PARTICLES_PER_CHUNK)
         return error(err, cap, "GPU particle count exceeds chunk capacity");
-    memcpy(chunk->particles,
-           (dc_mpm_particle_t *)gpu->particle_mapped +
-               (size_t)slot * DC_MPM_PARTICLES_PER_CHUNK,
-           sizeof(chunk->particles));
+    memcpy(chunk->particles, gpu->particle_mapped, sizeof(chunk->particles));
     return true;
 }
 

@@ -269,12 +269,12 @@ bool fr_gpu_reactive_seed_particle(dc_gpu_t *g,uint32_t particle,
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,VK_ACCESS_2_MEMORY_WRITE_BIT,
         VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
     VkDeviceSize offset=(VkDeviceSize)particle*sizeof(dc_mpm_particle_t);
-    VkBufferCopy copy={offset,offset,sizeof(dc_mpm_particle_t)};
+    VkBufferCopy copy={offset,0,sizeof(dc_mpm_particle_t)};
     vkCmdCopyBuffer(g->command,g->particle_buffer,g->particle_staging_buffer,1,&copy);
     fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
         VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
     if(!fr_renderer_submit(g)) return error(err,cap,"Cannot inspect imported particle owner");
-    const dc_mpm_particle_t *p=(const dc_mpm_particle_t *)g->particle_mapped+particle;
+    const dc_mpm_particle_t *p=g->particle_mapped;
     if(!p->mass_fp||p->material!=state->material||(p->id_lo|p->id_hi)==0)
         return error(err,cap,"Reactive particle source is absent or has another material");
     if(!fr_gpu_reactive_initialize(g,err,cap)) return false;
