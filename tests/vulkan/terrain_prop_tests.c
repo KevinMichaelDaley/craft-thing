@@ -4,6 +4,8 @@
 #include <string.h>
 
 #include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/body_address_gpu.h"
+#include "../../src/vulkan/renderer_internal.h"
 #include "ferrum/assets/prop_gpu.h"
 #include "ferrum/renderer/gpu.h"
 #include "ferrum/structural/gpu.h"
@@ -290,6 +292,61 @@ static void test_old_save_recovers_missing_granular_support_history(void) {
     ASSERT_EQ(count,1u);dc_gpu_destroy(g);free(chunk);PASS();
 }
 
+static void test_imported_surface_overrides_survive_palette_refresh(void) {
+    dc_gpu_t *g=context(); ASSERT_TRUE(g);
+    char err[256];
+    ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+    VkDescriptorBufferInfo bindings[3];
+    ASSERT_TRUE(fr_renderer_authored_bindings(g,bindings));
+    /* Word 15 is inside the descriptor, beyond the last editable style. */
+    ASSERT_TRUE(fr_renderer_begin(g));
+    vkCmdFillBuffer(g->command,bindings[2].buffer,15u*4u,4u,1u);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+    ASSERT_TRUE(fr_renderer_submit(g));
+    uint8_t *bytes=malloc(g_asset.size); ASSERT_TRUE(bytes);
+    memcpy(bytes,g_bytes,g_asset.size);
+    const unsigned count=g_asset.width*g_asset.height;
+    for(unsigned i=0;i<2;i++) {
+        uint8_t *p=bytes+g_asset.data_offset+8u*i;
+        p[0]=11u+i;p[1]=0;p[2]=1;p[3]=0;
+        uint8_t *a=bytes+g_asset.data_offset+8u*count+64u*i;
+        const float normal[3]={0,1,0},roughness=.125f,relief=.625f;
+        memcpy(a+12,&roughness,4);memcpy(a+16,normal,12);memcpy(a+28,&relief,4);
+        a[60]=7u;
+    }
+    uint32_t crc=UINT32_MAX;
+    for(size_t i=0;i<g_asset.size;i++) {
+        if(i>=44&&i<48) continue;
+        crc^=bytes[i];
+        for(unsigned bit=0;bit<8;bit++) crc=(crc>>1)^(0xedb88320u&(0u-(crc&1u)));
+    }
+    crc=~crc;for(unsigned i=0;i<4;i++) bytes[44+i]=(uint8_t)(crc>>(i*8));
+    fr_prop_asset_t asset;
+    ASSERT_TRUE(fr_prop_asset_open(&asset,bytes,g_asset.size,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&asset,0,32,32,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+    dc_gpu_address_buffer_t readback={0};
+    ASSERT_TRUE(dc_gpu_address_buffer_create(g,64,true,&readback,err,sizeof(err)));
+    ASSERT_TRUE(fr_renderer_begin(g));
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_READ_BIT);
+    VkBufferCopy copy={(32u*64u+32u)*32u,0,64};
+    vkCmdCopyBuffer(g->command,bindings[0].buffer,readback.buffer,1,&copy);
+    fr_renderer_barrier(g->command,VK_PIPELINE_STAGE_2_TRANSFER_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_HOST_BIT,VK_ACCESS_2_HOST_READ_BIT);
+    ASSERT_TRUE(fr_renderer_submit(g));
+    fr_appearance_texel_t surfaces[2];
+    memcpy(surfaces,readback.mapped,sizeof(surfaces));
+    dc_gpu_address_buffer_destroy(g,&readback);dc_gpu_destroy(g);free(bytes);
+    for(unsigned i=0;i<2;i++) {
+        ASSERT_EQ(surfaces[i].roughness,.125f); ASSERT_EQ(surfaces[i].relief,.625f);
+        ASSERT_EQ(surfaces[i].normal[0],0.f); ASSERT_EQ(surfaces[i].normal[1],1.f);
+        ASSERT_EQ(surfaces[i].normal[2],0.f);
+    }
+    PASS();
+}
+
 int main(void) {
     FILE *file=fopen("assets/props/level_piece01.prop/asset.cprop","rb");
     if (!file) return 2;
@@ -298,6 +355,7 @@ int main(void) {
     if (!g_bytes || fread(g_bytes,1,(size_t)size,file)!=(size_t)size) return 2;
     fclose(file);
     if (!fr_prop_asset_open(&g_asset,g_bytes,(size_t)size,NULL,0)) return 2;
+    RUN(test_imported_surface_overrides_survive_palette_refresh);
     RUN(test_imported_soil_and_gravel_start_at_full_cell_density);
     RUN(test_old_save_recovers_missing_granular_support_history);
     RUN(test_actual_scene_places_exact_materials_colors_water_and_holes);
