@@ -47,3 +47,7 @@ Two new GPU failures reproduced: a descriptor-pool allocation failure during res
 **2026-11-28T05:37:17Z**
 
 Successful terrain-prop admission now publishes the presence of committed water from the GPU. A linked regression counted CPU pixel reads on placement before the fix; all eight final terrain-prop cases pass with zero such reads, dry-state preservation on rejection, 1,504 water pixels and exact material/pigment checks. Input file validation is still performed on admission.
+
+**2026-11-28T06:09:57Z**
+
+GPU preflight now checks that each declared member owns a valid structural pixel and that each member, joint and anchor endpoint resolves uniquely to a stable node. Real red cases admitted an unowned member and an unresolved endpoint. Duplicate node identity and zero generation are rejected. The final ten staging tests, including corrected-input retry, pass on RTX A2000 under core and synchronization validation. The compiled shader passes spirv-val. Live all-role reservation, root contact and publication still require implementation.

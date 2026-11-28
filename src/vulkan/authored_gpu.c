@@ -10,6 +10,7 @@ enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
        STAGE_PHASES = 9 };
 _Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
+_Static_assert(FR_STRUCTURAL_MEMBER_CAPACITY < 32u, "Member coverage must fit a GPU word");
 struct dc_gpu_authored_stage {
     VkBuffer buffer;
     VkDeviceMemory memory;

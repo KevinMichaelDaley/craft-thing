@@ -188,6 +188,16 @@ static void test_structural_references_require_existing_nodes(void) {
         ASSERT_TRUE(d.failures & FR_AUTHORED_FAIL_INPUT);
         *references[i]=original;
     }
+    graph.nodes[1].id=46;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+    ASSERT_TRUE(d.failures & FR_AUTHORED_FAIL_INPUT);
+    graph.nodes[1].id=9;
+    graph.anchors[0].generation=0;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+    ASSERT_TRUE(d.failures & FR_AUTHORED_FAIL_INPUT);
+    graph.anchors[0].generation=1;
     ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
     ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
     ASSERT_EQ(d.failures,0u);
