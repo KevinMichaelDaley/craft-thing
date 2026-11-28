@@ -92,6 +92,12 @@ The runtime test writes `runtime-idle.bmp`, `runtime-walk.bmp`,
 `build/agents/beaver-player/sustained/`. The split-screen test writes
 `split-start.bmp` and `split-walk.bmp` under `build/agents/beaver-player/split/`.
 
+The two-seat action test aims the keyboard fire bolt at (175, 56) and the
+controller ice storm at (211, 42). At cast frame six it finds one flaming coal
+body and 65,536 Q16 fluid at the ice target. In the harvest case the seats chew
+wood at (73, 40) and (137, 40) in turn. Removing each cell credits exactly
+39,322 Q16 wood to its player's inventory.
+
 Use A/D to move, Space to jump, and hold C to harvest. Select fire with 1 or ice
 with 2, then press Q to cast the selected spell. E drops a carried body. The
 mouse aims into the keyboard player's viewport. On a controller, Start joins,

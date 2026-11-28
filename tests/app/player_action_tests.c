@@ -369,6 +369,58 @@ static void test_keyboard_and_controller_manipulate_separate_bodies(void) {
     PASS();
 }
 
+static void test_two_players_cast_different_spells_in_one_update(void) {
+    ASSERT_TRUE(open_fixture() && pad(42, SDL_CONTROLLER_BUTTON_START));
+    dc_gpu_t *gpu = dc_level_view_gpu(view);
+    uint32_t bolt = dc_gpu_next_body_id(gpu);
+    ASSERT_TRUE(bolt && aim(0, 175, 56) && aim(1, 211, 42));
+    ASSERT_TRUE(tap(SDL_SCANCODE_Q) && pad(42, SDL_CONTROLLER_BUTTON_Y));
+    dc_cell_t ice, fire;
+    ASSERT_TRUE(step(.25f) && read_cell(211, 42, &ice));
+    ASSERT_EQ(ice.fluid_mass, 0u);
+    ASSERT_EQ(dc_gpu_next_body_id(gpu), bolt);
+    ASSERT_TRUE(step(.15625f) && read_cell(211, 42, &ice) && read_cell(175, 56, &fire));
+    ASSERT_EQ(ice.fluid_mass, DC_FLUID_FULL);
+    ASSERT_EQ(fire.fluid_mass, 0u);
+    fr_reactive_record_t parcel;
+    bool found = false;
+    ASSERT_TRUE(fr_gpu_reactive_read_body(gpu, bolt, 1, 1, &parcel, &found, err, sizeof(err)) && found);
+    ASSERT_EQ(parcel.owner.key[0], bolt);
+    ASSERT_EQ(parcel.state.material, DC_MATERIAL_COAL);
+    ASSERT_TRUE(parcel.state.flags & FR_REACTIVE_FLAMING);
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)) && step(.25f) && step(.25f));
+    ASSERT_EQ(dc_gpu_next_body_id(gpu), bolt + 1u);
+    PASS();
+}
+
+static void test_two_players_harvest_only_their_own_wood(void) {
+    ASSERT_TRUE(open_fixture() && pad(42, SDL_CONTROLLER_BUTTON_START));
+    const uint32_t target_x[] = {73, 137};
+    for (unsigned seat = 0; seat < 2; seat++) {
+        ASSERT_TRUE(paint(target_x[seat], 40, DC_MATERIAL_WOOD));
+        ASSERT_TRUE(aim(seat, target_x[seat], 40));
+    }
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    for (unsigned active = 0; active < 2; active++) {
+        if (active == 0) ASSERT_TRUE(key(SDL_KEYDOWN, SDL_SCANCODE_C));
+        else ASSERT_TRUE(key(SDL_KEYUP, SDL_SCANCODE_C) && pad(42, SDL_CONTROLLER_BUTTON_B));
+        for (unsigned tick = 0; tick < 5; tick++) {
+            dc_players_frame_time(view, .15);
+            ASSERT_TRUE(step(1.f / 60.f));
+        }
+        for (unsigned seat = 0; seat < 2; seat++) {
+            dc_cell_t cell;
+            fr_player_inventory_t inventory;
+            ASSERT_TRUE(read_cell(target_x[seat], 40, &cell));
+            ASSERT_TRUE(dc_players_inventory(view, seat, &inventory));
+            uint64_t harvested = seat <= active ? (uint64_t)lround(DC_DENSITY_WOOD * DC_FLUID_FULL) : 0;
+            ASSERT_EQ(cell.material, harvested ? DC_MATERIAL_AIR : DC_MATERIAL_WOOD);
+            ASSERT_EQ(fr_player_inventory_mass(&inventory, DC_ITEM_WOOD), harvested);
+        }
+    }
+    PASS();
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "--cast-input-ownership") == 0) {
         RUN(test_reconnect_cancels_only_the_disconnected_seats_cast);
@@ -384,6 +436,8 @@ int main(int argc, char **argv) {
     RUN(test_empty_inventory_places_neither_terrain_nor_body);
     RUN(test_paid_placement_is_typed_and_rejects_occupied_cells);
     RUN(test_keyboard_and_controller_manipulate_separate_bodies);
+    RUN(test_two_players_cast_different_spells_in_one_update);
+    RUN(test_two_players_harvest_only_their_own_wood);
     printf("Results: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
