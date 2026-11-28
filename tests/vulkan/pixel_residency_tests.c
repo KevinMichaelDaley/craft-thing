@@ -36,7 +36,7 @@ static void check_cached_contact_ownership(dc_gpu_t *gpu,dc_chunk_t *chunk,unsig
     }
 }
 
-static void cached_stone(unsigned world_x) {
+static void cached_stone(unsigned world_x,unsigned camera_chunk) {
     char err[256]={0};dc_gpu_t *gpu=NULL;
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));ASSERT_TRUE(chunk);
     ASSERT_TRUE(dc_gpu_create(&gpu,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
@@ -47,7 +47,8 @@ static void cached_stone(unsigned world_x) {
                 chunk->cells[y*64+x].material=DC_MATERIAL_STONE;
         ASSERT_TRUE(dc_gpu_upload_chunk(gpu,slot,chunk,err,sizeof(err)));
     }
-    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,camera_chunk,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){camera_chunk,0},err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     for(unsigned tick=0;tick<4;tick++) ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
     dc_gpu_world_body_t body;dc_gpu_body_motion_t motion;
@@ -55,29 +56,35 @@ static void cached_stone(unsigned world_x) {
     ASSERT_TRUE(dc_gpu_read_body_motion(gpu,body.body.id,&motion,err,sizeof(err)));
     dc_gpu_body_t solver_body;
     ASSERT_TRUE(dc_gpu_read_body_id(gpu,body.body.id,&solver_body,err,sizeof(err)));
-    int64_t expected_x=body.chunk.x*(64<<16)+body.body.x_fp;
+    int64_t expected_x=(body.chunk.x-camera_chunk)*(64<<16)+body.body.x_fp;
     int64_t expected_y=body.chunk.y*(64<<16)+body.body.y_fp;
     unsigned pixels=0;
     ASSERT_TRUE(dc_gpu_read_pixel_shape(gpu,body.body.id,NULL,0,&pixels,err,sizeof(err)));
     float mass=motion.mass;int velocity=body.body.vy_fp;
     printf("Known cached stone x%u: pixels%u mass%.6f vy%d\n",world_x,pixels,mass,velocity);
-    if(world_x==60) check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u);
+    if(world_x==60 && !camera_chunk) check_cached_contact_ownership(gpu,chunk,(unsigned)(body.body.y_fp>>16)+8u);
     dc_gpu_destroy(gpu);free(chunk);
     ASSERT_EQ(pixels,128u);ASSERT_TRUE(fabsf(mass-128.f*2.7f)<.002f);
     ASSERT_EQ(solver_body.x_fp,expected_x);
     ASSERT_EQ(solver_body.y_fp,expected_y);
     ASSERT_EQ(velocity,4*16384);PASS();
 }
-static void test_onscreen_known_stone_advances(void) {cached_stone(20);}
-static void test_partly_offscreen_known_stone_advances(void) {cached_stone(60);}
-static void test_wholly_offscreen_known_stone_across_cached_seam_advances(void) {cached_stone(124);}
+static void test_onscreen_known_stone_advances(void) {cached_stone(20,0);}
+static void test_partly_offscreen_known_stone_advances(void) {cached_stone(60,0);}
+static void test_wholly_offscreen_known_stone_across_cached_seam_advances(void) {cached_stone(124,0);}
+static void test_left_cached_reference_advances(void) {cached_stone(60,1);}
 int main(int argc,char **argv) {
+    if(argc==2 && strcmp(argv[1],"--left")==0) {
+        RUN(test_left_cached_reference_advances);
+        return g_fail!=0;
+    }
     if(argc==2 && strcmp(argv[1],"--seam")==0) {
         RUN(test_partly_offscreen_known_stone_advances);
         return g_fail!=0;
     }
     RUN(test_onscreen_known_stone_advances);
     RUN(test_partly_offscreen_known_stone_advances);
+    RUN(test_left_cached_reference_advances);
     RUN(test_wholly_offscreen_known_stone_across_cached_seam_advances);
     printf("%d passed, %d failed\n",g_pass,g_fail);return g_fail!=0;
 }
