@@ -140,7 +140,33 @@ test_renderer_uses_textures_preserves_holes_and_paused_physics(void) {
   ASSERT_EQ(g_hierarchy_recordings,0u);
   PASS();
 }
+static void test_clearing_terrain_color_restores_the_material_texture(void) {
+  dc_gpu_t *g=NULL; char err[256];
+  ASSERT_TRUE(dc_gpu_create(&g,64,64,"build/shaders/pattern.comp.spv",err,sizeof(err)));
+  dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
+  dc_chunk_colors_t *colors=calloc(1,sizeof(*colors));
+  ASSERT_TRUE(chunk && colors);
+  unsigned cell=18u*64u+26u;
+  chunk->cells[cell].material=DC_MATERIAL_STONE;
+  ASSERT_TRUE(dc_gpu_upload_chunk(g,0,chunk,err,sizeof(err)));
+  ASSERT_TRUE(dc_gpu_set_page(g,0,0,0,err,sizeof(err)));
+  ASSERT_TRUE(fr_renderer_enable(g,err,sizeof(err)));
+  ASSERT_TRUE(fr_renderer_set_mode(g,FR_RENDERER_ALBEDO));
+  ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+  uint32_t original=((uint32_t *)g->mapped)[cell];
+  colors->terrain[cell][0]=1.f; colors->terrain[cell][3]=1.f;
+  ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));
+  ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+  ASSERT_EQ(((uint32_t *)g->mapped)[cell],0xff0000ffu);
+  colors->terrain[cell][3]=0.f;
+  ASSERT_TRUE(fr_renderer_upload_chunk_colors(g,0,colors,err,sizeof(err)));
+  ASSERT_TRUE(fr_renderer_render(g,err,sizeof(err)));
+  ASSERT_EQ(((uint32_t *)g->mapped)[cell],original);
+  free(colors); free(chunk); dc_gpu_destroy(g); PASS();
+}
+
 int main(void) {
+  RUN(test_clearing_terrain_color_restores_the_material_texture);
   RUN(test_renderer_uses_textures_preserves_holes_and_paused_physics);
   printf("Results: %d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
