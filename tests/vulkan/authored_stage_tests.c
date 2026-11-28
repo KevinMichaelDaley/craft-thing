@@ -366,6 +366,11 @@ static void test_component_plan_only_offers_available_live_slots(void) {
     ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&diagnostic,NULL,0,err,sizeof(err)));
     ASSERT_EQ(diagnostic.failures,FR_AUTHORED_FAIL_CAPACITY);
     ASSERT_EQ(diagnostic.rigid_components,2u);
+    fr_authored_component_plan_t plans[2]={{.body_slot=UINT32_MAX}};
+    uint32_t count=0;
+    ASSERT_TRUE(!fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_TRUE(strstr(err,"free body slots"));
+    ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].body_slot,UINT32_MAX);
     ASSERT_TRUE(!dc_gpu_body_record(gpu,original-1)->body.active);
 
     ASSERT_TRUE(dc_gpu_runtime_bodies_reserve(gpu,original*8,err,sizeof(err)));
@@ -373,8 +378,6 @@ static void test_component_plan_only_offers_available_live_slots(void) {
     dc_gpu_body_owner(gpu,original+1)->generation=UINT32_MAX;
     dc_gpu_body_record(gpu,original+2)->reserved[0]=DC_GPU_STRUCTURAL_TAG;
     ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
-    fr_authored_component_plan_t plans[2];
-    uint32_t count=0;
     ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
     ASSERT_EQ(count,2u); ASSERT_EQ(plans[0].body_slot,original-1);
     ASSERT_EQ(plans[1].body_slot,original+3);
