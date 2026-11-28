@@ -6,7 +6,8 @@
 #include "gpu_internal.h"
 
 enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
-       STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 22, STAGE_PHASES = 8 };
+       STAGE_PLAN_PREFIX_WORDS = 12, STAGE_PLAN_WORDS = 22, STAGE_GRAPH_REFERENCES = 8,
+       STAGE_PHASES = 9 };
 _Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
 struct dc_gpu_authored_stage {
@@ -158,6 +159,13 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
     uint32_t push[4] = {r->width, r->height, r->structure != NULL, 0};
     vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     for (uint32_t phase = 0; phase < STAGE_PHASES; phase++) {
+        uint32_t groups = (count + 127u) / 128u;
+        if (phase == STAGE_GRAPH_REFERENCES) {
+            if (!r->structure) continue;
+            groups = r->structure->node_count + r->structure->member_count +
+                     r->structure->joint_count + r->structure->anchor_count;
+            if (!groups) continue;
+        }
         vkCmdBindPipeline(gpu->command, VK_PIPELINE_BIND_POINT_COMPUTE, s->pipelines[phase]);
         if (phase == 6u) {
             uint32_t parity = 0;
@@ -171,7 +179,7 @@ static bool stage_request(dc_gpu_t *gpu, struct dc_gpu_authored_stage *s,
             push[3] = parity;
             vkCmdPushConstants(gpu->command, s->layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
         } else {
-            vkCmdDispatch(gpu->command, (count + 127u) / 128u, 1, 1);
+            vkCmdDispatch(gpu->command, groups, 1, 1);
             stage_barrier(gpu, false);
         }
     }
