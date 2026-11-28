@@ -55,3 +55,7 @@ GPU preflight now checks that each declared member owns a valid structural pixel
 **2026-11-28T06:25:42Z**
 
 Reproduced structural staging accepting canonical dense wood with an ordinary wood mechanical profile, in disagreement with fr_structural_material_map. GPU staging now rejects materials without a registered structural profile and preserves all rigid-role material support. All 11 staging cases passed on the RTX A2000 with synchronization validation, as did an expanded 36-combination check covering twelve canonical material IDs against each of the three declared profiles. SPIR-V validated. Atomic live placement remains open.
+
+**2026-11-28T06:42:28Z**
+
+The GPU preflight admitted a NaN joint stiffness. It now validates all eight mechanical coefficients and the orientation of every joint and anchor in parallel. Six native failure cases cover nonfinite stiffness, strength and orientation and negative capacity/friction. Valid signed angles and corrected retry pass. All 12 authored staging cases passed RTX core/synchronization validation; SPIR-V validates.

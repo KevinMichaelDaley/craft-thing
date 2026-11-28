@@ -11,6 +11,12 @@ enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
 _Static_assert(sizeof(fr_authored_component_plan_t) == 10u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
 _Static_assert(FR_STRUCTURAL_MEMBER_CAPACITY < 32u, "Member coverage must fit a GPU word");
+_Static_assert(offsetof(fr_structural_gpu_joint_t, normal_stiffness) == 5 * sizeof(uint32_t) &&
+               offsetof(fr_structural_gpu_joint_t, normal_angle) == 13 * sizeof(uint32_t),
+               "Authored joint coefficient layout changed");
+_Static_assert(offsetof(fr_structural_gpu_anchor_t, normal_stiffness) == 13 * sizeof(uint32_t) &&
+               offsetof(fr_structural_gpu_anchor_t, normal_angle) == 21 * sizeof(uint32_t),
+               "Authored anchor coefficient layout changed");
 struct dc_gpu_authored_stage {
     VkBuffer buffer;
     VkDeviceMemory memory;

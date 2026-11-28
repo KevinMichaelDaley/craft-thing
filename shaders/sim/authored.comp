@@ -6,6 +6,7 @@ layout(push_constant) uniform Params { uint width,height,has_graph,padding; } pa
 const uint INVALID=0xffffffffu;
 const uint GRAPH_WORDS=2320u;
 const uint GRAPH_NODES=16u,GRAPH_MEMBERS=400u,GRAPH_JOINTS=528u,GRAPH_ANCHORS=1552u;
+const uint JOINT_STIFFNESS_WORD=5u,ANCHOR_STIFFNESS_WORD=13u,INTERFACE_ANGLE_INDEX=8u;
 const uint MEMBER_COVERAGE_WORD=21u;
 uint pixels() {return params.width*params.height;}
 uint physical(uint i) {return 24u+i*2u;}
@@ -29,10 +30,10 @@ void check_graph_record() {
     else if(record>=first_joint) {record-=first_joint;start=GRAPH_JOINTS;stride=16u;}
     else if(needs_first) {record-=nodes;start=GRAPH_MEMBERS;stride=8u;}
     uint table=g+start,entry=table+record*stride,id=words[entry];
-    if ((start==GRAPH_JOINTS || start==GRAPH_ANCHORS) && lane<9u) {
-        uint coefficients=entry+(start==GRAPH_JOINTS ? 5u : 13u);
+    if ((start==GRAPH_JOINTS || start==GRAPH_ANCHORS) && lane<=INTERFACE_ANGLE_INDEX) {
+        uint coefficients=entry+(start==GRAPH_JOINTS ? JOINT_STIFFNESS_WORD : ANCHOR_STIFFNESS_WORD);
         float value=uintBitsToFloat(words[coefficients+lane]);
-        if (isnan(value) || isinf(value) || (lane<8u && value<0.)) reject(INVALID);
+        if (isnan(value) || isinf(value) || (lane<INTERFACE_ANGLE_INDEX && value<0.)) reject(INVALID);
     }
     if(lane==0u) {
         first_matches=0u;second_matches=0u;
