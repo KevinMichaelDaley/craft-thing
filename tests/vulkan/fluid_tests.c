@@ -734,6 +734,31 @@ static void test_chunk_velocity_survives_gpu_round_trip(void) {
     PASS();
 }
 
+static void check_cached_face_velocity(bool shift) {
+    char err[256]={0};
+    dc_chunk_t left={0},right={.coord={1,0}},saved={0};
+    dc_gpu_t *gpu=make_grid(&left,&right,err,sizeof(err));
+    ASSERT_TRUE(gpu);
+    const unsigned x=20,y=10;
+    dc_face_velocity_t *faces=gpu->velocity_mapped;
+    faces[y*128+x]=(dc_face_velocity_t){2.25f,-0.75f};
+    faces[y*128+x+64]=(dc_face_velocity_t){-3.5f,1.5f};
+    if(shift) ASSERT_TRUE(dc_gpu_shift_velocity(gpu,1,0,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,1,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_download_chunk(gpu,0,&saved,err,sizeof(err)));
+    ASSERT_EQ(saved.face_velocity[y*64+x].x,2.25f);
+    ASSERT_EQ(saved.face_velocity[y*64+x].y,-0.75f);
+    ASSERT_EQ(faces[y*128+x].x,-3.5f);
+    ASSERT_EQ(faces[y*128+x].y,1.5f);
+    ASSERT_TRUE(dc_gpu_set_page(gpu,1,0,0,err,sizeof(err)));
+    ASSERT_EQ(faces[y*128+x+64].x,2.25f);
+    ASSERT_EQ(faces[y*128+x+64].y,-0.75f);
+    dc_gpu_destroy(gpu);
+    PASS();
+}
+static void test_displaced_water_velocity_stays_with_chunk(void) {check_cached_face_velocity(false);}
+static void test_camera_shift_retains_evicted_water_velocity(void) {check_cached_face_velocity(true);}
+
 static void test_cropped_viewport_edges_are_internal_fluid_faces(void) {
     char err[256] = {0};
     dc_chunk_t *chunks = calloc(24, sizeof(*chunks));
@@ -1054,7 +1079,10 @@ static void test_closed_displacement_retains_and_reports_overflow(void) {
     PASS();
 }
 
-int main(void) {
+int main(int argc,char **argv) {
+    RUN(test_displaced_water_velocity_stays_with_chunk);
+    RUN(test_camera_shift_retains_evicted_water_velocity);
+    if(argc==2 && strcmp(argv[1],"--cached-velocity")==0) return g_fail!=0;
     RUN(test_rigid_displacement_raises_water_without_losing_volume);
     RUN(test_closed_displacement_retains_and_reports_overflow);
     RUN(test_water_falls_and_crosses_resident_chunk_edge);
