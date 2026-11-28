@@ -128,7 +128,7 @@ static void test_onscreen_known_stone_advances(void) {cached_stone(20,0);}
 static void test_partly_offscreen_known_stone_advances(void) {cached_stone(60,0);}
 static void test_wholly_offscreen_known_stone_across_cached_seam_advances(void) {cached_stone(124,0);}
 static void test_left_cached_reference_advances(void) {cached_stone(60,1);}
-static void submerged_wood(unsigned camera_chunk) {
+static void submerged_wood(dc_chunk_coord_t camera) {
     char err[256]={0};
     dc_gpu_t *gpu=NULL;
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk));
@@ -144,21 +144,29 @@ static void submerged_wood(unsigned camera_chunk) {
         }
         ASSERT_TRUE(dc_gpu_upload_chunk(gpu,slot,chunk,err,sizeof(err)));
     }
-    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,camera_chunk,err,sizeof(err)));
-    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,(dc_chunk_coord_t){camera_chunk,0},err,sizeof(err)));
+    unsigned page=camera.y==0 && camera.x>=0 && camera.x<3 ? (unsigned)camera.x : UINT32_MAX;
+    ASSERT_TRUE(dc_gpu_set_page(gpu,0,0,page,err,sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_body_origin(gpu,camera,err,sizeof(err)));
     ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
     ASSERT_TRUE(dc_gpu_rigid_step(gpu,err,sizeof(err)));
     dc_gpu_world_body_t body;
     ASSERT_TRUE(dc_gpu_read_world_body(gpu,0x80000001u,&body,err,sizeof(err)));
-    printf("Submerged wood camera %u: velocity %d,%d\n",camera_chunk,body.body.vx_fp,body.body.vy_fp);
+    printf("Submerged wood camera %lld,%lld: velocity %d,%d\n",(long long)camera.x,(long long)camera.y,body.body.vx_fp,body.body.vy_fp);
     dc_gpu_destroy(gpu);free(chunk);
     ASSERT_TRUE(fabsf(body.body.vy_fp/65536.f+1.f/6.f)<.003f);
     ASSERT_TRUE(fabsf(body.body.vx_fp/65536.f-.025f)<.001f);
     PASS();
 }
-static void test_visible_wet_wood_responds_to_moving_water(void) {submerged_wood(2);}
-static void test_cached_wet_wood_responds_to_moving_water(void) {submerged_wood(0);}
+static void test_visible_wet_wood_responds_to_moving_water(void) {submerged_wood((dc_chunk_coord_t){2,0});}
+static void test_cached_wet_wood_responds_to_moving_water(void) {submerged_wood((dc_chunk_coord_t){0,0});}
+static void test_distant_camera_keeps_cached_buoyancy_and_drag(void) {
+    submerged_wood((dc_chunk_coord_t){INT64_C(1)<<40,-(INT64_C(1)<<40)});
+}
 int main(int argc,char **argv) {
+    if(argc==1 || (argc==2 && strcmp(argv[1],"--distant")==0)) {
+        RUN(test_distant_camera_keeps_cached_buoyancy_and_drag);
+        if(argc==2) return g_fail!=0;
+    }
     if(argc==1 || (argc==2 && strcmp(argv[1],"--water")==0)) {
         RUN(test_visible_wet_wood_responds_to_moving_water);
         RUN(test_cached_wet_wood_responds_to_moving_water);
