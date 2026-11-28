@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "dungeoncraft/gpu.h"
 
@@ -172,7 +173,11 @@ cleanup:
     dc_gpu_destroy(gpu);
 }
 
-int main(void) {
+bool halo_context_memory_errors(void);
+
+int main(int argc, char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "--memory-errors"))
+        return halo_context_memory_errors() ? 0 : 1;
     RUN(test_halo_reads_neighbor_and_marks_missing_chunk);
     RUN(test_scalar_transfer_waits_for_chunk_and_matches_unsplit_grid);
     RUN(test_particle_transfer_crosses_chunk_edge_without_duplication);

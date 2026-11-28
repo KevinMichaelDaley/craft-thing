@@ -827,7 +827,7 @@ bench_native: build/native_bench
 	./build/native_bench
 
 build/halo_tests: tests/vulkan/halo_tests.c tests/vulkan/halo_context_guard.c $(GPU_OBJ) $(CHUNK_OBJ) $(SHADER) $(RIGID_SHADER) $(PROBE_SHADER) $(HALO_SHADER) $(FLUID_SHADER) $(PROJECTION_SHADER) $(MARKER_SHADER) $(SHIFT_SHADER) $(MPM_SHADER) $(MPM_ACTIVITY_SHADER) $(MPM_COMPONENT_SHADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_create -Wl,--wrap=dc_gpu_destroy
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=dc_gpu_create -Wl,--wrap=dc_gpu_destroy -Wl,--wrap=vkAllocateMemory -Wl,--wrap=vkBindBufferMemory -Wl,--wrap=vkMapMemory
 .PHONY: test_halo_fixture_diagnostic
 test_halo_fixture_diagnostic: build/halo_tests
 	python3 tests/vulkan/halo_fixture_test.py
@@ -1026,6 +1026,7 @@ test: build/authoring_request_tests build/rigid_solver_tests build/contact_tests
 	./build/gpu_tests
 	./build/hydro_residency_tests
 	./build/halo_tests
+	./build/halo_tests --memory-errors
 	./build/fluid_tests
 	./build/buoyancy_tests
 	./build/component_material_tests
