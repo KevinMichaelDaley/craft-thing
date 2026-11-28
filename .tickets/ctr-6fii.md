@@ -26,3 +26,7 @@ Xephyr displayed the rotating concave, textured, four-light/sun fixture at 480x2
 **2026-11-28T07:18:12Z**
 
 The former benchmark timed one workgroup for both texture and compose and reported the entire 4480-group texture pass as optical. It now identifies the actual bound scene compute pipeline, with workgroup counts asserted on all 24 frames. At 640x360 the corrected final benchmark measured GPU texture 0.600 ms, optical 4.055 ms, lighting 5.142 ms and compose 1.246 ms; whole-frame mean 14.425 ms, worst 19.846 ms. A separate same-fixture Wayland swapchain replay with completed present on each frame passed both sizes twice; on its third run the 480x270 worst was 45.578 ms and the 640x360 worst was 28.709 ms. Concurrent GPU activity was present; end-to-end tails remain open.
+
+**2026-11-28T07:26:09Z**
+
+Reproduced clearing the terrain tint leaving the previous red pixel on screen. Rendering now samples the current color channel over the cached base material. The original texture returns after clearing the tint in lit and albedo modes, including the unfused albedo path. Native scene 2/2, imported terrain 8/8, visual 1/1 and the shader validators passed. The frame harness now has --present, which verifies native swapchain extents and measures physics/render/present through queue completion. Real 480/640 maxima remained below 30 ms in three consecutive presented pairs plus the reporting-only refactor run. Broader integration and gameplay gates are still open.

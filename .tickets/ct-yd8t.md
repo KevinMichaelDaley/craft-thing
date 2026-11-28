@@ -35,3 +35,7 @@ Behavioral RED executed after sandbox closed: onscreen known stone128pixels mass
 **2026-10-17T07:48:17Z**
 
 Offline read of the exact user-saved world proves all64/64 body records active and owned (IDs0x80000001..0x80000040): slots0..62 bounds7x7, slot63 bounds28x11. Arena uses only2722words, so body-slot exhaustion—not geometry arena or stone density—is the immediate birth blocker in saved state. Do not delete/merge bodies or increase constant as a substitute for real resource scaling. Held paint invokes material brush each rendered frame (main.c1280), and brush writes terrain under existing rigid occupancy; need deterministic repeated-stamp regression and explicit saturation diagnostics. Cached visibility RED remains a separate real dynamics defect.
+
+**2026-11-28T07:26:09Z**
+
+Current native cached-motion recheck under Vulkan synchronization validation: all three fixtures created an exact 128-pixel stone body of mass 345.600006. After four rigid steps, vertical velocity at x20 was 65536, at x60 it was 10794, and at x124 it remained zero. The wholly cached body still freezes. rigid.comp locate_body replaces off-view positions with a sentinel and rigid_solver.comp awake rejects bodies using viewport visibility and its page table. A camera-independent update must also retain real world-space neighbors, contacts and conservative UNKNOWN handling.

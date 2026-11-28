@@ -1,6 +1,6 @@
 ---
 id: ctlo-udlu
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T10:28:55Z
@@ -31,3 +31,7 @@ Full coupled fluid specialization oracle exposed a divergence-cache precision mi
 **2026-11-28T07:18:12Z**
 
 Production binary-face divergence caching was reinstated in f7d077ec. The runtime pressure oracle passed 9/9, including exact partial-face and edited-cell comparisons with identical 72737632-byte mapped budgets. The coupled fluid recurrence, all 65537 packed codes, one-cell transport and 17 buoyancy checks passed. The actual rendered and completed Wayland 480/640 frame pairs passed twice but the third 480x270 run reached 45.578 ms; retaining the displayed-frame gate.
+
+**2026-11-28T07:26:09Z**
+
+Closure verification: the current pressure probe passed all 65537 aperture codes with zero coefficient, payload, validity or low-byte errors. All nine native pressure work cases and the full coupled fluid recurrence passed core/synchronization validation, including exact cell, face velocity and pressure comparisons after edits and partial-face fallbacks. No extra stencil words or batches. Both pressure shader modules validated. The released renderer and presented fixture passed the unchanged 30 ms total frame limit at both resolutions in three consecutive 24-frame pairs (worst 22.099/24.004 ms), then passed again at 13.925/11.800 ms. The checked-in --present option reproduces this gate under native Wayland.
