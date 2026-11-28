@@ -17,6 +17,12 @@ static int g_pass, g_fail;
 
 static void *g_bytes;
 static fr_prop_asset_t g_asset;
+static unsigned host_pixel_reads;
+bool __real_fr_prop_pixel(const fr_prop_asset_t *, uint32_t, uint32_t, fr_prop_pixel_t *);
+bool __wrap_fr_prop_pixel(const fr_prop_asset_t *asset, uint32_t frame, uint32_t pixel, fr_prop_pixel_t *out) {
+    host_pixel_reads++;
+    return __real_fr_prop_pixel(asset,frame,pixel,out);
+}
 static dc_gpu_t *context(void) {
     dc_gpu_t *g = NULL;
     char err[256];
@@ -82,7 +88,11 @@ static void test_imported_soil_and_gravel_start_at_full_cell_density(void) {
 
 static void test_actual_scene_places_exact_materials_colors_water_and_holes(void) {
     dc_gpu_t *g=context(); ASSERT_TRUE(g); char err[256];
+    ASSERT_TRUE(!g->fluid_work_possible);
+    host_pixel_reads=0;
     ASSERT_TRUE(fr_gpu_place_terrain_prop(g,&g_asset,0,32,32,err,sizeof(err)));
+    ASSERT_TRUE(g->fluid_work_possible);
+    ASSERT_EQ(host_pixel_reads,0u);
     dc_chunk_t *chunks=calloc(9,sizeof(*chunks)); ASSERT_TRUE(chunks);
     for (uint32_t i=0;i<9;i++) ASSERT_TRUE(dc_gpu_download_chunk(g,i,&chunks[i],err,sizeof(err)));
     uint32_t counts[10]={0}, sample=UINT32_MAX;
@@ -129,6 +139,7 @@ static void test_unknown_occupied_destination_rejects_entire_scene(void) {
     dc_gpu_t *g=context(); ASSERT_TRUE(g); char err[256];
     ASSERT_TRUE(dc_gpu_set_page(g,1,1,UINT32_MAX,err,sizeof(err)));
     ASSERT_TRUE(!fr_gpu_place_terrain_prop(g,&g_asset,0,32,32,err,sizeof(err)));
+    ASSERT_TRUE(!g->fluid_work_possible);
     dc_chunk_t *chunk=calloc(1,sizeof(*chunk)); ASSERT_TRUE(chunk);
     ASSERT_TRUE(dc_gpu_download_chunk(g,0,chunk,err,sizeof(err)));
     ASSERT_EQ(chunk->cells[32*64+32].material,DC_MATERIAL_STONE);

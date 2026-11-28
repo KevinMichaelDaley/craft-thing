@@ -1739,7 +1739,7 @@ build/shaders/prop_place.comp.spv: shaders/renderer/prop_place.comp shaders/rend
 	mkdir -p build/shaders
 	$(GLSLANG) -V --target-env vulkan1.3 $< -o $@
 build/terrain_prop_tests: tests/vulkan/terrain_prop_tests.c $(GPU_OBJ) $(CHUNK_OBJ) build/shaders/prop_place.comp.spv
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(GPU_OBJ) $(CHUNK_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_prop_pixel
 .PHONY: test_terrain_prop test_scene_placement
 test_terrain_prop: build/terrain_prop_tests
 	./build/terrain_prop_tests
