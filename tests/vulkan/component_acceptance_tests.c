@@ -212,6 +212,29 @@ test_parallel_candidate_masks_preserve_world_ordered_birth_ids(void) {
     dc_gpu_destroy(gpu);
     PASS();
 }
+static void test_more_than_one_batch_reports_exact_deferred_count(void) {
+    char err[256] = {0};
+    dc_gpu_t *gpu = NULL;
+    dc_chunk_t *chunk = calloc(1, sizeof(*chunk));
+    ASSERT_TRUE(chunk);
+    for (unsigned i = 0; i < 71; i++) {
+        unsigned x = 4 + (i % 10) * 5, y = 4 + (i / 10) * 5;
+        chunk->cells[y * 64 + x].material = DC_MATERIAL_STONE;
+    }
+    ASSERT_TRUE(dc_gpu_create(&gpu, 64, 64, "build/shaders/pattern.comp.spv", err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_upload_chunk(gpu, 0, chunk, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_set_page(gpu, 0, 0, 0, err, sizeof(err)));
+    ASSERT_TRUE(dc_gpu_enable_automatic_components(gpu));
+    ASSERT_TRUE(dc_gpu_rigid_step(gpu, err, sizeof(err)));
+    dc_gpu_extraction_stats_t stats;
+    ASSERT_TRUE(dc_gpu_read_extraction_stats(gpu, &stats));
+    free(chunk);
+    dc_gpu_destroy(gpu);
+    ASSERT_EQ(stats.selected_components, 64u);
+    ASSERT_EQ(stats.deferred_by_batch_limit, 7u);
+    PASS();
+}
+
 int main(int argc, char **argv) {
     if (argc > 2)
         return 2;
@@ -220,6 +243,7 @@ int main(int argc, char **argv) {
         if (argc == 1 || strcmp(argv[1], #fn) == 0)                            \
             RUN(fn);                                                           \
     } while (0)
+    SELECT(test_more_than_one_batch_reports_exact_deferred_count);
     SELECT(test_wet_mixed_component_crosses_a_warm_chunk_seam);
     SELECT(test_saturated_pool_retains_terrain_then_births_exactly_once);
     SELECT(test_parallel_candidate_masks_preserve_world_ordered_birth_ids);
