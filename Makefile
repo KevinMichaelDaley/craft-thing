@@ -56,7 +56,7 @@ build/scene_gpu_tests: tests/renderer/scene_gpu_tests.c src/vulkan/scene_gpu.c i
 build/renderer_visual_tests: tests/renderer/visual_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 build/renderer_performance_tests: tests/renderer/performance_tests.c tests/renderer/concave_scene.h $(RENDERER_SHADERS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(PERFORMANCE_OBJ) -o $@ $(LDLIBS) -Wl,--wrap=fr_renderer_record -Wl,--wrap=fr_occlusion_record -Wl,--wrap=fr_lighting_record -Wl,--wrap=vkCmdDispatch -Wl,--wrap=vkCmdDispatchIndirect -Wl,--wrap=vkCmdBindPipeline
 build/authoring_request_tests: tests/structural/authoring_request_tests.c src/structural/authoring.c include/ferrum/structural/authoring.h
 	mkdir -p build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/structural/authoring_request_tests.c src/structural/authoring.c -o $@
@@ -196,7 +196,7 @@ build/shaders/contacts_pixel.comp.spv build/shaders/runtime/contacts_pixel.comp.
 build/diagnostics/contacts_scalar_reference.spv build/diagnostics/runtime_contacts_scalar_reference.spv \
 build/diagnostics/contacts_terrain_scan.comp.spv build/diagnostics/runtime_contacts_terrain_scan.comp.spv: \
 	shaders/sim/rigid_peer.glsl shaders/sim/rigid_grain_storage.glsl include/dungeoncraft/hydro_peer_layout.h include/dungeoncraft/terrain_flags.h
-build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h
+build/scene_gpu.o: src/vulkan/scene_gpu.c src/vulkan/body_address_gpu.h src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h include/ferrum/renderer/gpu.h src/vulkan/scene_gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/renderer_resource.o: src/vulkan/renderer_resource.c src/vulkan/renderer_internal.h src/vulkan/gpu_internal.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@

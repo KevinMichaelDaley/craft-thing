@@ -6,34 +6,16 @@
 #include "ferrum/renderer/gpu.h"
 #include "ferrum/renderer/light_transport.h"
 #include "ferrum/renderer/texture.h"
-#include "body_address_gpu.h"
-#include "renderer_internal.h"
+#include "scene_gpu_internal.h"
 #include "runtime_body_gpu.h"
 #include "fire_ray_renderer.h"
 
-enum { SCENE_PHASES = 10, SCENE_BUFFERS = 5, SCENE_WORK_WORDS = 128 + 4096 };
+enum { SCENE_WORK_WORDS = 128 + 4096 };
 typedef struct {
   float smoke_alpha, flame_emission;
 } presented_fire_sample_t;
 _Static_assert(sizeof(presented_fire_sample_t) == 8u, "Fire compositor sample layout");
 
-struct fr_scene_gpu {
-  fr_renderer_mode_t mode;
-  uint32_t light_revision, point_count;
-  dc_chunk_coord_t source_origin, last_origin;
-  fr_renderer_point_light_t points[16];
-  fr_renderer_sun_t sun;
-  fr_occlusion_gpu_t *occlusion;
-  fr_lighting_gpu_t *lighting;
-  fr_renderer_compute_t compute;
-  VkPipeline phases[SCENE_PHASES];
-  VkBuffer buffers[SCENE_BUFFERS];
-  VkDeviceMemory memory[SCENE_BUFFERS];
-  void *mapped[SCENE_BUFFERS];
-  dc_gpu_address_buffer_t fire_coverage;
-  uint32_t fire_view_x, fire_view_y, fire_view_width, fire_view_height;
-  bool fire_coverage_ready;
-};
 void fr_renderer_bind_sprites(dc_gpu_t *g,const VkDescriptorBufferInfo *buffer) {
   VkWriteDescriptorSet write={.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
     .dstSet=g->renderer->compute.descriptor,.dstBinding=16,.descriptorCount=1,
@@ -293,14 +275,14 @@ void fr_renderer_record(dc_gpu_t *g) {
     } else scene_dispatch(g,9,g->view_width*g->view_height,push);
     return;
   }
-  scene_dispatch(g, 2, dc_gpu_slot_capacity(g) * DC_CHUNK_CELLS, push);
-  scene_dispatch(g, 3, g->width * g->height, push);
+  scene_dispatch(g, SCENE_TEXTURE, dc_gpu_slot_capacity(g) * DC_CHUNK_CELLS, push);
+  scene_dispatch(g, SCENE_OPTICAL, g->width * g->height, push);
   scene_dispatch(g, 4, 32, push);
   if (s->mode == FR_RENDERER_LIT) {
     fr_lighting_record(s->lighting, s->buffers[3], sizeof(uint32_t));
     scene_barrier(g);
   }
-  scene_dispatch(g, 5, g->view_width * g->view_height, push);
+  scene_dispatch(g, SCENE_COMPOSE, g->view_width * g->view_height, push);
 }
 bool fr_renderer_render(dc_gpu_t *g, char *err, uint32_t cap) {
   return g && g->renderer && dc_gpu_render_chunks(g, err, cap);

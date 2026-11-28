@@ -2,12 +2,13 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "../../src/vulkan/gpu_internal.h"
+#include "../../src/vulkan/scene_gpu_internal.h"
 #include "concave_scene.h"
 
 static int g_pass, g_fail;
 static VkQueryPool g_queries;
-static unsigned g_dispatch;
+static const struct fr_scene_gpu *g_scene;
+static VkPipeline g_bound_pipeline;
 static unsigned g_timed_groups[12];
 static bool g_recording, g_subsystem;
 static bool g_lighting;
@@ -32,7 +33,8 @@ static bool g_profile_passes;
 void __real_fr_renderer_record(dc_gpu_t *g);
 void __wrap_fr_renderer_record(dc_gpu_t *g) {
   vkCmdResetQueryPool(g->command, g_queries, 0, 64);
-  g_dispatch = 0;
+  g_scene = g->renderer;
+  g_bound_pipeline = VK_NULL_HANDLE;
   g_recording = true;
   vkCmdWriteTimestamp2(g->command, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                        g_queries, 0);
@@ -43,17 +45,21 @@ void __wrap_fr_renderer_record(dc_gpu_t *g) {
 }
 void __real_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y,
                           uint32_t z);
+void __real_vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline);
+void __wrap_vkCmdBindPipeline(VkCommandBuffer command, VkPipelineBindPoint bind, VkPipeline pipeline) {
+  if(g_recording && bind==VK_PIPELINE_BIND_POINT_COMPUTE) g_bound_pipeline=pipeline;
+  __real_vkCmdBindPipeline(command,bind,pipeline);
+}
 void __wrap_vkCmdDispatch(VkCommandBuffer command, uint32_t x, uint32_t y,
                           uint32_t z) {
   unsigned query = 99;
   if (g_recording && !g_subsystem) {
-    if (g_dispatch == 2)
+    if (g_bound_pipeline == g_scene->phases[SCENE_TEXTURE])
       query = 2;
-    else if (g_dispatch == 3)
+    else if (g_bound_pipeline == g_scene->phases[SCENE_OPTICAL])
       query = 4;
-    else if (g_dispatch == 5)
+    else if (g_bound_pipeline == g_scene->phases[SCENE_COMPOSE])
       query = 10;
-    g_dispatch++;
   }
   if (query != 99)
     g_timed_groups[query]=x*y*z;
