@@ -31,3 +31,7 @@ Native Wayland on a GL Weston compositor nested in persistent Xephyr :93 adverti
 **2026-11-28T05:03:19Z**
 
 Repeated native Wayland on a fresh, private device cache. All three 90-frame cycles reported exactly 90 brush fence waits, zero queue-idle calls, finite acquire, safe per-image semaphores and both checked transfer dependencies. The child still exceeded the unchanged 15-second aggregate watchdog; the second/third starts were 3.85s apart. The 18.8MB private cache reloaded, so the prior near-limit shared cache alone cannot explain the deadline.
+
+**2026-11-28T06:00:03Z**
+
+Traced duplicate full-sized memset calls during each actual Wayland constructor: water, shape appearance and bulk state each received two zero fills. Removed the redundant client-side fills and checked the constructor directly while running all 90 real brush submissions. Each waited its fence, with zero presentation queue-idle calls. One three-cycle run passed the unchanged deadline, but repeated runs still timed out under concurrent rendering; device shutdown alone reached 3.1 seconds in a trace. Keeping the ticket open.
