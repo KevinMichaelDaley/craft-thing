@@ -2,8 +2,7 @@
 
 Epic `ct-exwr`; implementation order: `ct-2p38`, `ct-xsll`, `ct-ortp`,
 `ct-hk3v`, `ct-unkh`, `ct-1i55`, then runtime acceptance `ct-vkik`.
-This document describes interfaces and provisional decisions, not playable
-acceptance evidence.
+This document records the runtime interfaces, sandbox controls and rendered tests.
 
 ## Ownership and rules
 
@@ -41,8 +40,8 @@ finishes active casts before other actions, and latches ability/target at windup
 Rendering never emits gameplay events. Input tests cover routing and authoritative
 animation phases; the SDL adapter and live application now consume these actions.
 
-Animation uses integer elapsed presentation milliseconds. The logical walk hook
-remains; the live build shows supplied idle artwork until a walk asset exists.
+Animation uses integer elapsed presentation milliseconds. The sandbox cycles
+through six walk poses. The fire-ray demo uses the supplied idle artwork during movement.
 Cast uses the authoritative eight 80x40 frames in `beaver_cast.ase` at 80 ms.
 Frames 1-5 wind up, entry to frame 6 (400 ms) latches one cast event, frames
 7-8 recover. `fr_player_take_cast_event` consumes that event once, even after
@@ -82,6 +81,16 @@ pose and update each texel's canonical parcel. Occluded texels retain their stor
 state. Collision uses canonical rest geometry. The live framebuffer checks cover
 robe wetting and robe and hat singeing across reversal. The sandbox save test
 checks that fur reaction state and the surrounding gas reload exactly.
+
+With the test environment pointed at the persistent Xephyr display, run
+`./tools/with-vulkan make test_player_runtime test_player_chew_app test_player_actions test_player_split`.
+The runtime and chew tests compare framebuffer pixels against all six walk poses,
+eight cast frames and eight chomp frames. The chew test holds a dense wood target
+through the looping poses, then releases the control to check recovery.
+The runtime test writes `runtime-idle.bmp`, `runtime-walk.bmp`,
+`runtime-walk-left.bmp` and `runtime-cast.bmp` under
+`build/agents/beaver-player/sustained/`. The split-screen test writes
+`split-start.bmp` and `split-walk.bmp` under `build/agents/beaver-player/split/`.
 
 Use A/D to move, Space to jump, and hold C to harvest. Select fire with 1 or ice
 with 2, then press Q to cast the selected spell. E drops a carried body. The

@@ -6,6 +6,7 @@
 #include "dungeoncraft/material_density.h"
 #include "../../src/app/player_session.h"
 #include "../../src/app/view_config.h"
+#include "../player/runtime_visual_check.h"
 
 static int g_pass, g_fail;
 static char err[256];
@@ -86,6 +87,8 @@ static void test_chewing_obeys_live_player_reach_and_drives_animation(void) {
     ASSERT_EQ(get_material(distant_cell), DC_MATERIAL_WOOD);
     ASSERT_TRUE(dc_players_status(view, 0, &player, &body));
     ASSERT_INT_EQ(player.action, FR_PLAYER_IDLE);
+    ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+    ASSERT_TRUE(runtime_visual_check(view, FR_PLAYER_CHEW, 0, 0, err, sizeof(err)));
 
     ASSERT_TRUE(dc_players_aim_override(view, 0, &nearby_cell, err, sizeof(err)));
     ASSERT_TRUE(action_step());
@@ -108,6 +111,26 @@ static void test_chewing_obeys_live_player_reach_and_drives_animation(void) {
     ASSERT_EQ(fr_player_inventory_mass(&inv, DC_ITEM_WOOD),
               (uint64_t)lround(DC_DENSITY_WOOD * DC_FLUID_FULL));
     ASSERT_EQ(get_material(nearby_cell), DC_MATERIAL_AIR);
+    key.type = SDL_KEYUP;
+    ASSERT_TRUE(dc_players_event(view, &key) && action_step());
+    ASSERT_TRUE(dc_level_view_paint(view, 73u, 40u, 0u, DC_MATERIAL_DENSE_WOOD,
+                                    err, sizeof(err)));
+    key.type = SDL_KEYDOWN;
+    ASSERT_TRUE(dc_players_event(view, &key));
+    unsigned visible = 1u;
+    for (unsigned tick = 0; tick < 100u && visible != 0xffu; ++tick) {
+        dc_players_frame_time(view, .025);
+        ASSERT_TRUE(dc_players_step(view, 1.f / 60.f, err, sizeof(err)));
+        ASSERT_TRUE(dc_players_status(view, 0, &player, &body));
+        if (player.action != FR_PLAYER_CHEW) continue;
+        uint32_t frame;
+        ASSERT_TRUE(fr_player_frame(&player, &frame) && frame < 8u);
+        if (visible & (1u << frame)) continue;
+        ASSERT_TRUE(dc_level_view_tick(view, err, sizeof(err)));
+        ASSERT_TRUE(runtime_visual_check(view, FR_PLAYER_CHEW, frame, 0, err, sizeof(err)));
+        visible |= 1u << frame;
+    }
+    ASSERT_EQ(visible, 0xffu);
     ASSERT_EQ(get_material(distant_cell), DC_MATERIAL_WOOD);
     PASS();
 }

@@ -157,18 +157,34 @@ static void test_real_app_keyboard_drives_body_and_animation(void) {
     ASSERT_TRUE(dc_players_aim_override(v,0,&aim,err,sizeof(err)));
     uint32_t projectile_id=dc_gpu_next_body_id(dc_level_view_gpu(v));
     e.type=SDL_KEYDOWN;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));
-    for(unsigned n=0;n<24;n++) ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+    unsigned cast_frames = 0;
+    for(unsigned n=0;n<24;n++) {
+        ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
+        ASSERT_TRUE(dc_players_status(v,0,&p,&binding) && p.action == FR_PLAYER_CAST);
+        ASSERT_TRUE(fr_player_frame(&p,&frame) && frame < 8u);
+        if (!(cast_frames & (1u << frame))) {
+            ASSERT_TRUE(runtime_visual_check(v, FR_PLAYER_CAST, frame, projectile_id, err, sizeof(err)));
+            cast_frames |= 1u << frame;
+        }
+    }
     ASSERT_TRUE(dc_players_status(v,0,&p,&binding));ASSERT_EQ(p.action,FR_PLAYER_CAST);
     ASSERT_TRUE(fr_player_frame(&p,&frame));ASSERT_EQ(frame,5);
     ASSERT_TRUE(capture(v,"build/agents/beaver-player/sustained/runtime-cast.bmp",err,sizeof(err)));
     dc_gpu_world_body_t projectile;
     ASSERT_TRUE(projectile_id&&dc_level_view_body_state(v,projectile_id,&projectile,&motion,err,sizeof(err)));
-    ASSERT_TRUE(runtime_visual_check(v,FR_PLAYER_CAST,frame,projectile_id,err,sizeof(err)));
     for(unsigned n=0;n<120;n++) {
         ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));
         ASSERT_TRUE(dc_players_status(v,0,&p,&binding));
+        if (p.action == FR_PLAYER_CAST) {
+            ASSERT_TRUE(fr_player_frame(&p,&frame) && frame < 8u);
+            if (!(cast_frames & (1u << frame))) {
+                ASSERT_TRUE(runtime_visual_check(v, FR_PLAYER_CAST, frame, projectile_id, err, sizeof(err)));
+                cast_frames |= 1u << frame;
+            }
+        }
         if(n>=14) ASSERT_EQ(p.action,FR_PLAYER_IDLE);
     }
+    ASSERT_EQ(cast_frames, 0xffu);
     e.type=SDL_KEYUP;e.key.keysym.scancode=SDL_SCANCODE_Q;ASSERT_TRUE(dc_players_event(v,&e));
     e.type=SDL_KEYDOWN;ASSERT_TRUE(dc_players_event(v,&e));dc_players_frame_time(v,0);
     ASSERT_TRUE(dc_level_view_step(v,err,sizeof(err))&&dc_level_view_tick(v,err,sizeof(err)));

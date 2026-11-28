@@ -2127,7 +2127,7 @@ build/ability_cast_tests: tests/player/ability_cast_tests.c include/ferrum/playe
 test_ability_cast: build/ability_cast_tests
 	./build/ability_cast_tests
 test: test_ability_cast
-build/player_chew_app_tests: tests/app/player_chew_tests.c $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
+build/player_chew_app_tests: tests/app/player_chew_tests.c tests/player/runtime_visual_check.h $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) $(RUNTIME_BODY_SHADERS) build/shaders/runtime/structural_carve.comp.spv build/shaders/pattern.comp.spv
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QUARTER_FLAGS) $< $(filter-out build/performance/src/app/main.o,$(QUARTER_APP_OBJ)) $(PERFORMANCE_OBJ) -o $@ $(LDLIBS)
 .PHONY: test_player_chew_app
 test_player_chew_app: build/player_chew_app_tests
