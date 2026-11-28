@@ -165,6 +165,35 @@ static void test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_structural_references_require_existing_nodes(void) {
+    fr_authored_request_t r=request();
+    fr_structural_gpu_graph_t graph={.node_count=2,.member_count=1,.joint_count=1,.anchor_count=1};
+    graph.nodes[0]=(fr_structural_gpu_node_t){.id=46,.generation=2};
+    graph.nodes[1]=(fr_structural_gpu_node_t){.id=9,.generation=3,.x_fp=65536};
+    graph.members[0]=(fr_structural_gpu_member_t){.id=300,.generation=4,.a=46,.b=9,.depth_fp=65536};
+    graph.joints[0]=(fr_structural_gpu_joint_t){.id=16,.generation=3,.a=46,.b=9,.kind=FR_JOINT_PINNED};
+    graph.anchors[0]=(fr_structural_gpu_anchor_t){.id=20,.generation=1,.node=46,.kind=FR_JOINT_PINNED,
+        .width=1,.height=1,.terrain_material=DC_MATERIAL_STONE};
+    uint32_t owners[64]={300};
+    r.structure=&graph; r.member_ownership=(const uint8_t *)owners; r.member_ownership_bytes=sizeof(owners);
+    pixel(0,0,1,FR_AUTHORED_STRUCTURE,1);
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu);
+    char err[256]; fr_authored_stage_diagnostic_t d;
+    uint32_t *references[]={&graph.members[0].b,&graph.joints[0].a,&graph.anchors[0].node};
+    for(unsigned i=0;i<sizeof(references)/sizeof(references[0]);++i) {
+        uint32_t original=*references[i];
+        *references[i]=301;
+        ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+        ASSERT_TRUE(d.failures & FR_AUTHORED_FAIL_INPUT);
+        *references[i]=original;
+    }
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+    ASSERT_EQ(d.failures,0u);
+    dc_gpu_destroy(gpu); PASS();
+}
+
 static void test_absent_normal_uses_renderer_default_not_raw_placeholder(void) {
     fr_authored_request_t r = request();
     memset(appearance + 16, 0, 12);
@@ -238,8 +267,10 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
-int main(void) {
+int main(int argc,char **argv) {
+    RUN(test_structural_references_require_existing_nodes);
     RUN(test_each_declared_member_requires_owned_structural_pixels);
+    if(argc==2 && !strcmp(argv[1],"--structural-graph")) return g_fail!=0;
     RUN(test_failed_resize_preserves_ready_component_plan);
     RUN(test_unpublished_water_keeps_dry_world_asleep);
     RUN(test_mixed_concavities_keep_exact_role_object_connectivity);
