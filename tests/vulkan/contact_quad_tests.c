@@ -10,12 +10,12 @@ static void test_quad_contacts_match_frozen_ordered_sat_without_dynamic_loops(vo
     memset(f.probe.mapped,0,39u*sizeof(uint32_t));
     fixture_run(&f,"ordered quad contact geometry");
     uint32_t errors=f.probe.mapped[0],cases=f.probe.mapped[1],loops=f.probe.mapped[2];
-    printf("quad contact cases %u bounded errors %u dynamic iterations %u\n",cases,errors,loops);
+    printf("quad contact cases %u exact errors %u dynamic iterations %u\n",cases,errors,loops);
     unsigned general_errors=f.probe.mapped[3],general_cases=f.probe.mapped[4];
-    printf("mixed pentagon/quad cases %u bounded errors %u\n",general_cases,general_errors);
+    printf("mixed pentagon/quad cases %u exact errors %u\n",general_cases,general_errors);
     unsigned rectangle_errors=f.probe.mapped[5],rectangle_cases=f.probe.mapped[6],rectangle_axes=f.probe.mapped[7];
     unsigned pair_errors=f.probe.mapped[8],pair_cases=f.probe.mapped[9],pair_axes=f.probe.mapped[10];
-    printf("rectangle cases %u bounded errors %u maximum axes %u; rectangle pairs %u errors %u axes %u\n",
+    printf("rectangle cases %u exact errors %u maximum axes %u; rectangle pairs %u errors %u axes %u\n",
         rectangle_cases,rectangle_errors,rectangle_axes,pair_cases,pair_errors,pair_axes);
     unsigned unit_errors=f.probe.mapped[11],unit_cases=f.probe.mapped[12],unit_axes=f.probe.mapped[13];
     unsigned unit_pair_errors=f.probe.mapped[14],unit_pair_cases=f.probe.mapped[15],unit_pair_axes=f.probe.mapped[16];
