@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 #define DC_RUNTIME_BODY_STORAGE 1
+#define DC_RUNTIME_BODY_INDEX_WRITER 1
 #include "rigid_body.glsl"
 layout(local_size_x=64) in;
 layout(push_constant) uniform Params {uint phase,legacy_state,graph,reserved;} params;

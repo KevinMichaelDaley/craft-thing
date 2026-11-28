@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_shuffle : require
-#define DC_RUNTIME_ROOT_READONLY 1
+#define DC_RUNTIME_RESTRICT_BODY_STORAGE 1
 #include "rigid_body.glsl"
 layout(local_size_x=32) in;
 layout(set=0,binding=31,std430) buffer ColorProfile {uint color_profile[];};

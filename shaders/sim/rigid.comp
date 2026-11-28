@@ -4,7 +4,7 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #include "../../include/dungeoncraft/hydro_peer_layout.h"
 layout(buffer_reference,std430,buffer_reference_align=4) buffer PeerOccupancy { uint words[]; };
-#define DC_RUNTIME_ROOT_READONLY 1
+#define DC_RUNTIME_RESTRICT_BODY_STORAGE 1
 layout(constant_id = 1) const bool RIGID_PIXEL_ONLY = false;
 #define DC_RIGID_PIXEL_ONLY RIGID_PIXEL_ONLY
 #include "rigid_body.glsl"

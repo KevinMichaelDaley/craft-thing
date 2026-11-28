@@ -5,7 +5,7 @@
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_KHR_shader_subgroup_ballot : require
-#define DC_RUNTIME_ROOT_READONLY 1
+#define DC_RUNTIME_RESTRICT_BODY_STORAGE 1
 #include "rigid_body.glsl"
 #include "solver_layout.glsl"
 layout(local_size_x = 64) in;

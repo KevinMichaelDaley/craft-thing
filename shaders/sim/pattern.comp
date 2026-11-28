@@ -1,6 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
-#define DC_RUNTIME_ROOT_READONLY 1
+#define DC_RUNTIME_RESTRICT_BODY_STORAGE 1
 #include "../../include/dungeoncraft/pattern_brush_layout.h"
 #include "../../include/dungeoncraft/terrain_flags.h"
 layout(constant_id=1) const bool DRAW_PIXEL_ONLY=false;

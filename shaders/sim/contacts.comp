@@ -4,7 +4,7 @@
 #extension GL_EXT_buffer_reference_uvec2 : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
-#define DC_RUNTIME_ROOT_READONLY 1
+#define DC_RUNTIME_RESTRICT_BODY_STORAGE 1
 #include "../../include/dungeoncraft/contact_work_layout.h"
 #include "../../include/dungeoncraft/terrain_flags.h"
 #ifdef DC_CONTACT_PIXEL_MODULE

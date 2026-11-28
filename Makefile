@@ -1697,6 +1697,11 @@ $(GPU_OBJ): build/shaders/runtime_body_scan.comp.spv
 
 RUNTIME_BODY_NAMES = pattern rigid rigid_solver contacts broadphase component_extract component_local structural pixel_hydro mpm mpm_active mpm_compact tick_probe scene halo
 RUNTIME_BODY_SHADERS = $(addprefix build/shaders/runtime/,$(addsuffix .comp.spv,$(RUNTIME_BODY_NAMES)))
+test_gpu_tools: $(RUNTIME_BODY_SHADERS) $(addprefix build/shaders/runtime/,$(STRUCTURAL_PHASE_FILES)) \
+    build/shaders/runtime/structural_carve.comp.spv build/shaders/runtime/mpm_commit.comp.spv \
+    build/shaders/runtime/mpm_stencil.comp.spv build/shaders/runtime_body_scan.comp.spv \
+    build/shaders/body_combustion.comp.spv build/shaders/combustion.comp.spv \
+    build/shaders/player_drive.comp.spv build/shaders/player_fire_ray.comp.spv build/shaders/thermal.comp.spv
 $(GPU_OBJ) $(PERFORMANCE_OBJ) $(NATIVE360_OBJ) $(GPU_SOURCE_BINARIES) build/dungeoncraft_360 build/diagnostics/body_support build/level03_support_tests: build/shaders/structural_carve.comp.spv build/shaders/runtime/structural_carve.comp.spv
 $(GPU_OBJ): $(RUNTIME_BODY_SHADERS)
 $(GPU_SOURCE_BINARIES) build/dungeoncraft_360: $(RUNTIME_BODY_SHADERS) build/shaders/runtime_body_index.comp.spv build/shaders/runtime_body_scan.comp.spv build/diagnostics/body_storage_init.spv src/vulkan/runtime_body_gpu.h src/vulkan/runtime_body_internal.h

@@ -4,12 +4,10 @@
 #ifndef DC_RUNTIME_BODY_BINDING
 #define DC_RUNTIME_BODY_BINDING 4
 #endif
-/* Opt in per consumer: the Intel fracture compiler expands phase 4
-   prohibitively with this declaration. Its root remains conservative. */
-#ifdef DC_RUNTIME_ROOT_READONLY
-layout(set=0,binding=DC_RUNTIME_BODY_BINDING,std430) readonly restrict buffer RuntimeBodyRoot {
-#else
+#ifdef DC_RUNTIME_BODY_INDEX_WRITER
 layout(set=0,binding=DC_RUNTIME_BODY_BINDING,std430) buffer RuntimeBodyRoot {
+#else
+layout(set=0,binding=DC_RUNTIME_BODY_BINDING,std430) readonly restrict buffer RuntimeBodyRoot {
 #endif
     BodyStorageRoot runtime_body_root;
 };
@@ -34,7 +32,7 @@ RuntimeBodyWord runtime_body_data_word(uint index) {
 #define DC_SOLVER_DATA(index) runtime_body_data_word(index).value
 #define DC_BUFFER_DATA(index) DC_DATA(index)
 #define DC_SUPPORT_DATA(index) DC_DATA(index)
-#ifdef DC_RUNTIME_ROOT_READONLY
+#ifdef DC_RUNTIME_RESTRICT_BODY_STORAGE
 #define DC_PIXEL_WORD(index) BodyStorageGeometry(runtime_body_root.geometry).words[index]
 #else
 #define DC_PIXEL_WORD(index) BodyStorageWords(runtime_body_root.geometry).words[index]
