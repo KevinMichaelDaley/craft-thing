@@ -19,6 +19,25 @@ static uint32_t visible_page_extent(uint32_t size, uint32_t tile) {
     return remaining < DC_CHUNK_SIDE ? remaining : DC_CHUNK_SIDE;
 }
 
+static void transfer_page_velocity(dc_gpu_t *gpu,uint32_t tile,dc_face_velocity_t *chunk,bool to_page) {
+    uint32_t tile_x=tile%gpu->page_width,tile_y=tile/gpu->page_width;
+    uint32_t columns=visible_page_extent(gpu->width,tile_x);
+    uint32_t rows=visible_page_extent(gpu->height,tile_y);
+    dc_face_velocity_t *faces=gpu->velocity_mapped;
+    for(uint32_t y=0;y<rows;y++) {
+        dc_face_velocity_t *view_row=faces+(size_t)(tile_y*DC_CHUNK_SIDE+y)*gpu->width+tile_x*DC_CHUNK_SIDE;
+        dc_face_velocity_t *chunk_row=chunk+(size_t)y*DC_CHUNK_SIDE;
+        if(to_page) memcpy(view_row,chunk_row,columns*sizeof(*faces));
+        else memcpy(chunk_row,view_row,columns*sizeof(*faces));
+    }
+}
+
+void dc_gpu_cache_page_velocity(dc_gpu_t *gpu,uint32_t slot) {
+    uint32_t tile=gpu->slot_page[slot];
+    if(tile!=UINT32_MAX && !gpu->preserve_shifted_slot[slot] && gpu->width && gpu->height)
+        transfer_page_velocity(gpu,tile,gpu->chunk_velocity+(size_t)slot*DC_CHUNK_CELLS,false);
+}
+
 uint32_t dc_gpu_host_memory_type(const VkPhysicalDeviceMemoryProperties *props,
                                  uint32_t compatible_types) {
     const VkMemoryPropertyFlags needed = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -410,18 +429,8 @@ bool dc_gpu_download_chunk(dc_gpu_t *gpu, uint32_t slot, dc_chunk_t *chunk,
     memcpy(chunk->face_velocity,
            gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS,
            sizeof(chunk->face_velocity));
-    if (tile != UINT32_MAX) {
-        const dc_face_velocity_t *faces = gpu->velocity_mapped;
-        uint32_t tile_x = tile % gpu->page_width;
-        uint32_t tile_y = tile / gpu->page_width;
-        uint32_t columns = visible_page_extent(gpu->width, tile_x);
-        uint32_t rows = visible_page_extent(gpu->height, tile_y);
-        for (uint32_t y = 0; y < rows; ++y)
-            memcpy(chunk->face_velocity + (size_t)y * DC_CHUNK_SIDE,
-                   faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
-                            tile_x * DC_CHUNK_SIDE),
-                   columns * sizeof(dc_face_velocity_t));
-    }
+    if (tile != UINT32_MAX && !gpu->preserve_shifted_slot[slot])
+        transfer_page_velocity(gpu,tile,chunk->face_velocity,false);
     const uint32_t *counts = gpu->marker_ping ?
         gpu->marker_count_b_mapped : gpu->marker_count_a_mapped;
     const dc_marker_t *markers = gpu->marker_ping ?
@@ -455,6 +464,8 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
         return error(err, cap, "Cannot change page mappings during a coupled water cycle");
     fr_gas_gpu_invalidate_cache(gpu);
     gpu->body_refresh_pending = true;
+    if(slot!=UINT32_MAX) dc_gpu_cache_page_velocity(gpu,slot);
+    if(pages[tile]) dc_gpu_cache_page_velocity(gpu,pages[tile]-1u);
     if (slot != UINT32_MAX && gpu->slot_page[slot] != UINT32_MAX &&
         gpu->slot_page[slot] != tile)
         pages[gpu->slot_page[slot]] = 0u;
@@ -467,18 +478,8 @@ bool dc_gpu_set_page(dc_gpu_t *gpu, uint32_t tile_x, uint32_t tile_y,
     pages[tile] = new_page;
     if (slot != UINT32_MAX) {
         gpu->slot_page[slot] = tile;
-        if (changed_mapping && !gpu->preserve_shifted_slot[slot]) {
-            dc_face_velocity_t *faces = gpu->velocity_mapped;
-            const dc_face_velocity_t *source =
-                gpu->chunk_velocity + (size_t)slot * DC_CHUNK_CELLS;
-            uint32_t columns = visible_page_extent(gpu->width, tile_x);
-            uint32_t rows = visible_page_extent(gpu->height, tile_y);
-            for (uint32_t y = 0; y < rows; ++y)
-                memcpy(faces + ((size_t)(tile_y * DC_CHUNK_SIDE + y) * gpu->width +
-                                tile_x * DC_CHUNK_SIDE),
-                       source + (size_t)y * DC_CHUNK_SIDE,
-                       columns * sizeof(dc_face_velocity_t));
-        }
+        if(changed_mapping && gpu->width && gpu->height)
+            transfer_page_velocity(gpu,tile,gpu->chunk_velocity+(size_t)slot*DC_CHUNK_CELLS,true);
         gpu->preserve_shifted_slot[slot] = false;
     }
     memcpy(gpu->slot_page_mapped, gpu->slot_page,

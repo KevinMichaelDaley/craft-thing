@@ -566,6 +566,8 @@ bool dc_gpu_make_device_buffer(dc_gpu_t *gpu, VkDeviceSize bytes, VkBuffer *buff
 void dc_gpu_fluid_uploads_invalidate(dc_gpu_t *gpu);
 /** Retire fluid work only when every slot has current upload evidence. */
 void dc_gpu_fluid_uploads_recheck(dc_gpu_t *gpu);
+/** Preserve the current mapped faces before their chunk leaves the grid. */
+void dc_gpu_cache_page_velocity(dc_gpu_t *gpu,uint32_t slot);
 bool dc_gpu_copy_chunk_state(dc_gpu_t *gpu, uint32_t slot, bool upload,
                              bool particles, char *err, uint32_t cap);
 bool dc_gpu_rigid_buffers_init(dc_gpu_t *gpu, char *err, uint32_t cap);

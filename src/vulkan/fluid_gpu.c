@@ -265,8 +265,6 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
     }
     if (dc_gpu_liquid_owner_held(gpu))
         return error(err, cap, "Cannot shift velocity during a coupled water cycle");
-    for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(gpu); ++slot)
-        gpu->preserve_shifted_slot[slot] = gpu->slot_page[slot] != UINT32_MAX;
     if (vkResetCommandBuffer(gpu->command, 0) != VK_SUCCESS)
         return error(err, cap, "Cannot reset velocity shift command buffer");
     VkCommandBufferBeginInfo begin = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -290,9 +288,13 @@ bool dc_gpu_shift_velocity(dc_gpu_t *gpu, int32_t chunk_dx, int32_t chunk_dy,
         return error(err, cap, "Cannot end velocity shift command buffer");
     VkSubmitInfo submit = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1, .pCommandBuffers = &gpu->command };
+    for (uint32_t slot=0;slot<dc_gpu_slot_capacity(gpu);++slot)
+        dc_gpu_cache_page_velocity(gpu,slot);
     if (vkQueueSubmit(gpu->queue, 1, &submit, VK_NULL_HANDLE) != VK_SUCCESS ||
         vkQueueWaitIdle(gpu->queue) != VK_SUCCESS)
         return error(err, cap, "GPU velocity shift failed");
+    for (uint32_t slot = 0; slot < dc_gpu_slot_capacity(gpu); ++slot)
+        gpu->preserve_shifted_slot[slot] = gpu->slot_page[slot] != UINT32_MAX;
     return true;
 }
 
