@@ -145,6 +145,31 @@ static void test_each_declared_member_requires_owned_structural_pixels(void) {
     dc_gpu_destroy(gpu); PASS();
 }
 
+static void test_structural_pixels_use_registered_mechanical_profiles(void) {
+    fr_authored_request_t r=request();
+    fr_structural_gpu_graph_t graph={.node_count=2,.member_count=1};
+    graph.nodes[0]=(fr_structural_gpu_node_t){.id=1,.generation=1};
+    graph.nodes[1]=(fr_structural_gpu_node_t){.id=2,.generation=1,.x_fp=65536};
+    graph.members[0]=(fr_structural_gpu_member_t){.id=17,.generation=1,.a=1,.b=2,.depth_fp=65536};
+    uint32_t owners[64]={17};
+    r.structure=&graph;
+    r.member_ownership=(const uint8_t *)owners;
+    r.member_ownership_bytes=sizeof(owners);
+    dc_gpu_t *gpu=context(); ASSERT_TRUE(gpu);
+    char err[256]; fr_authored_stage_diagnostic_t d;
+    for (uint32_t material=1; material<=12; ++material) {
+        fr_structural_material_t profile=FR_STRUCTURAL_WOOD;
+        bool supported=fr_structural_material_map(false,fr_prop_body_material(material),&profile);
+        graph.members[0].material=profile;
+        pixel(0,0,material,FR_AUTHORED_STRUCTURE,1);
+        ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+        ASSERT_TRUE(fr_gpu_read_authored_stage(gpu,&d,NULL,0,err,sizeof(err)));
+        ASSERT_EQ(d.failures,supported ? 0u : FR_AUTHORED_FAIL_INPUT);
+        ASSERT_EQ(d.structural_pixels,(uint32_t)supported);
+    }
+    dc_gpu_destroy(gpu); PASS();
+}
+
 static void test_staging_resize_releases_allocation_and_bad_envelope_keeps_prior(void) {
     fr_authored_request_t r = request(); pixel(1,1,2,3,0);
     dc_gpu_t *gpu = context(); ASSERT_TRUE(gpu); char err[256];
@@ -280,6 +305,7 @@ static void test_unpublished_water_keeps_dry_world_asleep(void) {
 int main(int argc,char **argv) {
     RUN(test_structural_references_require_existing_nodes);
     RUN(test_each_declared_member_requires_owned_structural_pixels);
+    RUN(test_structural_pixels_use_registered_mechanical_profiles);
     if(argc==2 && !strcmp(argv[1],"--structural-graph")) return g_fail!=0;
     RUN(test_failed_resize_preserves_ready_component_plan);
     RUN(test_unpublished_water_keeps_dry_world_asleep);
