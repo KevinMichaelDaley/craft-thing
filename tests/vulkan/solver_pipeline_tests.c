@@ -9,6 +9,9 @@ static int g_pass,g_fail;
 static unsigned pipelines,graph_pipelines,modules;
 static unsigned skipped_graph_capture,skipped_unstructured;
 static uint32_t fail_phase=UINT32_MAX;
+static bool inspect_structural;
+static unsigned structural_programs, structural_programs_with_runtime_phase;
+static bool module_has_phase[DC_GPU_STRUCTURAL_PHASE_COUNT + 1];
 #define RUN(fn) do {printf("RUN %s\n",#fn);fn();} while(0)
 #define ASSERT_TRUE(e) do {if(!(e)){printf("FAIL %d: %s\n",__LINE__,#e);g_fail++;return;}} while(0)
 #define ASSERT_EQ(a,b) ASSERT_TRUE((a)==(b))
@@ -17,7 +20,23 @@ static uint32_t fail_phase=UINT32_MAX;
 
 VKAPI_ATTR VkResult VKAPI_CALL vkCreateShaderModule(VkDevice d,const VkShaderModuleCreateInfo *i,
     const VkAllocationCallbacks *a,VkShaderModule *out) {
-    (void)d;(void)i;(void)a;*out=(VkShaderModule)(uintptr_t)++modules;return VK_SUCCESS;
+    (void)d;(void)a;
+    *out=(VkShaderModule)(uintptr_t)++modules;
+    if (inspect_structural) {
+        if (modules > DC_GPU_STRUCTURAL_PHASE_COUNT) return VK_ERROR_INITIALIZATION_FAILED;
+        module_has_phase[modules] = false;
+        for (size_t word = 5; word < i->codeSize / sizeof(uint32_t);) {
+            uint32_t length = i->pCode[word] >> 16;
+            if (!length || length > i->codeSize / sizeof(uint32_t) - word)
+                return VK_ERROR_INITIALIZATION_FAILED;
+            /* OpDecorate target SpecId 0 selects the structural phase. */
+            if ((i->pCode[word] & 65535u) == 71u && length == 4 &&
+                i->pCode[word + 2] == 1u && i->pCode[word + 3] == 0u)
+                module_has_phase[modules] = true;
+            word += length;
+        }
+    }
+    return VK_SUCCESS;
 }
 VKAPI_ATTR void VKAPI_CALL vkDestroyShaderModule(VkDevice d,VkShaderModule m,const VkAllocationCallbacks *a) {
     (void)d;(void)m;(void)a;
@@ -26,6 +45,12 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateComputePipelines(VkDevice d,VkPipelineCac
     const VkComputePipelineCreateInfo *info,const VkAllocationCallbacks *a,VkPipeline *out) {
     (void)d;(void)c;(void)a;
     for(unsigned i=0;i<n;i++) {
+        if (inspect_structural) {
+            if (structural_programs < DC_GPU_STRUCTURAL_PHASE_COUNT - 1u)
+                structural_programs_with_runtime_phase += module_has_phase[(uintptr_t)info[i].stage.module];
+            out[i] = (VkPipeline)(uintptr_t)(100u + ++structural_programs);
+            continue;
+        }
         uint32_t phase=UINT32_MAX,capture=1u,skip_zero=0u;
         const VkSpecializationInfo *spec=info[i].stage.pSpecializationInfo;
         for(unsigned entry=0;spec&&entry<spec->mapEntryCount;entry++) {
@@ -82,7 +107,27 @@ static void test_zero_reduction_does_not_skip_structural_dependency_capture(void
     printf("zero-reduction variants: unstructured%u unsafe structural%u\n",skipped_unstructured,skipped_graph_capture);
     ASSERT_EQ(skipped_unstructured,2u);ASSERT_EQ(skipped_graph_capture,0u);PASS();
 }
+static void test_structural_startup_uses_offline_specialized_phases(void) {
+    for (unsigned runtime = 0; runtime < 2; runtime++) {
+        dc_gpu_t gpu = {.width=256, .height=128, .runtime_body_consumers=runtime != 0};
+        char err[128] = {0};
+        gpu.body_mapped = calloc(1, dc_gpu_legacy_body_storage_bytes(&gpu));
+        ASSERT_TRUE(gpu.body_mapped);
+        inspect_structural = true;
+        modules = structural_programs = structural_programs_with_runtime_phase = 0;
+        bool initialized = dc_gpu_structural_pipeline_init(&gpu, err, sizeof(err));
+        inspect_structural = false;
+        free(gpu.body_mapped);
+        ASSERT_TRUE(initialized);
+        ASSERT_INT_EQ(structural_programs, DC_GPU_STRUCTURAL_PHASE_COUNT);
+        printf("Structural startup: %u pipelines still specialize phase at runtime\n",
+               structural_programs_with_runtime_phase);
+        ASSERT_INT_EQ(structural_programs_with_runtime_phase, 0u);
+    }
+    PASS();
+}
 int main(void) {
+    RUN(test_structural_startup_uses_offline_specialized_phases);
     RUN(test_automatic_body_context_does_not_compile_graph_only_variants);
     RUN(test_graph_boundary_prepares_variants_once);
     RUN(test_failed_graph_preparation_reuses_successful_variants_on_retry);
