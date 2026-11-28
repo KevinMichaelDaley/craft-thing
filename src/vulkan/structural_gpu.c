@@ -220,37 +220,33 @@ bool dc_gpu_structural_pipeline_init(dc_gpu_t *gpu, char *err, uint32_t cap) {
         for (unsigned v = 0; v < 10; v++)
             packed[m * 12u + v] = (float)values[v];
     }
-    VkShaderModule shader;
-    if (!dc_gpu_load_shader_module(gpu, "build/shaders/structural.comp.spv",
-                                   &shader, err, cap))
-        return false;
     VkComputePipelineCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                   .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                  .module = shader,
                   .pName = "main"},
         .layout = gpu->pipeline_layout};
-    VkSpecializationMapEntry entry = {.constantID = 0, .offset = 0,
-                                      .size = sizeof(uint32_t)};
-    VkShaderModule carve_shader;
-    if(!dc_gpu_load_shader_module(gpu,"build/shaders/structural_carve.comp.spv",&carve_shader,err,cap)) {
-        vkDestroyShaderModule(gpu->device,shader,NULL);return false;
+    const uint32_t carve_phase = 6u;
+    const VkSpecializationMapEntry carve_entry = {0, 0, sizeof(carve_phase)};
+    const VkSpecializationInfo carve_spec = {1, &carve_entry, sizeof(carve_phase), &carve_phase};
+    for (uint32_t phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT; phase++) {
+        char phase_path[80];
+        const char *path = "build/shaders/structural_carve.comp.spv";
+        if (phase != carve_phase) {
+            snprintf(phase_path, sizeof(phase_path), "build/shaders/%sstructural_phase_%u.comp.spv",
+                     gpu->runtime_body_consumers ? "runtime/" : "", phase);
+            path = phase_path;
+        }
+        VkShaderModule shader;
+        if (!dc_gpu_load_shader_module(gpu, path, &shader, err, cap)) return false;
+        info.stage.module = shader;
+        info.stage.pSpecializationInfo = phase == carve_phase ? &carve_spec : NULL;
+        VkResult result = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1, &info,
+                                                    NULL, &gpu->structural_pipelines[phase]);
+        vkDestroyShaderModule(gpu->device, shader, NULL);
+        if (result != VK_SUCCESS) return error(err, cap, "Cannot create structural pipeline");
     }
-    VkResult r = VK_SUCCESS;
-    for (uint32_t phase = 0; phase < DC_GPU_STRUCTURAL_PHASE_COUNT && r == VK_SUCCESS; phase++) {
-        VkSpecializationInfo specialization = {
-            .mapEntryCount = 1, .pMapEntries = &entry,
-            .dataSize = sizeof(phase), .pData = &phase};
-        info.stage.pSpecializationInfo = &specialization;
-        info.stage.module=phase==6u?carve_shader:shader;
-        r = vkCreateComputePipelines(gpu->device, gpu->pipeline_cache, 1, &info,
-                                     NULL, &gpu->structural_pipelines[phase]);
-    }
-    vkDestroyShaderModule(gpu->device, shader, NULL);
-    vkDestroyShaderModule(gpu->device, carve_shader, NULL);
-    return r == VK_SUCCESS ||
-           error(err, cap, "Cannot create structural pipeline");
+    return true;
 }
 static void dispatch_brush(dc_gpu_t *gpu, uint32_t mode,const uint32_t *brush,VkBuffer indirect) {
     VkMemoryBarrier2 b = {
