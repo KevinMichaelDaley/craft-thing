@@ -145,7 +145,7 @@ float grain_bed_creep(Body body,uint c,uint reference) {
     Particle p=read_grain(reference-1u);
     /* Thin leaf flakes bend and evacuate; they are not a mineral bearing bed. */
     if(p.material==10u) return -1.0;
-    vec2 center=grain_position(c,reference-1u);
+    vec2 center=grain_position(c,reference-1u,body);
     vec2 local_point=body_local_point(body,center-position(body));
     uint piece=(DC_DATA(c+3u)>>28u)&3u;
     float interior_margin=float(p.grain_fp)/65536.0+0.25;
@@ -165,6 +165,9 @@ float grain_bed_creep(Body body,uint c,uint reference) {
     vec2 point=center-vec2(p.x_fp,p.y_fp)/65536.0+vec2(local%64u,local/64u)+vec2(0.5);
     ivec2 cell=ivec2(floor(point));
     vec4 support;
+    uvec2 origin_x,origin_y;
+    if(!body_frame_origin(body,origin_x,origin_y) || any(notEqual(origin_x,params.origin_x)) ||
+       any(notEqual(origin_y,params.origin_y))) return -1.0;
     if(hydro_control[DC_HYDRO_PEER_WIDTH]!=0u) support=paired_bed_support(cell);
     else {
         if(any(lessThan(cell,ivec2(0)))||any(greaterThanEqual(cell,ivec2(params.width,params.height)))) return -1.0;

@@ -2,14 +2,18 @@
 #include "rigid_shape.glsl"
 
 const uint CACHED_HYDRO_PAGE=0x40000000u;
-bool cached_domain;
+bool cached_domain,hydro_view_frame;
+uvec2 hydro_origin_x,hydro_origin_y;
 ivec2 cached_low,cached_high;
 
 void select_hydro_domain(Body b) {
     ivec2 view=ivec2(params.width,params.height);
     cached_domain=b.visible==0u || any(lessThan(b.bounds_low,ivec2(17))) ||
         any(greaterThan(b.bounds_high,view-17));
+    hydro_view_frame=true;
     if(!cached_domain) return;
+    if(!body_frame_origin(b,hydro_origin_x,hydro_origin_y)) {cached_domain=false;return;}
+    hydro_view_frame=all(equal(hydro_origin_x,params.origin_x)) && all(equal(hydro_origin_y,params.origin_y));
     ivec2 tile=ivec2(b.x_fp,b.y_fp)>>22;
     uint registry=structural_base(),count=DC_DATA(registry+1u);
     ivec2 first=tile,last=tile;
@@ -17,15 +21,15 @@ void select_hydro_domain(Body b) {
         uint r=registry+32u+slot*8u;
         if(DC_DATA(r+5u)==0u) continue;
         ivec2 t;
-        if(!relative_chunk(uvec2(DC_DATA(r),DC_DATA(r+1u)),params.origin_x,t.x) ||
-           !relative_chunk(uvec2(DC_DATA(r+2u),DC_DATA(r+3u)),params.origin_y,t.y)) continue;
+        if(!relative_chunk(uvec2(DC_DATA(r),DC_DATA(r+1u)),hydro_origin_x,t.x) ||
+           !relative_chunk(uvec2(DC_DATA(r+2u),DC_DATA(r+3u)),hydro_origin_y,t.y)) continue;
         // A contiguous column of resident pages cannot exceed the slot count.
         if(any(lessThan(t,tile-int(count))) || any(greaterThan(t,tile+int(count)))) continue;
         first=min(first,t);last=max(last,t);
     }
     cached_low=first*64;cached_high=(last+1)*64;
     if(b.visible!=0u) {cached_low=min(cached_low,ivec2(0));cached_high=max(cached_high,view);}
-    if(hydro_control[DC_HYDRO_PEER_WIDTH]!=0u) {
+    if(hydro_view_frame && hydro_control[DC_HYDRO_PEER_WIDTH]!=0u) {
         cached_low=min(cached_low,-hydro_offset());
         cached_high=max(cached_high,hydro_peer_size()-hydro_offset());
     }

@@ -352,4 +352,10 @@ bool shifted_chunk(uvec2 origin, int offset, out uvec2 anchor) {
     return !((offset < 0 ? 1u : 0u) == sign_o && sign_a != sign_o);
 }
 
+// The published world chunk and working pose jointly identify the origin
+// of this body's 16.16 coordinate frame, including after a chunk crossing.
+bool body_frame_origin(Body b,out uvec2 x,out uvec2 y) {
+    return shifted_chunk(b.chunk_x,-(b.x_fp>>22),x) && shifted_chunk(b.chunk_y,-(b.y_fp>>22),y);
+}
+
 #endif

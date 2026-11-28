@@ -19,7 +19,7 @@ void solve_bonds(uint phase) {
             vec2 ra=body_rotate(getv(p+6u),a.angle),rb=body_rotate(getv(p+8u),b.angle);
             float angle=a.angle+getf(p+11u)+float(axis)*1.5707963267948966;
             vec2 n=vec2(cos(angle),sin(angle));
-            vec2 delta=position(b)+b.center+rb-position(a)-a.center-ra;
+            vec2 delta=frame_offset(a,b)+position(b)+b.center+rb-position(a)-a.center-ra;
             float ja=axis==2u?-1.0:body_cross(n,delta)-body_cross(ra,n);
             float jb=axis==2u?1.0:body_cross(rb,n);
             float mass=a.inverse_inertia*ja*ja+b.inverse_inertia*jb*jb;
@@ -30,13 +30,13 @@ void solve_bonds(uint phase) {
                 c=ja*a.angular_velocity+jb*b.angular_velocity;
                 if(axis<2u) c+=dot(n,velocity(b)-velocity(a));
             } else if(axis==2u) c=wrap(b.angle-a.angle-getf(p+10u));
-            else c=dot(n,position(b)+b.center+rb-position(a)-a.center-ra);
+            else c=dot(n,delta);
             float compliance=phase==13u?0:3600.0/(stiffness*DT*DT);
             float previous=getf(p+15u+axis);
             float lambda=-(c+compliance*previous)/(mass+compliance);
             if(DC_DATA(p+5u)==0u&&axis<2u) {
                 vec2 normal=vec2(cos(a.angle+getf(p+11u)),sin(a.angle+getf(p+11u)));
-                float gap=dot(normal,position(b)+b.center+rb-position(a)-a.center-ra);
+                float gap=dot(normal,delta);
                 if(phase==13u) {
                     if(gap<-0.0001) lambda=0;
                     else if(axis==0u) lambda=min(lambda,0);

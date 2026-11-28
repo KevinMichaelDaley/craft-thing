@@ -31,9 +31,9 @@ void grain_scratch_add(uint index,uint word,uint value) {
     }
     atomicAdd(grain_scratch[at],value);
 }
-vec2 grain_position(uint c,uint index) {
+vec2 grain_position(uint c,uint index,Body b) {
     Particle grain=read_grain(index);
-    return anchor(c+22u)-vec2(int(DC_DATA(c+26u)),int(DC_DATA(c+27u)))/65536.0+
+    return anchor(c+22u,b)-vec2(int(DC_DATA(c+26u)),int(DC_DATA(c+27u)))/65536.0+
         vec2(grain.x_fp,grain.y_fp)/65536.0;
 }
 void grain_correction(uint index,vec2 change) {
@@ -41,9 +41,22 @@ void grain_correction(uint index,vec2 change) {
     if(!SKIP_ZERO_REDUCTIONS||fp.x!=0) grain_scratch_add(index,0u,uint(fp.x));
     if(!SKIP_ZERO_REDUCTIONS||fp.y!=0) grain_scratch_add(index,1u,uint(fp.y));
 }
-bool grain_static_at(vec2 point) {
-    ivec2 cell=ivec2(floor(point));
-    uint page=hydro_page(cell);
+bool grain_static_at(uint c,vec2 local) {
+    ivec2 cell=ivec2(floor(local)),delta=cell>>6;
+    uvec2 x,y;
+    if(!shifted_chunk(uvec2(DC_DATA(c+28u),DC_DATA(c+29u)),delta.x,x) ||
+       !shifted_chunk(uvec2(DC_DATA(c+30u),DC_DATA(c+31u)),delta.y,y)) return true;
+    ivec2 tile;
+    uint page=0u;
+    if(relative_chunk(x,params.origin_x,tile.x) && relative_chunk(y,params.origin_y,tile.y) &&
+       all(greaterThanEqual(tile,ivec2(-33554432))) && all(lessThanEqual(tile,ivec2(33554431))))
+        page=hydro_page(tile*64+(cell&63));
+#ifdef DC_RUNTIME_BODY_STORAGE
+    if(page==0u) {
+        uint base=structural_base();
+        page=cached_chunk_page(base,DC_DATA(base+1u),x,y);
+    }
+#endif
     if(page==0u) return true;
     uint material=hydro_cell(hydro_atlas(cell,page)).x & 65535u;
     return material==1u||material==7u||material==8u||material==9u;
@@ -68,10 +81,9 @@ void grain_phase(uint i,uint phase) {
         vec2 low=vec2(cell%64u,cell/64u)-vec2(0.49);
         vec2 old=vec2(p.x_fp,p.y_fp)/65536.0;
         vec2 next=clamp(old+change,low,low+vec2(1.98));
-        vec2 origin=grain_position(c,index)-old;
-        if(grain_static_at(origin+vec2(next.x,old.y))) next.x=old.x;
-        if(grain_static_at(origin+vec2(old.x,next.y))) next.y=old.y;
-        if(grain_static_at(origin+next)) next=old;
+        if(grain_static_at(c,vec2(next.x,old.y))) next.x=old.x;
+        if(grain_static_at(c,vec2(old.x,next.y))) next.y=old.y;
+        if(grain_static_at(c,next)) next=old;
         change=next-old;
         p.x_fp=int(round(next.x*65536.0));p.y_fp=int(round(next.y*65536.0));
         change/=DT;

@@ -11,9 +11,10 @@ void solve_contact(uint i, bool impulse) {
     uint grain_ref=grain_reference(c);
     float creep=contact_getf(s+12u);
     float mb = 0.0, ib = 0.0;
+    vec2 frame=vec2(0);
     if(grain_ref!=0u) {
         Particle p=read_grain(grain_ref-1u);
-        pb=grain_position(c,grain_ref-1u)+rb;
+        pb=grain_position(c,grain_ref-1u,ba)+rb;
         vb=vec2(p.vx_fp,p.vy_fp)/65536.0;
         mb=p.mass_fp!=0u?65536.0/float(p.mass_fp):0.0;
         if(creep>=0.0) {
@@ -25,7 +26,8 @@ void solve_contact(uint i, bool impulse) {
     if (b != BODY_CAPACITY) {
         Body bb = contact_body(b);
         rb = body_rotate(rb, bb.angle);
-        pb = position(bb) + bb.center + rb;
+        frame=frame_offset(ba,bb);
+        pb = frame+position(bb) + bb.center + rb;
         vb = velocity(bb) + bb.angular_velocity * vec2(-rb.y, rb.x);
         mb = bb.inverse_mass;
         ib = bb.inverse_inertia;
@@ -56,7 +58,7 @@ void solve_contact(uint i, bool impulse) {
         vec2 start_b = contact_getv(s + 9u);
         if (b != BODY_CAPACITY)
             start_b =
-                CACHE_CONTACT_STARTS?contact_getv(s+9u):contact_start_anchor(b,DC_BODY(b),contact_getv(s+6u));
+                CACHE_CONTACT_STARTS?contact_getv(s+9u):frame+contact_start_anchor(b,DC_BODY(b),contact_getv(s+6u));
         float tangent_error = dot((pa - start_a) - (pb - start_b), t);
         float lt = contact_getf(s + 1u), limit = contact_getf(c + 11u) * max(0.0, lambda + dn);
         if (wt > 0.0)
@@ -71,7 +73,7 @@ void solve_contact(uint i, bool impulse) {
     impact_capture(b,a,DC_DATA(c+6u),DC_DATA(c+5u),-n,incoming,normal_impulse,wn,contact_getf(c+12u));
     if(CAPTURE_STRUCTURAL_LOADS) {
         structural_capture(a,b,pa,applied_impulse);
-        structural_capture(b,a,pb,-applied_impulse);
+        structural_capture(b,a,pb-frame,-applied_impulse);
     }
     if(any(greaterThan(abs(vec3(ba.inverse_mass*force,ba.inverse_inertia*(an*dn+at*dt))),vec3(2))))
         atomicOr(DC_BODY_CLIPPED(a),1u);

@@ -26,15 +26,19 @@ ivec2 hydro_high() {
     return hydro_control[DC_HYDRO_PEER_WIDTH]==0u?size:max(size,hydro_peer_size()-hydro_offset());
 }
 uint hydro_page(ivec2 p) {
-    if(all(greaterThanEqual(p,ivec2(0))) && all(lessThan(p,ivec2(params.width,params.height)))) {
+    bool view_frame=true;
+#ifdef DC_CACHED_PIXEL_HYDRO
+    view_frame=hydro_view_frame;
+#endif
+    if(view_frame && all(greaterThanEqual(p,ivec2(0))) && all(lessThan(p,ivec2(params.width,params.height)))) {
         uint page=pages[uint(p.y/64)*((params.width+63u)/64u)+uint(p.x/64)];
         if(page!=0u) return page;
     }
-    uint peer=hydro_peer_page(p);
+    uint peer=view_frame?hydro_peer_page(p):0u;
 #ifdef DC_CACHED_PIXEL_HYDRO
     if(peer==0u && cached_domain) {
         uvec2 x,y;
-        if(shifted_chunk(params.origin_x,p.x>>6,x) && shifted_chunk(params.origin_y,p.y>>6,y)) {
+        if(shifted_chunk(hydro_origin_x,p.x>>6,x) && shifted_chunk(hydro_origin_y,p.y>>6,y)) {
             uint registry=structural_base();
             uint page=cached_chunk_page(registry,DC_DATA(registry+1u),x,y);
             if(page!=0u) return CACHED_HYDRO_PAGE|page;

@@ -8,7 +8,7 @@ uint bond_budget(uint slot) {
     return structural_graph()+34000u+slot*16u;
 #endif
 }
-vec2 bond_center(uint slot) { return position(DC_BODY(slot))+DC_BODY(slot).center; }
+vec2 bond_center(uint owner,uint slot) { return frame_offset(DC_BODY(owner),DC_BODY(slot))+position(DC_BODY(slot))+DC_BODY(slot).center; }
 void prepare_bond_budgets() {
     for(uint i=0u;i<BODY_CAPACITY;i++) {
         uint p=bond_budget(i);DC_SOLVER_DATA(p)=i;DC_SOLVER_DATA(p+1u)=0u;DC_SOLVER_DATA(p+8u)=0u;
@@ -36,7 +36,7 @@ void prepare_bond_budgets() {
         float mass=0;vec2 center=vec2(0),momentum=vec2(0);bool cold=false,invalid=false;
         for(uint i=0u;i<BODY_CAPACITY;i++) if(DC_SOLVER_DATA(bond_budget(i))==owner) {
             Body b=DC_BODY(i);mass+=b.mass;
-            center+=b.mass*(getv(bs(i)+6u)+b.center);momentum+=b.mass*velocity(b);
+            center+=b.mass*(frame_offset(DC_BODY(owner),b)+getv(bs(i)+6u)+b.center);momentum+=b.mass*velocity(b);
             cold=cold||DC_SOLVER_DATA(bs(i)+BODY_AWAKE_WORD)==0u;
             invalid=invalid||b.motion_flags!=0u||DC_BODY_CLIPPED(i)!=0u;
         }
@@ -44,11 +44,11 @@ void prepare_bond_budgets() {
         for(uint i=0u;i<BODY_CAPACITY;i++) if(DC_SOLVER_DATA(bond_budget(i))==owner) {
             Body b=DC_BODY(i);
             angular+=b.inertia*b.angular_velocity+
-                b.mass*body_cross(getv(bs(i)+6u)+b.center-center,velocity(b));
+                b.mass*body_cross(frame_offset(DC_BODY(owner),b)+getv(bs(i)+6u)+b.center-center,velocity(b));
             if(cold) {
                 /* Freeze the whole bonded island without rebasing a hidden
                  * body's stale view-space cache into its world coordinates. */
-                if(b.visible!=0u) {
+                if(DC_SOLVER_DATA(bs(i)+BODY_AWAKE_WORD)!=0u) {
                     publish(b,getv(bs(i)));b.angle=getf(bs(i)+2u);body_cache_bounds(b);
                 }
                 b.vx_fp=int(DC_SOLVER_DATA(bs(i)+3u));b.vy_fp=int(DC_SOLVER_DATA(bs(i)+4u));
@@ -75,20 +75,20 @@ void conserve_isolated_bonds() {
         float mass=getf(p+2u);vec2 center=vec2(0),momentum=vec2(0);
         bool clipped=false;
         for(uint i=0u;i<BODY_CAPACITY;i++) if(DC_SOLVER_DATA(bond_budget(i))==owner) {
-            center+=DC_BODY(i).mass*bond_center(i);momentum+=DC_BODY(i).mass*velocity(DC_BODY(i));
+            center+=DC_BODY(i).mass*bond_center(owner,i);momentum+=DC_BODY(i).mass*velocity(DC_BODY(i));
             clipped=clipped||DC_BODY_CLIPPED(i)!=0u;
         }
         if(clipped) continue;
         center/=mass;float angular=0,inertia=0;
         for(uint i=0u;i<BODY_CAPACITY;i++) if(DC_SOLVER_DATA(bond_budget(i))==owner) {
-            Body b=DC_BODY(i);vec2 r=bond_center(i)-center;
+            Body b=DC_BODY(i);vec2 r=bond_center(owner,i)-center;
             angular+=b.inertia*b.angular_velocity+b.mass*body_cross(r,velocity(b));
             inertia+=b.inertia+b.mass*dot(r,r);
         }
         vec2 target=getv(p+5u),translation=(target-momentum)/mass;
         float rotation=(getf(p+7u)-body_cross(center-getv(p+3u),target)-angular)/inertia;
         for(uint i=0u;i<BODY_CAPACITY;i++) if(DC_SOLVER_DATA(bond_budget(i))==owner) {
-            Body b=DC_BODY(i);vec2 r=bond_center(i)-center;
+            Body b=DC_BODY(i);vec2 r=bond_center(owner,i)-center;
             vec2 v=velocity(b)+translation+rotation*vec2(-r.y,r.x);
             b.vx_fp=int(round(v.x*65536.0));b.vy_fp=int(round(v.y*65536.0));
             b.angular_velocity+=rotation;DC_BODY(i)=b;

@@ -67,8 +67,8 @@ bool locate_body(inout Body body) {
     bool representable = relative_chunk(body.chunk_x, params.origin_x, x) &&
                          relative_chunk(body.chunk_y, params.origin_y, y) &&
                          x >= -512 && x <= 511 && y >= -512 && y <= 511;
-    ivec2 origin = representable ? ivec2(x,y)*64 : ivec2(-16);
-    ivec2 local = representable ? body.local_fp : ivec2(0);
+    ivec2 origin = representable ? ivec2(x,y)*64 : ivec2(0);
+    ivec2 local = body.local_fp;
     // Compute shape extents before translation so a far edge can cross the
     // fixed-point limit while its integer cell bounds remain representable.
     body.x_fp=body.previous_x_fp=local.x;
