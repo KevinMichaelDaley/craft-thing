@@ -225,3 +225,7 @@ Inline checkpoint: ordinary real-time Wayland saved-scene500-frame mean32.414ms 
 **2026-11-26T17:30:52Z**
 
 The hidden-window recreation test hit its unchanged 15-second watchdog on the split-readback candidate 41078659 and on directly built predecessor afd4460a using the same nested X11 display and Vulkan cache with other validation work active. Completed cycles kept finite acquisition, 90 brush-fence waits, zero queue-idle waits and safe presentation image dependencies. This comparison does not establish isolated timing. The overlapping-window split regression passed separately, including explicit synchronization validation.
+
+**2026-11-28T05:18:48Z**
+
+Current RTX A2000, scale-one Xephyr, 180 frames at two 60 Hz steps/frame and cadence 6. Dry mean 2.128 ms / p95 3.050; dense default 9.850 / 15.804; exact 1176/1872-pixel concave scene 35.098 / 47.614 (cold 32.060 ms, 28.492 presented FPS). The concave case fails the 33.333 ms gate. A separate instrumented repeat measured 38.498 / 52.886. These measurements include concurrent machine load and are on NVIDIA; Intel Iris Xe acceptance remains outstanding.

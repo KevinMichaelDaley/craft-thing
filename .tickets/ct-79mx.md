@@ -54,3 +54,7 @@ Global-fallback2113-cell literaltransport10/10 passes core+sync after narrowbarr
 **2026-11-01T18:53:50Z**
 
 2026-11-01 integration: merged feature branch history into main integration. Kept the verified production fluid transport kernel because this ticket remains RED and the divergent cache path depends on incomplete synchronization changes. The completed body work-gate shader and GPU regression were integrated; color-cache work remains tracked by this ticket.
+
+**2026-11-28T05:18:48Z**
+
+Two shipping dense RTX A2000 runs with the unchanged 180-frame, 640x360 fixture met the dense-only gate (mean/p95 9.850/15.804 ms and 9.549/16.327 ms, cold 11.964 and 11.375 ms). The additional exact two-body native workload exceeded the full-frame gate, and the full UI/quarter regression battery is pending.
