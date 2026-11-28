@@ -324,6 +324,12 @@ static void test_parallel_plans_span_workgroups_and_sparse_tiles(void) {
            shape[1],plans[0].tiles,words,plans[0].geometry_words);
     ASSERT_EQ(plans[0].tiles,shape[1]); ASSERT_EQ(plans[0].geometry_words,words);
     ASSERT_EQ(plans[1].source_root, 380u); ASSERT_EQ(plans[1].body_slot, 1u);
+    uint32_t pool_offset=dc_gpu_pixel_pool_word_offset(gpu);
+    ((uint32_t *)gpu->body_mapped)[pool_offset]=1u;
+    ASSERT_TRUE(fr_gpu_prepare_authored(gpu,&r,err,sizeof(err)));
+    ASSERT_TRUE(fr_gpu_read_authored_components(gpu,plans,2,&count,err,sizeof(err)));
+    ASSERT_EQ(plans[0].geometry_word,pool_offset+DC_GPU_PIXEL_POOL_HEADER_WORDS+dc_gpu_pixel_pool_capacity(gpu));
+    ASSERT_EQ(plans[1].geometry_word,plans[0].geometry_word+words);
     dc_gpu_destroy(gpu); free(shape); free(p); free(a); PASS();
 }
 

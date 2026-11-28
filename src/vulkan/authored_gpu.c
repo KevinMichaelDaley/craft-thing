@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dungeoncraft/pixel_geometry_layout.h"
 #include "ferrum/structural/authoring.h"
 #include "gpu_internal.h"
 #include "runtime_body_gpu.h"
@@ -12,6 +13,8 @@ enum { STAGE_HEADER_WORDS = 24, STAGE_WORDS_PER_PIXEL = 20,
        STAGE_BODY_GROUP_WORDS = 6, STAGE_LANES = 128, STAGE_PHASES = 12 };
 _Static_assert(sizeof(fr_authored_component_plan_t) == 11u * sizeof(uint32_t),
                "Authored component plan GPU layout changed");
+_Static_assert(DC_GPU_PIXEL_POOL_HEADER_WORDS == DC_PIXEL_POOL_HEADER_WORDS,
+               "Authored geometry bank offset must match runtime storage");
 _Static_assert(FR_STRUCTURAL_MEMBER_CAPACITY < 32u, "Member coverage must fit a GPU word");
 _Static_assert(offsetof(fr_structural_gpu_joint_t, normal_stiffness) == 5 * sizeof(uint32_t) &&
                offsetof(fr_structural_gpu_joint_t, normal_angle) == 13 * sizeof(uint32_t),

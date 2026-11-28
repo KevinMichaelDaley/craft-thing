@@ -147,7 +147,7 @@ typedef struct {
     uint32_t geometry_word; /**< Tentative absolute sparse shape-header address, in words. */
 } fr_authored_component_plan_t;
 
-/** Read plans in source-root order. On slot shortage, count receives the
+/** Read plans in source-root order. On a body or geometry shortage, count receives the
  * component demand and the caller's plans remain untouched. The stage
  * diagnostic exposes the failure flags for the whole request.
  */

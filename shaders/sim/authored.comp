@@ -162,6 +162,8 @@ void main() {
         words[plan(i)+8u+(parity^1u)]=geometry;
         return;
     }
+    if(PHASE==7u && i+1u==pixels())
+        words[5]=i==0u ? geometry_size(plan(i)) : words[plan(i)+8u+params.padding];
     if(owner==INVALID) return;
     if(PHASE==1u) {
         if(i%params.width+1u<params.width) join(i,i+1u);
@@ -195,10 +197,9 @@ void main() {
         for(uint k=0u;k<5u;k++) words[d+k]=words[p+k];
         words[d+5u]=width;words[d+6u]=height;words[d+7u]=words[p+7u];
         words[d+8u]=geometry_size(p);
-        atomicAdd(words[5],words[d+8u]);
         words[d+9u]=INVALID;
         uint prior=i==0u ? 0u : words[plan(i-1u)+8u+params.padding];
-        words[d+10u]=params.pool_offset+16u+pixel_word_at(params.pool_offset)*params.pool_capacity+
+        words[d+10u]=params.pool_offset+DC_PIXEL_POOL_HEADER_WORDS+pixel_word_at(params.pool_offset)*params.pool_capacity+
                      pixel_word_at(params.pool_offset+1u)+prior;
     }
 }
