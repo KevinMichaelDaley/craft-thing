@@ -1,6 +1,6 @@
 ---
 id: ctlo-cnj8
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-24T08:37:04Z
@@ -19,3 +19,7 @@ Compiled SPIR-V marks selected runtime record slabs Restrict while retaining wri
 **2026-10-24T08:40:26Z**
 
 RED four compiled shader restrictions absent; GREEN compiled contract 5/5 and actual core/synchronization exact solver-state oracle 1/1 after dynamic growth. Displayed 500-frame run31.895ms mean40.398ms worst: no full-frame speedup established, global target remains unmet.
+
+**2026-11-28T04:09:47Z**
+
+Rechecked the compiled record slab in all five selected modules: writable and Restrict. The compiled structural and structural-carve modules retain conservative records. Dynamic-growth oracle, concave raster, full carve cases and the full project suite passed. The ticket records its displayed 500-frame result (31.895 ms mean, 40.398 ms worst).

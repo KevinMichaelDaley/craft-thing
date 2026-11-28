@@ -1,6 +1,6 @@
 ---
 id: ctbs-gq2r
-status: in_progress
+status: closed
 deps: []
 links: [ctlo-ldb7, ct-xsll]
 created: 2026-11-26T17:59:52Z
@@ -40,3 +40,7 @@ Final focused native run passed all seven player runtime cases and all three aut
 **2026-11-26T21:06:48Z**
 
 Integrated 3c94b591 passed seven live runtime, six Vulkan body, three authored spawn, 256 GPU/CPU profile comparisons and the CPU material, state, and fixture checks. The complete integrated make test is still queued. In the live tests the robe gained seven Q16 char and the hat eleven; fur reaction and the active atmosphere restored exactly.
+
+**2026-11-28T04:09:47Z**
+
+The outstanding full project run at d105fc10 passed. Its rendered player fixture passed all seven cases including owner-preserving pose reversal and robe/hat char gains of 7/11 Q16. Verified the compatibility receipt for the legacy wood parcel, the current manifest profile bindings, and the prior isolated moisture and heat checks.

@@ -1,6 +1,6 @@
 ---
 id: ctsl-7ay0
-status: in_progress
+status: closed
 deps: [ctpc-wezp, ctpc-xa7p, ctpc-9yer, ctgc-tteu]
 links: []
 created: 2026-11-26T13:27:27Z
@@ -51,3 +51,7 @@ The locked full-length acceptance target reads the 0.5 ratio and two replays fro
 **2026-11-26T16:31:38Z**
 
 The pinned acceptance process exited at second 142 of the first Greek replay. It measured positive chemical drift of 4.0625 Q16 and produced no oil duration or half-time verdict. Stock checks and all 36 wet faces held through that sample. ctgc-tteu tracks separating gas readback precision from physical transport or reaction drift.
+
+**2026-11-28T04:09:47Z**
+
+Verified both pairs of native locked traces at 8e45829e. The two pairs were byte-identical. Every load began with 327680 Q16 usable fuel and 56416 Q16 bound water, all 36 faces stayed submerged, and exterior/mobile film stayed zero. Both Greek runs reached zero at 48960 steps (816 s); both oils retained all starting fuel through 97920 steps (1632 s). The full suite passed the matched douse guard, which remains enabled.

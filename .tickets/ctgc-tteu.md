@@ -1,6 +1,6 @@
 ---
 id: ctgc-tteu
-status: in_progress
+status: closed
 deps: []
 links: [ctgeo-px2n, ctgsb-juv5]
 created: 2026-11-26T16:31:27Z
@@ -92,3 +92,7 @@ The still-running exact 8e45829e locked replay reached Greek second 583 with all
 **2026-11-26T20:41:55Z**
 
 The first exact 8e45829e locked Greek trial reached POOL_END 816 after 48,960 accepted 60 Hz steps. It retained all 36 wet faces with zero exterior or mobile film, depleted fuel to 0 Q16 and measured +0.000012165 Q16 chemical drift. The first matched oil control is running the required 1,632-second interval. Saturated pigment decoding exposed by the full gas prefix is tracked separately in ctgsb-juv5.
+
+**2026-11-28T04:09:46Z**
+
+Independently checked every second of both completed locked replays on integrated ancestor 8e45829e. The explicit transported-stock rounding fix kept the largest absolute Greek ledger error at 0.000012179 Q16 and ordinary oil at zero, within the unchanged four-unit tolerance. The current full suite also passed the shorter matched douse guard.
